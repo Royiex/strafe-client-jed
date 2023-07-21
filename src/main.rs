@@ -7,7 +7,7 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-use cgmath::{Matrix3, Matrix4, Point3, Rad, Vector3, Transform,Rotation, Quaternion};
+use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3, Rotation, Quaternion, Euler};
 use strafe_client::{Normal, Position, INDICES, NORMALS, POSITIONS};
 use std::{sync::Arc, time::Instant};
 use vulkano::{
@@ -50,7 +50,7 @@ use vulkano::{
 };
 use vulkano_win::VkSurfaceBuild;
 use winit::{
-	event::{ElementState,KeyboardInput,VirtualKeyCode,Event, WindowEvent},
+	event::{ElementState,KeyboardInput,VirtualKeyCode,Event, WindowEvent, DeviceEvent},
 	event_loop::{ControlFlow, EventLoop},
 	window::{Window, WindowBuilder},
 };
@@ -285,8 +285,8 @@ fn main() {
 
 	let mut time = Instant::now();
 	//polution
+	let mut mouse = Vector2::new(0.0,0.0);
 	let mut pos = Vector3::new(0.0,0.0,0.0);
-	let mut orientation = Quaternion::new(1.0,0.0,0.0,0.0);
 	let mut controls:u32 = 0;
 	let fly_speed = 0.05;
 	event_loop.run(move |event, _, control_flow| {
@@ -302,6 +302,15 @@ fn main() {
 				..
 			} => {
 				recreate_swapchain = true;
+			}
+			Event::DeviceEvent {
+				event:
+					DeviceEvent::MouseMotion {
+						delta,
+					},
+				..
+			} => {
+				mouse+=Vector2::from(delta);
 			}
 			Event::WindowEvent {
 				event:
@@ -348,8 +357,10 @@ fn main() {
 		}
 		let time_now = Instant::now();
 		let dt = (time_now-time).as_secs_f64();
-		if dt > 1.0 / 60.0 {
+		if dt > 1.0 / 120.0 {
 			time = time_now;
+				let angles = Euler{x:Rad(mouse.y/128.),y:Rad(mouse.x/128.),z:Rad(0.0)};
+				let orientation=Quaternion::from(angles);
 				pos += orientation.rotate_vector(get_control_dir(controls))*fly_speed;
 
 				let window = surface.object().unwrap().downcast_ref::<Window>().unwrap();
@@ -400,7 +411,7 @@ fn main() {
 						0.01,
 						100.0,
 					);
-					let view = Matrix4::from_translation(pos)+Matrix4::from(orientation);
+					let view = Matrix4::from_translation(pos)*Matrix4::from(angles);
 					let scale = Matrix4::from_scale(-0.01);
 
 					let uniform_data = vs::Data {
