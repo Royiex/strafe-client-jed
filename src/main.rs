@@ -7,7 +7,7 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-use cgmath::{Matrix3, Matrix4, Point3, Rad, Vector3};
+use cgmath::{Matrix3, Matrix4, Point3, Rad, Vector3, Transform,Rotation, Quaternion};
 use strafe_client::{Normal, Position, INDICES, NORMALS, POSITIONS};
 use std::{sync::Arc, time::Instant};
 use vulkano::{
@@ -50,10 +50,47 @@ use vulkano::{
 };
 use vulkano_win::VkSurfaceBuild;
 use winit::{
-	event::{Event, WindowEvent},
+	event::{ElementState,KeyboardInput,VirtualKeyCode,Event, WindowEvent},
 	event_loop::{ControlFlow, EventLoop},
 	window::{Window, WindowBuilder},
 };
+
+const CONTROL_MOVEFORWARD:u32 = 0b00000001;
+const CONTROL_MOVEBACK:u32 = 0b00000010;
+const CONTROL_MOVERIGHT:u32 = 0b00000100;
+const CONTROL_MOVELEFT:u32 = 0b00001000;
+const CONTROL_MOVEUP:u32 = 0b00010000;
+const CONTROL_MOVEDOWN:u32 = 0b00100000;
+//const CONTROL_JUMP:u32 = 0b01000000;
+//const CONTROL_ZOOM:u32 = 0b10000000;
+
+const FORWARD_DIR:Vector3<i8> = Vector3::new(0,0,-1);
+const RIGHT_DIR:Vector3<i8> = Vector3::new(1,0,0);
+const UP_DIR:Vector3<i8> = Vector3::new(0,1,0);
+
+fn get_control_dir(controls: u32) -> Vector3<f64>{
+	//don't get fancy just do it
+	let mut control_dir:Vector3<i8> = Vector3::new(0,0,0);
+	if controls & CONTROL_MOVEFORWARD == CONTROL_MOVEFORWARD {
+		control_dir+=FORWARD_DIR;
+	}
+	if controls & CONTROL_MOVEBACK == CONTROL_MOVEBACK {
+		control_dir+=-FORWARD_DIR;
+	}
+	if controls & CONTROL_MOVELEFT == CONTROL_MOVELEFT {
+		control_dir+=-RIGHT_DIR;
+	}
+	if controls & CONTROL_MOVERIGHT == CONTROL_MOVERIGHT {
+		control_dir+=RIGHT_DIR;
+	}
+	if controls & CONTROL_MOVEUP == CONTROL_MOVEUP {
+		control_dir+=UP_DIR;
+	}
+	if controls & CONTROL_MOVEDOWN == CONTROL_MOVEDOWN {
+		control_dir+=-UP_DIR;
+	}
+	return control_dir.cast().unwrap()
+}
 
 fn main() {
 	// The start of this example is exactly the same as `triangle`. You should read the `triangle`
@@ -245,6 +282,13 @@ fn main() {
 	let command_buffer_allocator =
 		StandardCommandBufferAllocator::new(device.clone(), Default::default());
 
+
+	let mut time = Instant::now();
+	//polution
+	let mut pos = Vector3::new(0.0,0.0,0.0);
+	let mut orientation = Quaternion::new(1.0,0.0,0.0,0.0);
+	let mut controls:u32 = 0;
+	let fly_speed = 0.05;
 	event_loop.run(move |event, _, control_flow| {
 		match event {
 			Event::WindowEvent {
@@ -259,7 +303,55 @@ fn main() {
 			} => {
 				recreate_swapchain = true;
 			}
-			Event::RedrawEventsCleared => {
+			Event::WindowEvent {
+				event:
+					WindowEvent::KeyboardInput {
+						input:
+							KeyboardInput {
+								state,
+								virtual_keycode: Some(keycode),
+								..
+							},
+						..
+					},
+				..
+			} => {
+				match (state,keycode) {
+					(k,VirtualKeyCode::W) => match k {
+						ElementState::Pressed => controls|=CONTROL_MOVEFORWARD,
+						ElementState::Released => controls&=!CONTROL_MOVEFORWARD,
+					}
+					(k,VirtualKeyCode::A) => match k {
+						ElementState::Pressed => controls|=CONTROL_MOVELEFT,
+						ElementState::Released => controls&=!CONTROL_MOVELEFT,
+					}
+					(k,VirtualKeyCode::S) => match k {
+						ElementState::Pressed => controls|=CONTROL_MOVEBACK,
+						ElementState::Released => controls&=!CONTROL_MOVEBACK,
+					}
+					(k,VirtualKeyCode::D) => match k {
+						ElementState::Pressed => controls|=CONTROL_MOVERIGHT,
+						ElementState::Released => controls&=!CONTROL_MOVERIGHT,
+					}
+					(k,VirtualKeyCode::E) => match k {
+						ElementState::Pressed => controls|=CONTROL_MOVEUP,
+						ElementState::Released => controls&=!CONTROL_MOVEUP,
+					}
+					(k,VirtualKeyCode::Q) => match k {
+						ElementState::Pressed => controls|=CONTROL_MOVEDOWN,
+						ElementState::Released => controls&=!CONTROL_MOVEDOWN,
+					}
+					_ => (),
+				}
+			}
+			_ => (),
+		}
+		let time_now = Instant::now();
+		let dt = (time_now-time).as_secs_f64();
+		if dt > 1.0 / 60.0 {
+			time = time_now;
+				pos += orientation.rotate_vector(get_control_dir(controls))*fly_speed;
+
 				let window = surface.object().unwrap().downcast_ref::<Window>().unwrap();
 				let dimensions = window.inner_size();
 				if dimensions.width == 0 || dimensions.height == 0 {
@@ -308,16 +400,12 @@ fn main() {
 						0.01,
 						100.0,
 					);
-					let view = Matrix4::look_at_rh(
-						Point3::new(0.3, 0.3, 1.0),
-						Point3::new(0.0, 0.0, 0.0),
-						Vector3::new(0.0, -1.0, 0.0),
-					);
-					let scale = Matrix4::from_scale(0.01);
+					let view = Matrix4::from_translation(pos)+Matrix4::from(orientation);
+					let scale = Matrix4::from_scale(-0.01);
 
 					let uniform_data = vs::Data {
 						world: Matrix4::from(rotation).into(),
-						view: (view * scale).into(),
+						view: (view * scale).cast::<f32>().unwrap().into(),
 						proj: proj.into(),
 					};
 
@@ -410,8 +498,6 @@ fn main() {
 					}
 				}
 			}
-			_ => (),
-		}
 	});
 }
 
