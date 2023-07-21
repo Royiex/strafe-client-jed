@@ -8,7 +8,7 @@
 // according to those terms.
 
 use cgmath::{Matrix3, Matrix4, Point3, Rad, Vector3};
-use examples::{Normal, Position, INDICES, NORMALS, POSITIONS};
+use strafe_client::{Normal, Position, INDICES, NORMALS, POSITIONS};
 use std::{sync::Arc, time::Instant};
 use vulkano::{
 	buffer::{
@@ -472,13 +472,13 @@ fn window_size_dependent_setup(
 mod vs {
 	vulkano_shaders::shader! {
 		ty: "vertex",
-		path: "src/bin/teapot/vert.glsl",
+		path: "src/vert.glsl",
 	}
 }
 
 mod fs {
 	vulkano_shaders::shader! {
 		ty: "fragment",
-		path: "src/bin/teapot/frag.glsl",
+		path: "src/frag.glsl",
 	}
 }
