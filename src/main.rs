@@ -7,7 +7,7 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3, Rotation, Quaternion, Euler};
+use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3, Rotation, Quaternion, Euler, SquareMatrix};
 use strafe_client::{Normal, Position, INDICES, NORMALS, POSITIONS};
 use std::{sync::Arc, time::Instant};
 use vulkano::{
@@ -66,7 +66,7 @@ const CONTROL_MOVEDOWN:u32 = 0b00100000;
 
 const FORWARD_DIR:Vector3<i8> = Vector3::new(0,0,-1);
 const RIGHT_DIR:Vector3<i8> = Vector3::new(1,0,0);
-const UP_DIR:Vector3<i8> = Vector3::new(0,1,0);
+const UP_DIR:Vector3<i8> = Vector3::new(0,-1,0);
 
 fn get_control_dir(controls: u32) -> Vector3<f64>{
 	//don't get fancy just do it
@@ -359,7 +359,7 @@ fn main() {
 		let dt = (time_now-time).as_secs_f64();
 		if dt > 1.0 / 120.0 {
 			time = time_now;
-				let angles = Euler{x:Rad(mouse.y/128.),y:Rad(mouse.x/128.),z:Rad(0.0)};
+				let angles = Euler{x:Rad(mouse.y/256.),y:Rad(mouse.x/-256.),z:Rad(0.0)};
 				let orientation=Quaternion::from(angles);
 				pos += orientation.rotate_vector(get_control_dir(controls))*fly_speed;
 
@@ -415,8 +415,8 @@ fn main() {
 					let scale = Matrix4::from_scale(-0.01);
 
 					let uniform_data = vs::Data {
-						world: Matrix4::from(rotation).into(),
-						view: (view * scale).cast::<f32>().unwrap().into(),
+						world: (Matrix4::from_translation(Vector3 { x: 0.0, y: 0.0, z: 0.0 }) * Matrix4::from(rotation) * scale).into(),
+						view: view.invert().unwrap().cast::<f32>().unwrap().into(),
 						proj: proj.into(),
 					};
 
