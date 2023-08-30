@@ -479,7 +479,7 @@ impl strafe_client::framework::Example for Skybox {
             }
 
             rpass.set_pipeline(&self.ground_pipeline);
-            rpass.draw(0..3, 0..1);
+            rpass.draw(0..6, 0..1);
 
             rpass.set_pipeline(&self.sky_pipeline);
             rpass.draw(0..3, 0..1);
