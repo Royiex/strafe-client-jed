@@ -89,7 +89,7 @@ impl Skybox {
     }
 }
 
-impl wgpu_example::framework::Example for Skybox {
+impl strafe_client::framework::Example for Skybox {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::TEXTURE_COMPRESSION_ASTC
             | wgpu::Features::TEXTURE_COMPRESSION_ETC2
@@ -396,7 +396,7 @@ impl wgpu_example::framework::Example for Skybox {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
+        _spawner: &strafe_client::framework::Spawner,
     ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -460,7 +460,7 @@ impl wgpu_example::framework::Example for Skybox {
 }
 
 fn main() {
-    wgpu_example::framework::run::<Skybox>("skybox");
+    strafe_client::framework::run::<Skybox>("skybox");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
