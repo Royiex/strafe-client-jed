@@ -1,6 +1,6 @@
 struct SkyOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec3<f32>,
+    @location(0) sampledir: vec3<f32>,
 };
 
 struct Data {
@@ -34,7 +34,7 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
     let unprojected = r_data.proj_inv * pos;
 
     var result: SkyOutput;
-    result.uv = inv_model_view * unprojected.xyz;
+    result.sampledir = inv_model_view * unprojected.xyz;
     result.position = pos;
     return result;
 }
@@ -92,7 +92,7 @@ var r_sampler: sampler;
 
 @fragment
 fn fs_sky(vertex: SkyOutput) -> @location(0) vec4<f32> {
-    return textureSample(r_texture, r_sampler, vertex.uv);
+    return textureSample(r_texture, r_sampler, vertex.sampledir);
 }
 
 @fragment
