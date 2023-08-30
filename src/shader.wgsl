@@ -39,6 +39,32 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
     return result;
 }
 
+struct GroundOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(3) view: vec3<f32>,
+    @location(4) pos: vec3<f32>,
+};
+
+@vertex
+fn vs_ground(@builtin(vertex_index) vertex_index: u32) -> GroundOutput {
+    // hacky way to draw two triangles that make a square
+    let tmp1 = (i32(vertex_index)-i32(vertex_index)/3*2) / 2;
+    let tmp2 = (i32(vertex_index)-i32(vertex_index)/3*2) & 1;
+    let pos = vec3<f32>(
+        f32(tmp1) * 2.0 - 1.0,
+        0.0,
+        f32(tmp2) * 2.0 - 1.0
+    ) * 100.0;
+
+    var result: GroundOutput;
+    result.normal = vec3<f32>(0.0,1.0,0.0);
+    result.pos = pos;
+    result.view = pos - r_data.cam_pos.xyz;
+    result.position = r_data.proj * r_data.view * vec4<f32>(pos, 1.0);
+    return result;
+}
+
 struct EntityOutput {
     @builtin(position) position: vec4<f32>,
     @location(1) normal: vec3<f32>,
@@ -77,4 +103,16 @@ fn fs_entity(vertex: EntityOutput) -> @location(0) vec4<f32> {
 
     let reflected_color = textureSample(r_texture, r_sampler, reflected).rgb;
     return vec4<f32>(vec3<f32>(0.1) + 0.5 * reflected_color, 1.0);
+}
+
+@fragment
+fn fs_ground(vertex: GroundOutput) -> @location(0) vec4<f32> {
+    //let incident = normalize(vertex.view);
+    //let normal = normalize(vertex.normal+vec3<f32>(cos(vertex.pos.x)/16.0,0.0,sin(vertex.pos.z)/16.0));
+    //let reflected = incident - 2.0 * dot(normal, incident) * normal;
+
+    //let reflected_color = textureSample(r_texture, r_sampler, reflected).rgb;
+    //return vec4<f32>(vec3<f32>(0.1) + 0.5 * reflected_color, 1.0);
+    let dir = vec3<f32>(-1.0)+vec3<f32>(vertex.pos.x/16.%1.0,0.0,vertex.pos.z/16.%1.0)*2.0;
+    return vec4<f32>(textureSample(r_texture, r_sampler, dir).rgb, 1.0);
 }

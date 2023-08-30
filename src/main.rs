@@ -56,6 +56,7 @@ pub struct Skybox {
     camera: Camera,
     sky_pipeline: wgpu::RenderPipeline,
     entity_pipeline: wgpu::RenderPipeline,
+    ground_pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     uniform_buf: wgpu::Buffer,
     entities: Vec<Entity>,
@@ -251,6 +252,33 @@ impl strafe_client::framework::Example for Skybox {
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
         });
+        let ground_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Ground"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_ground",
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_ground",
+                targets: &[Some(config.view_formats[0].into())],
+            }),
+            primitive: wgpu::PrimitiveState {
+                front_face: wgpu::FrontFace::Cw,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: Self::DEPTH_FORMAT,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+        });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: None,
@@ -360,6 +388,7 @@ impl strafe_client::framework::Example for Skybox {
             camera,
             sky_pipeline,
             entity_pipeline,
+            ground_pipeline,
             bind_group,
             uniform_buf,
             entities,
@@ -448,6 +477,9 @@ impl strafe_client::framework::Example for Skybox {
                 rpass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
                 rpass.draw(0..entity.vertex_count, 0..1);
             }
+
+            rpass.set_pipeline(&self.ground_pipeline);
+            rpass.draw(0..3, 0..1);
 
             rpass.set_pipeline(&self.sky_pipeline);
             rpass.draw(0..3, 0..1);
