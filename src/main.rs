@@ -350,6 +350,24 @@ fn main() {
 						ElementState::Pressed => controls|=CONTROL_MOVEDOWN,
 						ElementState::Released => controls&=!CONTROL_MOVEDOWN,
 					}
+                    (k,VirtualKeyCode::Tab) => match k {
+                        ElementState::Pressed => {
+                            let window = surface.object().unwrap().downcast_ref::<Window>().unwrap();
+                            let garb = window.set_cursor_grab(winit::window::CursorGrabMode::None);
+                            match garb {
+                                Err(err) => println!("set_cursor_grab error: {}",err),
+                                _ => (),
+                            }
+                        }
+                        ElementState::Released => {
+                            let window = surface.object().unwrap().downcast_ref::<Window>().unwrap();
+                            let garb = window.set_cursor_grab(winit::window::CursorGrabMode::Locked);
+                            match garb {
+                                Err(err) => println!("set_cursor_grab error: {}",err),
+                                _ => (),
+                            }
+                        }
+                    }
 					_ => (),
 				}
 			}
