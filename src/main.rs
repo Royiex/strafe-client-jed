@@ -413,9 +413,9 @@ fn main() {
 					);
 					let view = Matrix4::from_translation(pos)*Matrix4::from(angles);
 					let scale = Matrix4::from_scale(-0.01);
-
+// Matrix4::from_translation(Vector3 { x: 0.0, y: 0.0, z: 0.0 }) * 
 					let uniform_data = vs::Data {
-						world: (Matrix4::from_translation(Vector3 { x: 0.0, y: 0.0, z: 0.0 }) * Matrix4::from(rotation) * scale).into(),
+						world: (Matrix4::from(rotation) * scale).into(),
 						view: view.invert().unwrap().cast::<f32>().unwrap().into(),
 						proj: proj.into(),
 					};
