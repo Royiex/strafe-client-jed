@@ -471,8 +471,8 @@ impl strafe_client::framework::Example for Skybox {
             });
 
             rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.set_pipeline(&self.entity_pipeline);
 
+            rpass.set_pipeline(&self.entity_pipeline);
             for entity in self.entities.iter() {
                 rpass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
                 rpass.draw(0..entity.vertex_count, 0..1);
