@@ -359,7 +359,7 @@ fn main() {
 		let dt = (time_now-time).as_secs_f64();
 		if dt > 1.0 / 120.0 {
 			time = time_now;
-				let angles = Euler{x:Rad(mouse.y/256.),y:Rad(mouse.x/-256.),z:Rad(0.0)};
+				let angles = Euler{x:Rad(mouse.y/1024.),y:Rad(mouse.x/-1024.),z:Rad(0.0)};
 				let orientation=Quaternion::from(angles);
 				pos += orientation.rotate_vector(get_control_dir(controls))*fly_speed;
 
