@@ -1,0 +1,1 @@
+By contributing code to the [StrafesNET project](https://git.itzana.me/StrafesNET/strafe-client), you agree to license your contribution under the [License](LICENSE).
