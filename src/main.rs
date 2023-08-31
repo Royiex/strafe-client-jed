@@ -517,7 +517,7 @@ impl strafe_client::framework::Example for Skybox {
         let dt=(time-self.camera.time).as_secs_f32();
         self.camera.time=time;
         let camera_mat=glam::Mat3::from_euler(glam::EulerRot::YXZ,self.camera.yaw,0f32,0f32);
-        let control_dir=camera_mat*get_control_dir(self.camera.controls&(CONTROL_MOVELEFT|CONTROL_MOVERIGHT|CONTROL_MOVEFORWARD|CONTROL_MOVEBACK));
+        let control_dir=camera_mat*get_control_dir(self.camera.controls&(CONTROL_MOVELEFT|CONTROL_MOVERIGHT|CONTROL_MOVEFORWARD|CONTROL_MOVEBACK)).normalize_or_zero();
         let d=self.camera.vel.dot(control_dir);
         if d<self.camera.mv {
             self.camera.vel+=(self.camera.mv-d)*control_dir;
@@ -535,7 +535,7 @@ impl strafe_client::framework::Example for Skybox {
         }
         if self.camera.grounded {
             let applied_friction=self.camera.friction*dt;
-            let targetv=control_dir.normalize_or_zero()*self.camera.walkspeed;
+            let targetv=control_dir*self.camera.walkspeed;
             let diffv=targetv-self.camera.vel;
             if applied_friction*applied_friction<diffv.length_squared() {
                 self.camera.vel+=applied_friction*diffv.normalize();
