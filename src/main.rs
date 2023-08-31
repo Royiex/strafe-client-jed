@@ -209,7 +209,7 @@ impl strafe_client::framework::Example for Skybox {
             time: Instant::now(),
             pos: glam::Vec3 { x: 5.0, y: 5.0, z: 5.0 },
             vel: glam::Vec3 { x: 0.0, y: 0.0, z: 0.0 },
-            gravity: glam::Vec3 { x: 0.0, y: -50.0, z: 0.0 },
+            gravity: glam::Vec3 { x: 0.0, y: -100.0, z: 0.0 },
             screen_size: (config.width, config.height),
             pitch: 0.0,
             yaw: 0.0,
