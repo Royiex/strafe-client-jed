@@ -22,6 +22,7 @@ struct Camera {
     pos: glam::Vec3,
     vel: glam::Vec3,
     gravity: glam::Vec3,
+    friction: f32,
     screen_size: (u32, u32),
     offset: glam::Vec3,
     yaw: f32,
@@ -212,6 +213,7 @@ impl strafe_client::framework::Example for Skybox {
             pos: glam::Vec3::new(5.0,0.0,5.0),
             vel: glam::Vec3::new(0.0,0.0,0.0),
             gravity: glam::Vec3 { x: 0.0, y: -100.0, z: 0.0 },
+            friction: 80.0,
             screen_size: (config.width, config.height),
             offset: glam::Vec3::new(0.0,4.5,0.0),
             pitch: 0.0,
@@ -528,6 +530,14 @@ impl strafe_client::framework::Example for Skybox {
         if self.camera.grounded&&(self.camera.controls&CONTROL_JUMP)!=0 {
             self.camera.grounded=false;
             self.camera.vel+=glam::Vec3::new(0.0,50.0,0.0);
+        }
+        if self.camera.grounded {
+            let applied_friction=self.camera.friction*dt;
+            if applied_friction*applied_friction<self.camera.vel.length_squared() {
+                self.camera.vel-=applied_friction*self.camera.vel.normalize();
+            } else {
+                self.camera.vel=glam::Vec3::new(0.0,0.0,0.0);
+            }
         }
 
         let mut encoder =
