@@ -581,5 +581,5 @@ impl strafe_client::framework::Example for Skybox {
 }
 
 fn main() {
-    strafe_client::framework::run::<Skybox>("skybox");
+    strafe_client::framework::run::<Skybox>("Strafe Client v0.1");
 }
