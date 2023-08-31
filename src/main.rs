@@ -504,8 +504,8 @@ impl strafe_client::framework::Example for Skybox {
         //physique
         let dt=(time-self.camera.time).as_secs_f32();
         self.camera.time=time;
-        let camera_mat=glam::Mat3::from_euler(glam::EulerRot::YXZ,self.camera.yaw,self.camera.pitch,0f32);
-        let control_dir=camera_mat*get_control_dir(self.camera.controls&(CONTROL_MOVELEFT|CONTROL_MOVERIGHT));
+        let camera_mat=glam::Mat3::from_euler(glam::EulerRot::YXZ,self.camera.yaw,0f32,0f32);
+        let control_dir=camera_mat*get_control_dir(self.camera.controls&(CONTROL_MOVELEFT|CONTROL_MOVERIGHT|CONTROL_MOVEFORWARD|CONTROL_MOVEBACK));
         let d=self.camera.vel.dot(control_dir);
         if d<self.camera.mv {
             self.camera.vel+=(self.camera.mv-d)*control_dir;
