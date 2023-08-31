@@ -28,6 +28,7 @@ struct Camera {
     pitch: f32,
     controls: u32,
     mv: f32,
+    grounded: bool,
 }
 
 const CONTROL_MOVEFORWARD:u32 = 0b00000001;
@@ -36,7 +37,7 @@ const CONTROL_MOVERIGHT:u32 = 0b00000100;
 const CONTROL_MOVELEFT:u32 = 0b00001000;
 const CONTROL_MOVEUP:u32 = 0b00010000;
 const CONTROL_MOVEDOWN:u32 = 0b00100000;
-//const CONTROL_JUMP:u32 = 0b01000000;
+const CONTROL_JUMP:u32 = 0b01000000;
 //const CONTROL_ZOOM:u32 = 0b10000000;
 
 const FORWARD_DIR:glam::Vec3 = glam::Vec3::new(0.0,0.0,-1.0);
@@ -217,6 +218,7 @@ impl strafe_client::framework::Example for Skybox {
             yaw: 0.0,
             mv: 2.7,
             controls:0,
+            grounded: true,
         };
         let raw_uniforms = camera.to_uniform_data();
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -472,6 +474,10 @@ impl strafe_client::framework::Example for Skybox {
                         winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEDOWN,
                         winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEDOWN,
                     }
+                    (k,winit::event::VirtualKeyCode::Space) => match k {
+                        winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_JUMP,
+                        winit::event::ElementState::Released => self.camera.controls&=!CONTROL_JUMP,
+                    }
                     _ => (),
                 }
             }
@@ -514,7 +520,13 @@ impl strafe_client::framework::Example for Skybox {
         }
         self.camera.vel+=self.camera.gravity*dt;
         self.camera.pos+=self.camera.vel*dt;
-        if self.camera.pos.y<5.0&&self.camera.vel.y<0.0 {
+        if self.camera.pos.y<0.0{
+            self.camera.pos.y=0.0;
+            self.camera.vel.y=0.0;
+            self.camera.grounded=true;
+        }
+        if self.camera.grounded&&(self.camera.controls&CONTROL_JUMP)!=0 {
+            self.camera.grounded=false;
             self.camera.vel+=glam::Vec3 { x: 0.0, y: 50.0, z: 0.0 };
         }
 
