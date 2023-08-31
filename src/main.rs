@@ -69,7 +69,7 @@ fn get_control_dir(controls: u32) -> glam::Vec3{
 impl Camera {
     fn to_uniform_data(&self) -> [f32; 16 * 3 + 4] {
         let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
-        let proj = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect, 1.0, 200.0);
+        let proj = glam::Mat4::perspective_rh(consts::FRAC_PI_2, aspect, 1.0, 200.0);
         let view = (glam::Mat4::from_translation(self.pos) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.yaw, self.pitch, 0f32)).inverse();
         let proj_inv = proj.inverse();
 
