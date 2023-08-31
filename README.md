@@ -1,3 +1,5 @@
+<img align="right" width="25%" src="strafe.png">
+
 # Strafe Client
 In development client for jumping on squares (and riding on triangles)
 
