@@ -54,6 +54,7 @@ pub trait Example: 'static + Sized {
         queue: &wgpu::Queue,
     );
     fn update(&mut self, event: WindowEvent);
+    fn move_mouse(&mut self, delta: (f64,f64));
     fn render(
         &mut self,
         view: &wgpu::TextureView,
@@ -352,6 +353,15 @@ fn start<E: Example>(
                 _ => {
                     example.update(event);
                 }
+            },
+            event::Event::DeviceEvent {
+                event:
+                    winit::event::DeviceEvent::MouseMotion {
+                        delta,
+                    },
+                ..
+            } => {
+                example.move_mouse(delta);
             },
             event::Event::RedrawRequested(_) => {
                 #[cfg(not(target_arch = "wasm32"))]

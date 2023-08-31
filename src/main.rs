@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts};
+use std::{borrow::Cow, f32::consts,time::Instant};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 
 const IMAGE_SIZE: u32 = 128;
@@ -18,35 +18,66 @@ struct Entity {
 
 // Note: we use the Y=up coordinate space in this example.
 struct Camera {
+    time: Instant,
+    pos: glam::Vec3,
+    vel: glam::Vec3,
+    gravity: glam::Vec3,
     screen_size: (u32, u32),
-    angle_y: f32,
-    angle_xz: f32,
-    dist: f32,
+    yaw: f32,
+    pitch: f32,
+    controls: u32,
+    mv: f32,
 }
 
-const MODEL_CENTER_Y: f32 = 2.0;
+const CONTROL_MOVEFORWARD:u32 = 0b00000001;
+const CONTROL_MOVEBACK:u32 = 0b00000010;
+const CONTROL_MOVERIGHT:u32 = 0b00000100;
+const CONTROL_MOVELEFT:u32 = 0b00001000;
+const CONTROL_MOVEUP:u32 = 0b00010000;
+const CONTROL_MOVEDOWN:u32 = 0b00100000;
+//const CONTROL_JUMP:u32 = 0b01000000;
+//const CONTROL_ZOOM:u32 = 0b10000000;
+
+const FORWARD_DIR:glam::Vec3 = glam::Vec3::new(0.0,0.0,-1.0);
+const RIGHT_DIR:glam::Vec3 = glam::Vec3::new(1.0,0.0,0.0);
+const UP_DIR:glam::Vec3 = glam::Vec3::new(0.0,1.0,0.0);
+
+fn get_control_dir(controls: u32) -> glam::Vec3{
+    //don't get fancy just do it
+    let mut control_dir:glam::Vec3 = glam::Vec3::new(0.0,0.0,0.0);
+    if controls & CONTROL_MOVEFORWARD == CONTROL_MOVEFORWARD {
+        control_dir+=FORWARD_DIR;
+    }
+    if controls & CONTROL_MOVEBACK == CONTROL_MOVEBACK {
+        control_dir+=-FORWARD_DIR;
+    }
+    if controls & CONTROL_MOVELEFT == CONTROL_MOVELEFT {
+        control_dir+=-RIGHT_DIR;
+    }
+    if controls & CONTROL_MOVERIGHT == CONTROL_MOVERIGHT {
+        control_dir+=RIGHT_DIR;
+    }
+    if controls & CONTROL_MOVEUP == CONTROL_MOVEUP {
+        control_dir+=UP_DIR;
+    }
+    if controls & CONTROL_MOVEDOWN == CONTROL_MOVEDOWN {
+        control_dir+=-UP_DIR;
+    }
+    return control_dir
+}
 
 impl Camera {
     fn to_uniform_data(&self) -> [f32; 16 * 3 + 4] {
         let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
-        let proj = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect, 1.0, 50.0);
-        let cam_pos = glam::Vec3::new(
-            self.angle_xz.cos() * self.angle_y.sin() * self.dist,
-            self.angle_xz.sin() * self.dist + MODEL_CENTER_Y,
-            self.angle_xz.cos() * self.angle_y.cos() * self.dist,
-        );
-        let view = glam::Mat4::look_at_rh(
-            cam_pos,
-            glam::Vec3::new(0f32, MODEL_CENTER_Y, 0.0),
-            glam::Vec3::Y,
-        );
+        let proj = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect, 1.0, 200.0);
+        let view = (glam::Mat4::from_translation(self.pos) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.yaw, self.pitch, 0f32)).inverse();
         let proj_inv = proj.inverse();
 
         let mut raw = [0f32; 16 * 3 + 4];
         raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj)[..]);
         raw[16..32].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj_inv)[..]);
         raw[32..48].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&view)[..]);
-        raw[48..51].copy_from_slice(AsRef::<[f32; 3]>::as_ref(&cam_pos));
+        raw[48..51].copy_from_slice(AsRef::<[f32; 3]>::as_ref(&self.pos));
         raw[51] = 1.0;
         raw
     }
@@ -175,10 +206,15 @@ impl strafe_client::framework::Example for Skybox {
         });
 
         let camera = Camera {
+            time: Instant::now(),
+            pos: glam::Vec3 { x: 5.0, y: 5.0, z: 5.0 },
+            vel: glam::Vec3 { x: 0.0, y: 0.0, z: 0.0 },
+            gravity: glam::Vec3 { x: 0.0, y: -50.0, z: 0.0 },
             screen_size: (config.width, config.height),
-            angle_xz: 0.2,
-            angle_y: 0.2,
-            dist: 20.0,
+            pitch: 0.0,
+            yaw: 0.0,
+            mv: 2.7,
+            controls:0,
         };
         let raw_uniforms = camera.to_uniform_data();
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -400,14 +436,50 @@ impl strafe_client::framework::Example for Skybox {
     #[allow(clippy::single_match)]
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
-            winit::event::WindowEvent::CursorMoved { position, .. } => {
-                let norm_x = position.x as f32 / self.camera.screen_size.0 as f32 - 0.5;
-                let norm_y = position.y as f32 / self.camera.screen_size.1 as f32 - 0.5;
-                self.camera.angle_y = norm_x * 5.0;
-                self.camera.angle_xz = norm_y;
+            winit::event::WindowEvent::KeyboardInput {
+                input:
+                    winit::event::KeyboardInput {
+                        state,
+                        virtual_keycode: Some(keycode),
+                        ..
+                    },
+                ..
+            } => {
+                match (state,keycode) {
+                    (k,winit::event::VirtualKeyCode::W) => match k {
+                        winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEFORWARD,
+                        winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEFORWARD,
+                    }
+                    (k,winit::event::VirtualKeyCode::A) => match k {
+                        winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVELEFT,
+                        winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVELEFT,
+                    }
+                    (k,winit::event::VirtualKeyCode::S) => match k {
+                        winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEBACK,
+                        winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEBACK,
+                    }
+                    (k,winit::event::VirtualKeyCode::D) => match k {
+                        winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVERIGHT,
+                        winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVERIGHT,
+                    }
+                    (k,winit::event::VirtualKeyCode::E) => match k {
+                        winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEUP,
+                        winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEUP,
+                    }
+                    (k,winit::event::VirtualKeyCode::Q) => match k {
+                        winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEDOWN,
+                        winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEDOWN,
+                    }
+                    _ => (),
+                }
             }
             _ => {}
         }
+    }
+
+    fn move_mouse(&mut self, delta: (f64,f64)) {
+        self.camera.pitch+=(delta.1/-512.) as f32;
+        self.camera.yaw+=(delta.0/-512.) as f32;
     }
 
     fn resize(
@@ -427,6 +499,23 @@ impl strafe_client::framework::Example for Skybox {
         queue: &wgpu::Queue,
         _spawner: &strafe_client::framework::Spawner,
     ) {
+        let time = Instant::now();
+
+        //physique
+        let dt=(time-self.camera.time).as_secs_f32();
+        self.camera.time=time;
+        let camera_mat=glam::Mat3::from_euler(glam::EulerRot::YXZ,self.camera.yaw,self.camera.pitch,0f32);
+        let control_dir=camera_mat*get_control_dir(self.camera.controls&(CONTROL_MOVELEFT|CONTROL_MOVERIGHT));
+        let d=self.camera.vel.dot(control_dir);
+        if d<self.camera.mv {
+            self.camera.vel+=(self.camera.mv-d)*control_dir;
+        }
+        self.camera.vel+=self.camera.gravity*dt;
+        self.camera.pos+=self.camera.vel*dt;
+        if self.camera.pos.y<5.0&&self.camera.vel.y<0.0 {
+            self.camera.vel+=glam::Vec3 { x: 0.0, y: 50.0, z: 0.0 };
+        }
+
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
