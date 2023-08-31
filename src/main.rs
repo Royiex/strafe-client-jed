@@ -531,7 +531,7 @@ impl strafe_client::framework::Example for Skybox {
         }
         if self.camera.grounded&&(self.camera.controls&CONTROL_JUMP)!=0 {
             self.camera.grounded=false;
-            self.camera.vel+=glam::Vec3::new(0.0,50.0,0.0);
+            self.camera.vel+=glam::Vec3::new(0.0,0.715588/2.0*100.0,0.0);
         }
         if self.camera.grounded {
             let applied_friction=self.camera.friction*dt;
