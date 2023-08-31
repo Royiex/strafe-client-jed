@@ -30,6 +30,7 @@ struct Camera {
     controls: u32,
     mv: f32,
     grounded: bool,
+    walkspeed: f32,
 }
 
 const CONTROL_MOVEFORWARD:u32 = 0b00000001;
@@ -221,6 +222,7 @@ impl strafe_client::framework::Example for Skybox {
             mv: 2.7,
             controls:0,
             grounded: true,
+            walkspeed: 18.0,
         };
         let raw_uniforms = camera.to_uniform_data();
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -533,10 +535,12 @@ impl strafe_client::framework::Example for Skybox {
         }
         if self.camera.grounded {
             let applied_friction=self.camera.friction*dt;
-            if applied_friction*applied_friction<self.camera.vel.length_squared() {
-                self.camera.vel-=applied_friction*self.camera.vel.normalize();
+            let targetv=control_dir.normalize_or_zero()*self.camera.walkspeed;
+            let diffv=targetv-self.camera.vel;
+            if applied_friction*applied_friction<diffv.length_squared() {
+                self.camera.vel+=applied_friction*diffv.normalize();
             } else {
-                self.camera.vel=glam::Vec3::new(0.0,0.0,0.0);
+                self.camera.vel=targetv;
             }
         }
 
