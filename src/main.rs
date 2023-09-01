@@ -41,7 +41,7 @@ const CONTROL_MOVELEFT:u32 = 0b00001000;
 const CONTROL_MOVEUP:u32 = 0b00010000;
 const CONTROL_MOVEDOWN:u32 = 0b00100000;
 const CONTROL_JUMP:u32 = 0b01000000;
-//const CONTROL_ZOOM:u32 = 0b10000000;
+const CONTROL_ZOOM:u32 = 0b10000000;
 
 const FORWARD_DIR:glam::Vec3 = glam::Vec3::new(0.0,0.0,-1.0);
 const RIGHT_DIR:glam::Vec3 = glam::Vec3::new(1.0,0.0,0.0);
@@ -86,7 +86,12 @@ fn get_control_dir(controls: u32) -> glam::Vec3{
 impl Camera {
     fn to_uniform_data(&self) -> [f32; 16 * 3 + 4] {
         let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
-        let proj = perspective_rh(self.fov, aspect, 1.0, 200.0);
+        let fov = if self.controls&CONTROL_ZOOM==0 {
+            self.fov
+        }else{
+            self.fov/5.0
+        };
+        let proj = perspective_rh(fov, aspect, 1.0, 200.0);
         let view = (glam::Mat4::from_translation(self.pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.yaw, self.pitch, 0f32)).inverse();
         let proj_inv = proj.inverse();
 
@@ -495,6 +500,10 @@ impl strafe_client::framework::Example for Skybox {
                     (k,winit::event::VirtualKeyCode::Space) => match k {
                         winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_JUMP,
                         winit::event::ElementState::Released => self.camera.controls&=!CONTROL_JUMP,
+                    }
+                    (k,winit::event::VirtualKeyCode::Z) => match k {
+                        winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_ZOOM,
+                        winit::event::ElementState::Released => self.camera.controls&=!CONTROL_ZOOM,
                     }
                     _ => (),
                 }
