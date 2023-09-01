@@ -619,6 +619,8 @@ impl strafe_client::framework::Example for Skybox {
             }
 
             rpass.set_pipeline(&self.ground_pipeline);
+            //rpass.set_index_buffer(&[0u16,1,2,1,2,3][..] as wgpu::BufferSlice, wgpu::IndexFormat::Uint16);
+            //rpass.draw_indexed(0..4, 0, 0..1);
             rpass.draw(0..6, 0..1);
 
             rpass.set_pipeline(&self.sky_pipeline);
