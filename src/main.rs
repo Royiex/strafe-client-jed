@@ -111,7 +111,7 @@ pub struct Skybox {
     entity_pipeline: wgpu::RenderPipeline,
     ground_pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
-    uniform_buf: wgpu::Buffer,
+    camera_buf: wgpu::Buffer,
     entities: Vec<Entity>,
     depth_view: wgpu::TextureView,
     staging_belt: wgpu::util::StagingBelt,
@@ -245,10 +245,10 @@ impl strafe_client::framework::Example for Skybox {
             grounded: true,
             walkspeed: 18.0,
         };
-        let raw_uniforms = camera.to_uniform_data();
-        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Buffer"),
-            contents: bytemuck::cast_slice(&raw_uniforms),
+        let camera_uniforms = camera.to_uniform_data();
+        let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera"),
+            contents: bytemuck::cast_slice(&camera_uniforms),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -433,7 +433,7 @@ impl strafe_client::framework::Example for Skybox {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: uniform_buf.as_entire_binding(),
+                    resource: camera_buf.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -455,7 +455,7 @@ impl strafe_client::framework::Example for Skybox {
             entity_pipeline,
             ground_pipeline,
             bind_group,
-            uniform_buf,
+            camera_buf,
             entities,
             depth_view,
             staging_belt: wgpu::util::StagingBelt::new(0x100),
@@ -573,16 +573,16 @@ impl strafe_client::framework::Example for Skybox {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         // update rotation
-        let raw_uniforms = self.camera.to_uniform_data();
+        let camera_uniforms = self.camera.to_uniform_data();
         self.staging_belt
             .write_buffer(
                 &mut encoder,
-                &self.uniform_buf,
+                &self.camera_buf,
                 0,
-                wgpu::BufferSize::new((raw_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
+                wgpu::BufferSize::new((camera_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
                 device,
             )
-            .copy_from_slice(bytemuck::cast_slice(&raw_uniforms));
+            .copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
 
         self.staging_belt.finish();
 
