@@ -143,6 +143,37 @@ impl Skybox {
     }
 }
 
+fn add_obj(device:&wgpu::Device,entities:& mut Vec<Entity>,source:&[u8]){
+    let data = obj::ObjData::load_buf(&source[..]).unwrap();
+    let mut vertices = Vec::new();
+    for object in data.objects {
+        for group in object.groups {
+            vertices.clear();
+            for poly in group.polys {
+                for end_index in 2..poly.0.len() {
+                    for &index in &[0, end_index - 1, end_index] {
+                        let obj::IndexTuple(position_id, _texture_id, normal_id) =
+                            poly.0[index];
+                        vertices.push(Vertex {
+                            pos: data.position[position_id],
+                            normal: data.normal[normal_id.unwrap()],
+                        })
+                    }
+                }
+            }
+            let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex"),
+                contents: bytemuck::cast_slice(&vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+            entities.push(Entity {
+                vertex_count: vertices.len() as u32,
+                vertex_buf,
+            });
+        }
+    }
+}
+
 impl strafe_client::framework::Example for Skybox {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::TEXTURE_COMPRESSION_ASTC
@@ -156,38 +187,9 @@ impl strafe_client::framework::Example for Skybox {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let mut entities = Vec::new();
-        {
-            let source = include_bytes!("../models/teslacyberv3.0.obj");
-            let data = obj::ObjData::load_buf(&source[..]).unwrap();
-            let mut vertices = Vec::new();
-            for object in data.objects {
-                for group in object.groups {
-                    vertices.clear();
-                    for poly in group.polys {
-                        for end_index in 2..poly.0.len() {
-                            for &index in &[0, end_index - 1, end_index] {
-                                let obj::IndexTuple(position_id, _texture_id, normal_id) =
-                                    poly.0[index];
-                                vertices.push(Vertex {
-                                    pos: data.position[position_id],
-                                    normal: data.normal[normal_id.unwrap()],
-                                })
-                            }
-                        }
-                    }
-                    let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Vertex"),
-                        contents: bytemuck::cast_slice(&vertices),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    });
-                    entities.push(Entity {
-                        vertex_count: vertices.len() as u32,
-                        vertex_buf,
-                    });
-                }
-            }
-        }
+        let mut entities = Vec::<Entity>::new();
+        add_obj(device,& mut entities,include_bytes!("../models/teslacyberv3.0.obj"));
+        add_obj(device,& mut entities,include_bytes!("../models/suzanne.obj"));
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
