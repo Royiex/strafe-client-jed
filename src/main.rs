@@ -100,7 +100,7 @@ impl Camera {
         raw[16..32].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj_inv)[..]);
         raw[32..48].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&view)[..]);
         raw[48..51].copy_from_slice(AsRef::<[f32; 3]>::as_ref(&self.pos));
-        raw[51] = 1.0;
+        raw[51] = 1.0;//cam_pos is vec4
         raw
     }
 }
