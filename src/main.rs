@@ -12,6 +12,7 @@ struct Vertex {
 }
 
 struct Entity {
+    transform: glam::Affine3A,
     vertex_count: u32,
     vertex_buf: wgpu::Buffer,
 }
@@ -33,6 +34,8 @@ struct Camera {
     grounded: bool,
     walkspeed: f32,
 }
+
+const MAGIC_ENTITIES: usize = 7;
 
 const CONTROL_MOVEFORWARD:u32 = 0b00000001;
 const CONTROL_MOVEBACK:u32 = 0b00000010;
@@ -112,6 +115,7 @@ pub struct Skybox {
     ground_pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
+    entity_buf: wgpu::Buffer,
     entities: Vec<Entity>,
     depth_view: wgpu::TextureView,
     staging_belt: wgpu::util::StagingBelt,
@@ -143,6 +147,15 @@ impl Skybox {
     }
 }
 
+fn get_entity_uniform_data(entities:& Vec<Entity>) -> [f32; (9+3)*MAGIC_ENTITIES] {
+    let mut raw = [0f32; (9+3)*MAGIC_ENTITIES];
+    for (i,entity) in entities.iter().enumerate() {
+        raw[i*12..(i+1)*12-3].copy_from_slice(&AsRef::<[f32; 9]>::as_ref(&glam::Mat3::from(entity.transform.matrix3))[..]);
+        raw[i*12+9..(i+1)*12].copy_from_slice(AsRef::<[f32; 3]>::as_ref(&glam::Vec3::from(entity.transform.translation)));
+    }
+    raw
+}
+
 fn add_obj(device:&wgpu::Device,entities:& mut Vec<Entity>,source:&[u8]){
     let data = obj::ObjData::load_buf(&source[..]).unwrap();
     let mut vertices = Vec::new();
@@ -167,6 +180,7 @@ fn add_obj(device:&wgpu::Device,entities:& mut Vec<Entity>,source:&[u8]){
                 usage: wgpu::BufferUsages::VERTEX,
             });
             entities.push(Entity {
+                transform: glam::Affine3A::default(),
                 vertex_count: vertices.len() as u32,
                 vertex_buf,
             });
@@ -190,6 +204,8 @@ impl strafe_client::framework::Example for Skybox {
         let mut entities = Vec::<Entity>::new();
         add_obj(device,& mut entities,include_bytes!("../models/teslacyberv3.0.obj"));
         add_obj(device,& mut entities,include_bytes!("../models/suzanne.obj"));
+        println!("entities.len = {:?}", entities.len());
+        entities[6].transform=glam::Affine3A::from_translation(glam::vec3(10.,5.,10.));
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
@@ -218,6 +234,16 @@ impl strafe_client::framework::Example for Skybox {
                     binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
                     count: None,
                 },
             ],
@@ -249,6 +275,13 @@ impl strafe_client::framework::Example for Skybox {
         let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera"),
             contents: bytemuck::cast_slice(&camera_uniforms),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let entity_uniforms = get_entity_uniform_data(&entities);
+        let entity_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("EntityData"),
+            contents: bytemuck::cast_slice(&entity_uniforms),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -443,6 +476,10 @@ impl strafe_client::framework::Example for Skybox {
                     binding: 2,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: entity_buf.as_entire_binding(),
+                },
             ],
             label: None,
         });
@@ -456,6 +493,7 @@ impl strafe_client::framework::Example for Skybox {
             ground_pipeline,
             bind_group,
             camera_buf,
+            entity_buf,
             entities,
             depth_view,
             staging_belt: wgpu::util::StagingBelt::new(0x100),
@@ -583,6 +621,16 @@ impl strafe_client::framework::Example for Skybox {
                 device,
             )
             .copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
+        let entity_uniforms = get_entity_uniform_data(&self.entities);
+        self.staging_belt
+            .write_buffer(
+                &mut encoder,
+                &self.entity_buf,//description of where data will be written when command is executed
+                0,//offset in staging belt?
+                wgpu::BufferSize::new((entity_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
+                device,
+            )
+            .copy_from_slice(bytemuck::cast_slice(&entity_uniforms));
 
         self.staging_belt.finish();
 
