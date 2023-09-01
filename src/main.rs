@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts,time::Instant};
+use std::{borrow::Cow, time::Instant};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 
 const IMAGE_SIZE: u32 = 128;
@@ -25,6 +25,7 @@ struct Camera {
     friction: f32,
     screen_size: (u32, u32),
     offset: glam::Vec3,
+    fov: f32,
     yaw: f32,
     pitch: f32,
     controls: u32,
@@ -70,10 +71,22 @@ fn get_control_dir(controls: u32) -> glam::Vec3{
     return control_dir
 }
 
+    #[inline]
+    fn perspective_rh(fov_y_slope: f32, aspect_ratio: f32, z_near: f32, z_far: f32) -> glam::Mat4 {
+        //glam_assert!(z_near > 0.0 && z_far > 0.0);
+        let r = z_far / (z_near - z_far);
+        glam::Mat4::from_cols(
+            glam::Vec4::new(1.0/(fov_y_slope * aspect_ratio), 0.0, 0.0, 0.0),
+            glam::Vec4::new(0.0, 1.0/fov_y_slope, 0.0, 0.0),
+            glam::Vec4::new(0.0, 0.0, r, -1.0),
+            glam::Vec4::new(0.0, 0.0, r * z_near, 0.0),
+        )
+    }
+
 impl Camera {
     fn to_uniform_data(&self) -> [f32; 16 * 3 + 4] {
         let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
-        let proj = glam::Mat4::perspective_rh(consts::FRAC_PI_2, aspect, 1.0, 200.0);
+        let proj = perspective_rh(self.fov, aspect, 1.0, 200.0);
         let view = (glam::Mat4::from_translation(self.pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.yaw, self.pitch, 0f32)).inverse();
         let proj_inv = proj.inverse();
 
@@ -217,6 +230,7 @@ impl strafe_client::framework::Example for Skybox {
             friction: 90.0,
             screen_size: (config.width, config.height),
             offset: glam::Vec3::new(0.0,4.5,0.0),
+            fov: 1.0, //fov_slope = tan(fov_y/2)
             pitch: 0.0,
             yaw: 0.0,
             mv: 2.7,
