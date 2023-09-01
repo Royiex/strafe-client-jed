@@ -101,8 +101,20 @@ fn fs_entity(vertex: EntityOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(vec3<f32>(0.1) + 0.5 * reflected_color, 1.0);
 }
 
+fn modulo_euclidean (a: f32, b: f32) -> f32 {
+    var m = a % b;
+    if (m < 0.0) {
+        if (b < 0.0) {
+            m -= b;
+        } else {
+            m += b;
+        }
+    }
+    return m;
+}
+
 @fragment
 fn fs_ground(vertex: GroundOutput) -> @location(0) vec4<f32> {
-    let dir = vec3<f32>(-1.0)+vec3<f32>(vertex.pos.x/16.%1.0,0.0,vertex.pos.z/16.%1.0)*2.0;
+    let dir = vec3<f32>(-1.0)+vec3<f32>(modulo_euclidean(vertex.pos.x/16.,1.0),0.0,modulo_euclidean(vertex.pos.z/16.,1.0))*2.0;
     return vec4<f32>(textureSample(r_texture, r_sampler, dir).rgb, 1.0);
 }
