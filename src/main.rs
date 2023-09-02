@@ -119,7 +119,8 @@ pub struct Skybox {
     entity_buf: wgpu::Buffer,
     entities: Vec<Entity>,
     depth_view: wgpu::TextureView,
-    staging_belt: wgpu::util::StagingBelt,
+    camera_stagingbelt: wgpu::util::StagingBelt,
+    entity_stagingbelt: wgpu::util::StagingBelt,
 }
 
 impl Skybox {
@@ -499,7 +500,8 @@ impl strafe_client::framework::Example for Skybox {
             entity_buf,
             entities,
             depth_view,
-            staging_belt: wgpu::util::StagingBelt::new(0x100),
+            camera_stagingbelt: wgpu::util::StagingBelt::new(0x100),
+            entity_stagingbelt: wgpu::util::StagingBelt::new(0x100),
         }
     }
 
@@ -615,7 +617,7 @@ impl strafe_client::framework::Example for Skybox {
 
         // update rotation
         let camera_uniforms = self.camera.to_uniform_data();
-        self.staging_belt
+        self.camera_stagingbelt
             .write_buffer(
                 &mut encoder,
                 &self.camera_buf,
@@ -624,8 +626,11 @@ impl strafe_client::framework::Example for Skybox {
                 device,
             )
             .copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
+
+        self.camera_stagingbelt.finish();
+
         let entity_uniforms = get_entity_uniform_data(&self.entities);
-        self.staging_belt
+        self.entity_stagingbelt
             .write_buffer(
                 &mut encoder,
                 &self.entity_buf,//description of where data will be written when command is executed
@@ -635,7 +640,7 @@ impl strafe_client::framework::Example for Skybox {
             )
             .copy_from_slice(bytemuck::cast_slice(&entity_uniforms));
 
-        self.staging_belt.finish();
+        self.entity_stagingbelt.finish();
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -680,7 +685,8 @@ impl strafe_client::framework::Example for Skybox {
 
         queue.submit(std::iter::once(encoder.finish()));
 
-        self.staging_belt.recall();
+        self.camera_stagingbelt.recall();
+        self.entity_stagingbelt.recall();
     }
 }
 
