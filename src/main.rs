@@ -513,8 +513,8 @@ impl strafe_client::framework::Example for Skybox {
     }
 
     fn move_mouse(&mut self, delta: (f64,f64)) {
-        self.camera.pitch+=(delta.1/-512.) as f32;
-        self.camera.yaw+=(delta.0/-512.) as f32;
+        self.camera.pitch=(self.camera.pitch as f64+delta.1/-512.) as f32;
+        self.camera.yaw=(self.camera.yaw as f64+delta.0/-512.) as f32;
     }
 
     fn resize(
