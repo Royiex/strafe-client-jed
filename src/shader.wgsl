@@ -80,10 +80,11 @@ var<uniform> r_EntityTransforms: array<EntityTransform, 7>;
 fn vs_entity(
     @location(0) pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
+    @location(2) entity_id: u32,
 ) -> EntityOutput {
-    var position: vec3<f32> = pos;//r_EntityTransforms[instance_index].matrix3 * pos+r_EntityTransforms[instance_index].translation;
+    var position: vec3<f32> = r_EntityTransforms[entity_id].matrix3 * pos+r_EntityTransforms[entity_id].translation;
     var result: EntityOutput;
-    result.normal = normal;//r_EntityTransforms[instance_index].matrix3 * normal;
+    result.normal = r_EntityTransforms[entity_id].matrix3 * normal;
     result.view = position - r_data.cam_pos.xyz;
     result.position = r_data.proj * r_data.view * vec4<f32>(position, 1.0);
     return result;

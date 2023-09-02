@@ -9,6 +9,7 @@ const IMAGE_SIZE: u32 = 128;
 struct Vertex {
     pos: [f32; 3],
     normal: [f32; 3],
+    entity_id: u32,
 }
 
 struct Entity {
@@ -162,6 +163,7 @@ fn add_obj(device:&wgpu::Device,entities:& mut Vec<Entity>,source:&[u8]){
     for object in data.objects {
         for group in object.groups {
             vertices.clear();
+            let entity_id = entities.len() as u32;
             for poly in group.polys {
                 for end_index in 2..poly.0.len() {
                     for &index in &[0, end_index - 1, end_index] {
@@ -170,6 +172,7 @@ fn add_obj(device:&wgpu::Device,entities:& mut Vec<Entity>,source:&[u8]){
                         vertices.push(Vertex {
                             pos: data.position[position_id],
                             normal: data.normal[normal_id.unwrap()],
+                            entity_id,
                         })
                     }
                 }
@@ -328,7 +331,7 @@ impl strafe_client::framework::Example for Skybox {
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3],
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Uint32],
                 }],
             },
             fragment: Some(wgpu::FragmentState {
