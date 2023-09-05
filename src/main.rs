@@ -12,9 +12,21 @@ struct Vertex {
 }
 
 struct Entity {
-    transform: glam::Affine3A,
     vertex_count: u32,
     vertex_buf: wgpu::Buffer,
+}
+
+//temp?
+struct ModelData {
+    transform: glam::Affine3A,
+    entities: Vec<Entity>,
+}
+
+struct Model {
+    transform: glam::Affine3A,
+    entities: Vec<Entity>,
+    bind_group: wgpu::BindGroup,
+    model_buf: wgpu::Buffer,
 }
 
 // Note: we use the Y=up coordinate space in this example.
@@ -112,10 +124,8 @@ pub struct Skybox {
     entity_pipeline: wgpu::RenderPipeline,
     ground_pipeline: wgpu::RenderPipeline,
     main_bind_group: wgpu::BindGroup,
-    model_bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
-    entity_buf: wgpu::Buffer,
-    entities: Vec<Entity>,
+    models: Vec<Model>,
     depth_view: wgpu::TextureView,
     staging_belt: wgpu::util::StagingBelt,
 }
@@ -146,16 +156,17 @@ impl Skybox {
     }
 }
 
-fn get_entity_uniform_data(entity:&Entity) -> [f32; 4*4] {
+fn get_transform_uniform_data(transform:&glam::Affine3A) -> [f32; 4*4] {
     let mut raw = [0f32; 4*4];
-    raw[0..16].copy_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&glam::Mat4::from(entity.transform))[..]);
+    raw[0..16].copy_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&glam::Mat4::from(*transform))[..]);
     raw
 }
 
-fn add_obj(device:&wgpu::Device,entities:& mut Vec<Entity>,source:&[u8]){
+fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,source:&[u8]){
     let data = obj::ObjData::load_buf(&source[..]).unwrap();
     let mut vertices = Vec::new();
     for object in data.objects {
+        let mut entities = Vec::<Entity>::new();
         for group in object.groups {
             vertices.clear();
             for poly in group.polys {
@@ -176,11 +187,14 @@ fn add_obj(device:&wgpu::Device,entities:& mut Vec<Entity>,source:&[u8]){
                 usage: wgpu::BufferUsages::VERTEX,
             });
             entities.push(Entity {
-                transform: glam::Affine3A::default(),
                 vertex_count: vertices.len() as u32,
                 vertex_buf,
             });
         }
+        modeldatas.push(ModelData {
+            transform: glam::Affine3A::default(),
+            entities,
+        })
     }
 }
 
@@ -197,11 +211,11 @@ impl strafe_client::framework::Example for Skybox {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let mut entities = Vec::<Entity>::new();
-        add_obj(device,& mut entities,include_bytes!("../models/teslacyberv3.0.obj"));
-        add_obj(device,& mut entities,include_bytes!("../models/suzanne.obj"));
-        println!("entities.len = {:?}", entities.len());
-        entities[6].transform=glam::Affine3A::from_translation(glam::vec3(10.,5.,10.));
+        let mut modeldatas = Vec::<ModelData>::new();
+        add_obj(device,& mut modeldatas,include_bytes!("../models/teslacyberv3.0.obj"));
+        add_obj(device,& mut modeldatas,include_bytes!("../models/suzanne.obj"));
+        println!("models.len = {:?}", modeldatas.len());
+        modeldatas[1].transform=glam::Affine3A::from_translation(glam::vec3(10.,5.,10.));
 
         let main_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
@@ -276,13 +290,6 @@ impl strafe_client::framework::Example for Skybox {
         let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera"),
             contents: bytemuck::cast_slice(&camera_uniforms),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let entity_uniforms = get_entity_uniform_data(&entities[6]);
-        let entity_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("EntityData"),
-            contents: bytemuck::cast_slice(&entity_uniforms),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -480,16 +487,31 @@ impl strafe_client::framework::Example for Skybox {
             ],
             label: Some("Camera"),
         });
-        let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &model_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: entity_buf.as_entire_binding(),
-                },
-            ],
-            label: Some("Model"),
-        });
+        let mut models = Vec::<Model>::new();
+        for (i,modeldata) in modeldatas.drain(..).enumerate() {
+            let model_uniforms = get_transform_uniform_data(&modeldata.transform);
+            let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(format!("Model{}",i).as_str()),
+                contents: bytemuck::cast_slice(&model_uniforms),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+            let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &model_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: model_buf.as_entire_binding(),
+                    },
+                ],
+                label: Some(format!("Model{}",i).as_str()),
+            });
+            models.push(Model{
+                transform: modeldata.transform,
+                entities: modeldata.entities,
+                bind_group: model_bind_group,
+                model_buf: model_buf,
+            })
+        }
 
         let depth_view = Self::create_depth_texture(config, device);
 
@@ -499,10 +521,8 @@ impl strafe_client::framework::Example for Skybox {
             entity_pipeline,
             ground_pipeline,
             main_bind_group,
-            model_bind_group,
             camera_buf,
-            entity_buf,
-            entities,
+            models,
             depth_view,
             staging_belt: wgpu::util::StagingBelt::new(0x100),
         }
@@ -629,17 +649,18 @@ impl strafe_client::framework::Example for Skybox {
                 device,
             )
             .copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
-        let entity_uniforms = get_entity_uniform_data(&self.entities[6]);
-        self.staging_belt
-            .write_buffer(
-                &mut encoder,
-                &self.entity_buf,//description of where data will be written when command is executed
-                0,//offset in staging belt?
-                wgpu::BufferSize::new((entity_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
-                device,
-            )
-            .copy_from_slice(bytemuck::cast_slice(&entity_uniforms));
-
+        for model in self.models.iter() {
+            let model_uniforms = get_transform_uniform_data(&model.transform);
+            self.staging_belt
+                .write_buffer(
+                    &mut encoder,
+                    &model.model_buf,//description of where data will be written when command is executed
+                    0,//offset in staging belt?
+                    wgpu::BufferSize::new((model_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
+                    device,
+                )
+                .copy_from_slice(bytemuck::cast_slice(&model_uniforms));
+        }
         self.staging_belt.finish();
 
         {
@@ -669,12 +690,15 @@ impl strafe_client::framework::Example for Skybox {
             });
 
             rpass.set_bind_group(0, &self.main_bind_group, &[]);
-            rpass.set_bind_group(1, &self.model_bind_group, &[]);
 
             rpass.set_pipeline(&self.entity_pipeline);
-            for entity in self.entities.iter() {
-                rpass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
-                rpass.draw(0..entity.vertex_count, 0..1);
+            for model in self.models.iter() {
+                rpass.set_bind_group(1, &model.bind_group, &[]);
+
+                for entity in model.entities.iter() {
+                    rpass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
+                    rpass.draw(0..entity.vertex_count, 0..1);
+                }
             }
 
             rpass.set_pipeline(&self.ground_pipeline);
