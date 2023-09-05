@@ -197,6 +197,7 @@ impl strafe_client::framework::Example for Skybox {
         wgpu::Features::TEXTURE_COMPRESSION_ASTC
             | wgpu::Features::TEXTURE_COMPRESSION_ETC2
             | wgpu::Features::TEXTURE_COMPRESSION_BC
+            | wgpu::Features::BUFFER_BINDING_ARRAY
     }
 
     fn init(
@@ -248,7 +249,7 @@ impl strafe_client::framework::Example for Skybox {
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
-                    count: None,
+                    count: Some(std::num::NonZeroU32::new(MAGIC_ENTITIES as u32).unwrap()),
                 },
             ],
         });
