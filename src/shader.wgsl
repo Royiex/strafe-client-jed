@@ -53,7 +53,7 @@ fn vs_ground(@builtin(vertex_index) vertex_index: u32) -> GroundOutput {
         f32(tmp1) * 2.0 - 1.0,
         0.0,
         f32(tmp2) * 2.0 - 1.0
-    ) * 100.0;
+    ) * 160.0;
 
     var result: GroundOutput;
     result.pos = pos;
