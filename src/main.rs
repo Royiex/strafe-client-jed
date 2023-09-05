@@ -113,7 +113,8 @@ pub struct Skybox {
     sky_pipeline: wgpu::RenderPipeline,
     entity_pipeline: wgpu::RenderPipeline,
     ground_pipeline: wgpu::RenderPipeline,
-    bind_group: wgpu::BindGroup,
+    main_bind_group: wgpu::BindGroup,
+    model_bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
     entity_buf: wgpu::Buffer,
     entities: Vec<Entity>,
@@ -207,7 +208,7 @@ impl strafe_client::framework::Example for Skybox {
         println!("entities.len = {:?}", entities.len());
         entities[6].transform=glam::Affine3A::from_translation(glam::vec3(10.,5.,10.));
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let main_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
                 wgpu::BindGroupLayoutEntry {
@@ -236,8 +237,13 @@ impl strafe_client::framework::Example for Skybox {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+            ],
+        });
+        let model_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
                 wgpu::BindGroupLayoutEntry {
-                    binding: 3,
+                    binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
@@ -287,7 +293,7 @@ impl strafe_client::framework::Example for Skybox {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[&main_bind_group_layout, &model_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -461,8 +467,8 @@ impl strafe_client::framework::Example for Skybox {
             dimension: Some(wgpu::TextureViewDimension::Cube),
             ..wgpu::TextureViewDescriptor::default()
         });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
+        let main_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &main_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -476,12 +482,18 @@ impl strafe_client::framework::Example for Skybox {
                     binding: 2,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
+            ],
+            label: Some("Camera"),
+        });
+        let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &model_bind_group_layout,
+            entries: &[
                 wgpu::BindGroupEntry {
-                    binding: 3,
+                    binding: 0,
                     resource: entity_buf.as_entire_binding(),
                 },
             ],
-            label: None,
+            label: Some("Model"),
         });
 
         let depth_view = Self::create_depth_texture(config, device);
@@ -491,7 +503,8 @@ impl strafe_client::framework::Example for Skybox {
             sky_pipeline,
             entity_pipeline,
             ground_pipeline,
-            bind_group,
+            main_bind_group,
+            model_bind_group,
             camera_buf,
             entity_buf,
             entities,
@@ -660,7 +673,8 @@ impl strafe_client::framework::Example for Skybox {
                 }),
             });
 
-            rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.set_bind_group(0, &self.main_bind_group, &[]);
+            rpass.set_bind_group(1, &self.model_bind_group, &[]);
 
             rpass.set_pipeline(&self.entity_pipeline);
             for entity in self.entities.iter() {
