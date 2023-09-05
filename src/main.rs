@@ -35,8 +35,6 @@ struct Camera {
     walkspeed: f32,
 }
 
-const MAGIC_ENTITIES: usize = 7;
-
 const CONTROL_MOVEFORWARD:u32 = 0b00000001;
 const CONTROL_MOVEBACK:u32 = 0b00000010;
 const CONTROL_MOVERIGHT:u32 = 0b00000100;
@@ -148,12 +146,9 @@ impl Skybox {
     }
 }
 
-fn get_entity_uniform_data(entities:& Vec<Entity>) -> [f32; (9+3)*MAGIC_ENTITIES] {
-    let mut raw = [0f32; (9+3)*MAGIC_ENTITIES];
-    for (i,entity) in entities.iter().enumerate() {
-        raw[i*12..(i+1)*12-3].copy_from_slice(&AsRef::<[f32; 9]>::as_ref(&glam::Mat3::from(entity.transform.matrix3))[..]);
-        raw[i*12+9..(i+1)*12].copy_from_slice(AsRef::<[f32; 3]>::as_ref(&glam::Vec3::from(entity.transform.translation)));
-    }
+fn get_entity_uniform_data(entity:&Entity) -> [f32; 4*4] {
+    let mut raw = [0f32; 4*4];
+    raw[0..16].copy_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&glam::Mat4::from(entity.transform))[..]);
     raw
 }
 
@@ -284,7 +279,7 @@ impl strafe_client::framework::Example for Skybox {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let entity_uniforms = get_entity_uniform_data(&entities);
+        let entity_uniforms = get_entity_uniform_data(&entities[6]);
         let entity_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("EntityData"),
             contents: bytemuck::cast_slice(&entity_uniforms),
@@ -634,7 +629,7 @@ impl strafe_client::framework::Example for Skybox {
                 device,
             )
             .copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
-        let entity_uniforms = get_entity_uniform_data(&self.entities);
+        let entity_uniforms = get_entity_uniform_data(&self.entities[6]);
         self.staging_belt
             .write_buffer(
                 &mut encoder,

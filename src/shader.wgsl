@@ -67,25 +67,20 @@ struct EntityOutput {
     @location(3) view: vec3<f32>,
 };
 
-
-struct EntityTransform {
-    matrix3: mat3x3<f32>,
-    translation: vec3<f32>,
-};
 @group(1)
 @binding(0)
-var<uniform> r_EntityTransform: EntityTransform;
+var<uniform> r_EntityTransform: mat4x4<f32>;
 
 @vertex
 fn vs_entity(
     @location(0) pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
 ) -> EntityOutput {
-    var position: vec3<f32> = r_EntityTransform.matrix3 * pos+r_EntityTransform.translation;
+    var position: vec4<f32> = r_EntityTransform * vec4<f32>(pos, 1.0);
     var result: EntityOutput;
-    result.normal = r_EntityTransform.matrix3 * normal;
-    result.view = position - r_data.cam_pos.xyz;
-    result.position = r_data.proj * r_data.view * vec4<f32>(position, 1.0);
+    result.normal = (r_EntityTransform * vec4<f32>(normal, 0.0)).xyz;
+    result.view = position.xyz - r_data.cam_pos.xyz;
+    result.position = r_data.proj * r_data.view * position;
     return result;
 }
 
