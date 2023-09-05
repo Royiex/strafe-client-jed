@@ -487,6 +487,8 @@ impl strafe_client::framework::Example for Skybox {
             ],
             label: Some("Camera"),
         });
+
+        //drain the modeldata vec so entities can be /moved/ to models.entities
         let mut models = Vec::<Model>::new();
         for (i,modeldata) in modeldatas.drain(..).enumerate() {
             let model_uniforms = get_transform_uniform_data(&modeldata.transform);
@@ -505,6 +507,7 @@ impl strafe_client::framework::Example for Skybox {
                 ],
                 label: Some(format!("Model{}",i).as_str()),
             });
+            //all of these are being moved here
             models.push(Model{
                 transform: modeldata.transform,
                 entities: modeldata.entities,
