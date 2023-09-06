@@ -12,18 +12,20 @@ struct Vertex {
 }
 
 struct Entity {
-    vertex_count: u32,
-    vertex_buf: wgpu::Buffer,
+    index_count: u32,
+    index_buf: wgpu::Buffer,
 }
 
 //temp?
 struct ModelData {
     transform: glam::Affine3A,
+    vertex_buf: wgpu::Buffer,
     entities: Vec<Entity>,
 }
 
 struct Model {
     transform: glam::Affine3A,
+    vertex_buf: wgpu::Buffer,
     entities: Vec<Entity>,
     bind_group: wgpu::BindGroup,
     model_buf: wgpu::Buffer,
@@ -165,34 +167,47 @@ fn get_transform_uniform_data(transform:&glam::Affine3A) -> [f32; 4*4] {
 fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,source:&[u8]){
     let data = obj::ObjData::load_buf(&source[..]).unwrap();
     let mut vertices = Vec::new();
+    let mut vertex_index = std::collections::HashMap::<obj::IndexTuple,u16>::new();
     for object in data.objects {
         let mut entities = Vec::<Entity>::new();
         for group in object.groups {
-            vertices.clear();
+            let mut indices = Vec::new();
             for poly in group.polys {
                 for end_index in 2..poly.0.len() {
                     for &index in &[0, end_index - 1, end_index] {
-                        let obj::IndexTuple(position_id, _texture_id, normal_id) =
-                            poly.0[index];
-                        vertices.push(Vertex {
-                            pos: data.position[position_id],
-                            normal: data.normal[normal_id.unwrap()],
-                        })
+                        let vert = poly.0[index];
+                        if let Some(&i)=vertex_index.get(&vert){
+                            indices.push(i as u16);
+                        }else{
+                            let i=vertices.len() as u16;
+                            vertices.push(Vertex {
+                                pos: data.position[vert.0],
+                                normal: data.normal[vert.2.unwrap()],
+                            });
+                            vertex_index.insert(vert,i);
+                            indices.push(i);
+                        }
                     }
                 }
             }
-            let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex"),
-                contents: bytemuck::cast_slice(&vertices),
-                usage: wgpu::BufferUsages::VERTEX,
+            let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Index"),
+                contents: bytemuck::cast_slice(&indices),
+                usage: wgpu::BufferUsages::INDEX,
             });
             entities.push(Entity {
-                vertex_count: vertices.len() as u32,
-                vertex_buf,
+                index_buf,
+                index_count: indices.len() as u32,
             });
         }
+        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex"),
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
         modeldatas.push(ModelData {
             transform: glam::Affine3A::default(),
+            vertex_buf,
             entities,
         })
     }
@@ -512,6 +527,7 @@ impl strafe_client::framework::Example for Skybox {
             //all of these are being moved here
             models.push(Model{
                 transform: modeldata.transform,
+                vertex_buf:modeldata.vertex_buf,
                 entities: modeldata.entities,
                 bind_group: model_bind_group,
                 model_buf: model_buf,
@@ -700,10 +716,11 @@ impl strafe_client::framework::Example for Skybox {
             rpass.set_pipeline(&self.entity_pipeline);
             for model in self.models.iter() {
                 rpass.set_bind_group(1, &model.bind_group, &[]);
+                rpass.set_vertex_buffer(0, model.vertex_buf.slice(..));
 
                 for entity in model.entities.iter() {
-                    rpass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
-                    rpass.draw(0..entity.vertex_count, 0..1);
+                    rpass.set_index_buffer(entity.index_buf.slice(..), wgpu::IndexFormat::Uint16);
+                    rpass.draw_indexed(0..entity.index_count, 0, 0..1);
                 }
             }
 
