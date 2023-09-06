@@ -506,7 +506,7 @@ impl strafe_client::framework::Example for Skybox {
         });
 
         //drain the modeldata vec so entities can be /moved/ to models.entities
-        let mut models = Vec::<Model>::new();
+        let mut models = Vec::<Model>::with_capacity(modeldatas.len());
         for (i,modeldata) in modeldatas.drain(..).enumerate() {
             let model_uniforms = get_transform_uniform_data(&modeldata.transform);
             let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
