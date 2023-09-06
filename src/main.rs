@@ -652,6 +652,7 @@ impl strafe_client::framework::Example for Skybox {
                 device,
             )
             .copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
+        //This code only needs to run when the uniforms change
         for model in self.models.iter() {
             let model_uniforms = get_transform_uniform_data(&model.transform);
             self.staging_belt
