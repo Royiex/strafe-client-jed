@@ -106,10 +106,10 @@ impl Camera {
         }else{
             self.fov/5.0
         };
-        let proj = perspective_rh(fov, aspect, 1.0, 200.0);
+        let proj = perspective_rh(fov, aspect, 0.5, 1000.0);
+        let proj_inv = proj.inverse();
         let view = glam::Mat4::from_translation(self.pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.yaw, self.pitch, 0f32);
         let view_inv = view.inverse();
-        let proj_inv = proj.inverse();
 
         let mut raw = [0f32; 16 * 3 + 4];
         raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj)[..]);
