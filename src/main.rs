@@ -214,8 +214,10 @@ impl strafe_client::framework::Example for Skybox {
         let mut modeldatas = Vec::<ModelData>::new();
         add_obj(device,& mut modeldatas,include_bytes!("../models/teslacyberv3.0.obj"));
         add_obj(device,& mut modeldatas,include_bytes!("../models/suzanne.obj"));
+        add_obj(device,& mut modeldatas,include_bytes!("../models/teapot.obj"));
         println!("models.len = {:?}", modeldatas.len());
         modeldatas[1].transform=glam::Affine3A::from_translation(glam::vec3(10.,5.,10.));
+        modeldatas[2].transform=glam::Affine3A::from_translation(glam::vec3(-10.,5.,10.));
 
         let main_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
