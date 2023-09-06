@@ -720,8 +720,8 @@ impl strafe_client::framework::Example for Skybox {
         }
         self.camera.vel+=self.camera.gravity*dt;
         self.camera.pos+=self.camera.vel*dt;
-        if self.camera.pos.y<0.0{
-            self.camera.pos.y=0.0;
+        if self.camera.pos.y<2.0{
+            self.camera.pos.y=2.0;
             self.camera.vel.y=0.0;
             self.camera.grounded=true;
         }
