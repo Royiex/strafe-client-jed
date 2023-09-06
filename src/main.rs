@@ -19,13 +19,13 @@ struct Entity {
 
 //temp?
 struct ModelData {
-	transform: glam::Affine3A,
+	transform: glam::Mat4,
 	vertex_buf: wgpu::Buffer,
 	entities: Vec<Entity>,
 }
 
 struct Model {
-	transform: glam::Affine3A,
+	transform: glam::Mat4,
 	vertex_buf: wgpu::Buffer,
 	entities: Vec<Entity>,
 	bind_group: wgpu::BindGroup,
@@ -159,9 +159,9 @@ impl Skybox {
 	}
 }
 
-fn get_transform_uniform_data(transform:&glam::Affine3A) -> [f32; 4*4] {
+fn get_transform_uniform_data(transform:&glam::Mat4) -> [f32; 4*4] {
 	let mut raw = [0f32; 4*4];
-	raw[0..16].copy_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&glam::Mat4::from(*transform))[..]);
+	raw[0..16].copy_from_slice(&AsRef::<[f32; 4*4]>::as_ref(transform)[..]);
 	raw
 }
 
@@ -208,7 +208,7 @@ fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,source:&[u8]){
 			usage: wgpu::BufferUsages::VERTEX,
 		});
 		modeldatas.push(ModelData {
-			transform: glam::Affine3A::default(),
+			transform: glam::Mat4::default(),
 			vertex_buf,
 			entities,
 		})
@@ -233,8 +233,8 @@ impl strafe_client::framework::Example for Skybox {
 		add_obj(device,& mut modeldatas,include_bytes!("../models/suzanne.obj"));
 		add_obj(device,& mut modeldatas,include_bytes!("../models/teapot.obj"));
 		println!("models.len = {:?}", modeldatas.len());
-		modeldatas[1].transform=glam::Affine3A::from_translation(glam::vec3(10.,5.,10.));
-		modeldatas[2].transform=glam::Affine3A::from_translation(glam::vec3(-10.,5.,10.));
+		modeldatas[1].transform=glam::Mat4::from_translation(glam::vec3(10.,5.,10.));
+		modeldatas[2].transform=glam::Mat4::from_translation(glam::vec3(-10.,5.,10.));
 
 		let main_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: None,
