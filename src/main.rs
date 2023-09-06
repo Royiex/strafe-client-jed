@@ -8,6 +8,7 @@ const IMAGE_SIZE: u32 = 128;
 #[repr(C)]
 struct Vertex {
     pos: [f32; 3],
+    texture: [f32; 2],
     normal: [f32; 3],
 }
 
@@ -182,6 +183,7 @@ fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,source:&[u8]){
                             let i=vertices.len() as u16;
                             vertices.push(Vertex {
                                 pos: data.position[vert.0],
+                                texture: data.texture[vert.1.unwrap()],
                                 normal: data.normal[vert.2.unwrap()],
                             });
                             vertex_index.insert(vert,i);
@@ -353,7 +355,7 @@ impl strafe_client::framework::Example for Skybox {
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3],
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Float32x3],
                 }],
             },
             fragment: Some(wgpu::FragmentState {

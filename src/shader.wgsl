@@ -63,7 +63,8 @@ fn vs_ground(@builtin(vertex_index) vertex_index: u32) -> GroundOutput {
 
 struct EntityOutput {
     @builtin(position) position: vec4<f32>,
-    @location(1) normal: vec3<f32>,
+    @location(1) texture: vec2<f32>,
+    @location(2) normal: vec3<f32>,
     @location(3) view: vec3<f32>,
 };
 
@@ -74,11 +75,13 @@ var<uniform> r_EntityTransform: mat4x4<f32>;
 @vertex
 fn vs_entity(
     @location(0) pos: vec3<f32>,
-    @location(1) normal: vec3<f32>,
+    @location(1) texture: vec2<f32>,
+    @location(2) normal: vec3<f32>,
 ) -> EntityOutput {
     var position: vec4<f32> = r_EntityTransform * vec4<f32>(pos, 1.0);
     var result: EntityOutput;
     result.normal = (r_EntityTransform * vec4<f32>(normal, 0.0)).xyz;
+    result.texture=texture;
     result.view = position.xyz - r_data.cam_pos.xyz;
     result.position = r_data.proj * r_data.view * position;
     return result;
@@ -100,10 +103,13 @@ fn fs_sky(vertex: SkyOutput) -> @location(0) vec4<f32> {
 fn fs_entity(vertex: EntityOutput) -> @location(0) vec4<f32> {
     let incident = normalize(vertex.view);
     let normal = normalize(vertex.normal);
-    let reflected = incident - 2.0 * dot(normal, incident) * normal;
+    let d = dot(normal, incident);
+    let reflected = incident - 2.0 * d * normal;
 
+    let dir = vec3<f32>(-1.0)+2.0*vec3<f32>(vertex.texture.x,0.0,vertex.texture.y);
+    let texture_color = textureSample(r_texture, r_sampler, dir).rgb;
     let reflected_color = textureSample(r_texture, r_sampler, reflected).rgb;
-    return vec4<f32>(vec3<f32>(0.1) + 0.5 * reflected_color, 1.0);
+    return vec4<f32>(mix(vec3<f32>(0.1) + 0.5 * reflected_color,texture_color,abs(d)), 1.0);
 }
 
 fn modulo_euclidean (a: f32, b: f32) -> f32 {
