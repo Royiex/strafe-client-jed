@@ -236,6 +236,107 @@ impl strafe_client::framework::Example for Skybox {
 		modeldatas[1].transform=glam::Mat4::from_translation(glam::vec3(10.,5.,10.));
 		modeldatas[2].transform=glam::Mat4::from_translation(glam::vec3(-10.,5.,10.));
 
+		let input = std::io::BufReader::new(&include_bytes!("../maps/bhop_easyhop.rbxm")[..]);
+		match strafe_client::load_roblox::get_objects(input, "BasePart") {
+			Ok(objects)=>{
+				for object in objects.iter() {
+					if let (
+							Some(rbx_dom_weak::types::Variant::CFrame(cf)),
+							Some(rbx_dom_weak::types::Variant::Vector3(size)),
+							Some(rbx_dom_weak::types::Variant::Float32(transparency)),
+						) = (
+							object.properties.get("CFrame"),
+							object.properties.get("Size"),
+							object.properties.get("Transparency"),
+						)
+					{
+						if *transparency==1.0 {
+							continue;
+						}
+						//simply draw a box
+						let mut vertices = Vec::new();
+						let face_data = [
+							[0.0f32, 0., 1.],
+							[0.0f32, 0., -1.],
+							[1.0f32, 0., 0.],
+							[-1.0f32, 0., 0.],
+							[0.0f32, 1., 0.],
+							[0.0f32, -1., 0.],
+						];
+						let vertex_data = [
+							// top (0, 0, 1)
+							[-1.0f32, -1., 1.],
+							[1.0f32, -1., 1.],
+							[1.0f32, 1., 1.],
+							[-1.0f32, 1., 1.],
+							// bottom (0, 0, -1)
+							[-1.0f32, 1., -1.],
+							[1.0f32, 1., -1.],
+							[1.0f32, -1., -1.],
+							[-1.0f32, -1., -1.],
+							// right (1, 0, 0)
+							[1.0f32, -1., -1.],
+							[1.0f32, 1., -1.],
+							[1.0f32, 1., 1.],
+							[1.0f32, -1., 1.],
+							// left (-1, 0, 0)
+							[-1.0f32, -1., 1.],
+							[-1.0f32, 1., 1.],
+							[-1.0f32, 1., -1.],
+							[-1.0f32, -1., -1.],
+							// front (0, 1, 0)
+							[1.0f32, 1., -1.],
+							[-1.0f32, 1., -1.],
+							[-1.0f32, 1., 1.],
+							[1.0f32, 1., 1.],
+							// back (0, -1, 0)
+							[1.0f32, -1., 1.],
+							[-1.0f32, -1., 1.],
+							[-1.0f32, -1., -1.],
+							[1.0f32, -1., -1.],
+						];
+						for face in 0..6 {
+							for end_index in 2..4 {
+								for &index in &[0, end_index - 1, end_index] {
+									vertices.push(Vertex {
+										pos: vertex_data[face*4+index],
+										normal: face_data[face],
+									})
+								}
+							}
+						}
+						let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+							label: Some("Vertex"),
+							contents: bytemuck::cast_slice(&vertices),
+							usage: wgpu::BufferUsages::VERTEX,
+						});
+						let mut entities = Vec::<Entity>::new();
+						entities.push(Entity {
+							vertex_count: vertices.len() as u32,
+							vertex_buf,
+						});
+						modeldatas.push(ModelData {
+							transform: glam::Affine3A::from_translation(
+								glam::Vec3::new(cf.position.x,cf.position.y-13f32,cf.position.z)
+							)
+							* glam::Affine3A::from_mat3(
+								glam::Mat3::from_cols(
+									glam::Vec3::new(cf.orientation.x.x,cf.orientation.x.y,cf.orientation.x.z),
+									glam::Vec3::new(cf.orientation.y.x,cf.orientation.y.y,cf.orientation.y.z),
+									glam::Vec3::new(cf.orientation.z.x,cf.orientation.z.y,cf.orientation.z.z),
+								),
+							)
+							* glam::Affine3A::from_scale(
+								glam::Vec3::new(size.x,size.y,size.z)/2.0
+							),
+							entities,
+						})
+					}
+				}
+			},
+			Err(e) => println!("lmao err {:?}", e),
+		}
+
 		let main_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: None,
 			entries: &[
