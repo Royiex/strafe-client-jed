@@ -109,7 +109,7 @@ fn fs_entity(vertex: EntityOutput) -> @location(0) vec4<f32> {
     let dir = vec3<f32>(-1.0)+2.0*vec3<f32>(vertex.texture.x,0.0,vertex.texture.y);
     let texture_color = textureSample(r_texture, r_sampler, dir).rgb;
     let reflected_color = textureSample(r_texture, r_sampler, reflected).rgb;
-    return vec4<f32>(mix(vec3<f32>(0.1) + 0.5 * reflected_color,texture_color,abs(d)), 1.0);
+    return vec4<f32>(mix(vec3<f32>(0.1) + 0.5 * reflected_color,texture_color,1.0-pow(1.0-abs(d),2.0)), 1.0);
 }
 
 fn modulo_euclidean (a: f32, b: f32) -> f32 {
