@@ -251,13 +251,11 @@ impl strafe_client::framework::Example for Skybox {
 		println!("models.len = {:?}", modeldatas.len());
 		modeldatas[1].transform=glam::Mat4::from_translation(glam::vec3(10.,5.,10.));
 
-		let proj = glam::Mat4::orthographic_rh(-10.0, 10.0, -10.0, 10.0, -10.0, 10.0);
-		let view = glam::Mat4::from_translation(glam::vec3(0.,0.,10.));
-		let view_inv = view.inverse();
-		let model = glam::Mat4::from_translation(glam::vec3(-10.,5.,10.));
+		let proj1 = glam::Mat4::orthographic_rh(-20.0, 20.0, -20.0, 20.0, -20.0, 20.0);
+		let model0 = glam::Mat4::from_translation(glam::vec3(-10.,5.,10.)) * glam::Mat4::from_scale(glam::vec3(10.0,10.0,10.0));
 
-		modeldatas[2].transform=model;
-		modeldatas[2].transform_depth=proj * view_inv;
+		modeldatas[2].transform=model0;
+		modeldatas[2].transform_depth=proj1;// * view1_inv
 		modeldatas[2].use_depth=glam::Vec4::Z;
 
 		let main_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -685,11 +683,10 @@ impl strafe_client::framework::Example for Skybox {
 			}
 		}
 
-		let proj = glam::Mat4::orthographic_rh(-10.0, 10.0, -10.0, 10.0, -10.0, 10.0);
-		let view_inv = glam::Mat4::from_translation(glam::vec3(0.,0.,10.)).inverse();
-		let model = glam::Mat4::from_euler(glam::EulerRot::YXZ, self.start_time.elapsed().as_secs_f32(),0f32,0f32);
+		let proj1 = glam::Mat4::orthographic_rh(-20.0, 20.0, -20.0, 20.0, -20.0, 20.0);
+		let model1 = glam::Mat4::from_euler(glam::EulerRot::YXZ, self.start_time.elapsed().as_secs_f32(),0f32,0f32);
 
-		self.models[2].transform_depth=proj * view_inv * model;
+		self.models[2].transform_depth=proj1 * model1;
 
 		let mut encoder =
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
