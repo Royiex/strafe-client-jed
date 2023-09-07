@@ -130,6 +130,9 @@ pub struct Skybox {
 	sky_pipeline: wgpu::RenderPipeline,
 	entity_pipeline: wgpu::RenderPipeline,
 	ground_pipeline: wgpu::RenderPipeline,
+	special_teapot: Model,
+	checkered_pipeline: wgpu::RenderPipeline,
+	depth_overwrite_pipeline: wgpu::RenderPipeline,
 	main_bind_group: wgpu::BindGroup,
 	camera_buf: wgpu::Buffer,
 	models: Vec<Model>,
@@ -426,6 +429,60 @@ impl strafe_client::framework::Example for Skybox {
 			multisample: wgpu::MultisampleState::default(),
 			multiview: None,
 		});
+		let checkered_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+			label: Some("Checkered"),
+			layout: Some(&pipeline_layout),
+			vertex: wgpu::VertexState {
+				module: &shader,
+				entry_point: "vs_square",
+				buffers: &[],
+			},
+			fragment: Some(wgpu::FragmentState {
+				module: &shader,
+				entry_point: "fs_checkered",
+				targets: &[Some(config.view_formats[0].into())],
+			}),
+			primitive: wgpu::PrimitiveState {
+				front_face: wgpu::FrontFace::Cw,
+				..Default::default()
+			},
+			depth_stencil: Some(wgpu::DepthStencilState {
+				format: Self::DEPTH_FORMAT,
+				depth_write_enabled: false,
+				depth_compare: wgpu::CompareFunction::Always,
+				stencil: wgpu::StencilState::default(),
+				bias: wgpu::DepthBiasState::default(),
+			}),
+			multisample: wgpu::MultisampleState::default(),
+			multiview: None,
+		});
+		let depth_overwrite_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+			label: Some("Overwrite"),
+			layout: Some(&pipeline_layout),
+			vertex: wgpu::VertexState {
+				module: &shader,
+				entry_point: "vs_square",
+				buffers: &[],
+			},
+			fragment: Some(wgpu::FragmentState {
+				module: &shader,
+				entry_point: "fs_overwrite",
+				targets: &[Some(config.view_formats[0].into())],
+			}),
+			primitive: wgpu::PrimitiveState {
+				front_face: wgpu::FrontFace::Cw,
+				..Default::default()
+			},
+			depth_stencil: Some(wgpu::DepthStencilState {
+				format: Self::DEPTH_FORMAT,
+				depth_write_enabled: true,
+				depth_compare: wgpu::CompareFunction::Always,
+				stencil: wgpu::StencilState::default(),
+				bias: wgpu::DepthBiasState::default(),
+			}),
+			multisample: wgpu::MultisampleState::default(),
+			multiview: None,
+		});
 
 		let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
 			label: None,
@@ -560,6 +617,8 @@ impl strafe_client::framework::Example for Skybox {
 			})
 		}
 
+		let teapot = models.pop().unwrap();
+
 		let depth_view = Self::create_depth_texture(config, device);
 
 		Skybox {
@@ -567,6 +626,9 @@ impl strafe_client::framework::Example for Skybox {
 			sky_pipeline,
 			entity_pipeline,
 			ground_pipeline,
+			special_teapot: teapot,
+			checkered_pipeline,
+			depth_overwrite_pipeline,
 			main_bind_group,
 			camera_buf,
 			models,
@@ -686,7 +748,7 @@ impl strafe_client::framework::Example for Skybox {
 		let proj1 = glam::Mat4::orthographic_rh(-20.0, 20.0, -20.0, 20.0, -20.0, 20.0);
 		let model1 = glam::Mat4::from_euler(glam::EulerRot::YXZ, self.start_time.elapsed().as_secs_f32(),0f32,0f32);
 
-		self.models[2].transform_depth=proj1 * model1;
+		self.special_teapot.transform_depth=proj1 * model1;
 
 		let mut encoder =
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -702,6 +764,19 @@ impl strafe_client::framework::Example for Skybox {
 				device,
 			)
 			.copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
+		//special teapot
+		{
+			let model_uniforms = get_model_uniform_data(&self.special_teapot);
+			self.staging_belt
+				.write_buffer(
+					&mut encoder,
+					&self.special_teapot.model_buf,//description of where data will be written when command is executed
+					0,//offset in staging belt?
+					wgpu::BufferSize::new((model_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
+					device,
+				)
+				.copy_from_slice(bytemuck::cast_slice(&model_uniforms));
+		}
 		//This code only needs to run when the uniforms change
 		for model in self.models.iter() {
 			let model_uniforms = get_model_uniform_data(&model);
@@ -745,6 +820,23 @@ impl strafe_client::framework::Example for Skybox {
 
 			rpass.set_bind_group(0, &self.main_bind_group, &[]);
 
+			//draw special teapot
+			rpass.set_bind_group(1, &self.special_teapot.bind_group, &[]);
+			rpass.set_pipeline(&self.checkered_pipeline);
+			rpass.draw(0..6, 0..1);
+
+			rpass.set_pipeline(&self.entity_pipeline);
+			rpass.set_vertex_buffer(0, self.special_teapot.vertex_buf.slice(..));
+
+			for entity in self.special_teapot.entities.iter() {
+				rpass.set_index_buffer(entity.index_buf.slice(..), wgpu::IndexFormat::Uint16);
+				rpass.draw_indexed(0..entity.index_count, 0, 0..1);
+			}
+
+			rpass.set_pipeline(&self.depth_overwrite_pipeline);
+			rpass.draw(0..6, 0..1);
+
+			//draw models
 			rpass.set_pipeline(&self.entity_pipeline);
 			for model in self.models.iter() {
 				rpass.set_bind_group(1, &model.bind_group, &[]);

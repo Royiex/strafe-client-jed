@@ -98,6 +98,23 @@ fn vs_entity(
 	return result;
 }
 
+@vertex
+fn vs_square(@builtin(vertex_index) vertex_index: u32) -> GroundOutput {
+	// hacky way to draw two triangles that make a square
+	let tmp1 = i32(vertex_index)/2-i32(vertex_index)/3;
+	let tmp2 = i32(vertex_index)&1;
+	let pos = vec3<f32>(
+		(f32(tmp1) - 0.5)*1.8,
+		f32(tmp2) - 0.5,
+		0.0
+	);
+
+	var result: GroundOutput;
+	result.pos = (transform.transform * vec4<f32>(pos, 1.0)).xyz;
+	result.position = r_data.proj * r_data.view * transform.transform * vec4<f32>(pos, 1.0);
+	return result;
+}
+
 @group(0)
 @binding(1)
 var r_texture: texture_cube<f32>;
@@ -140,3 +157,16 @@ fn fs_ground(vertex: GroundOutput) -> @location(0) vec4<f32> {
 	let dir = vec3<f32>(-1.0)+vec3<f32>(modulo_euclidean(vertex.pos.x/16.,1.0),0.0,modulo_euclidean(vertex.pos.z/16.,1.0))*2.0;
 	return vec4<f32>(textureSample(r_texture, r_sampler, dir).rgb, 1.0);
 }
+
+@fragment
+fn fs_checkered(vertex: GroundOutput) -> @location(0) vec4<f32> {
+	let voxel_parity: f32 = f32(
+		u32(modulo_euclidean(vertex.pos.x,2.0)<1.0)
+		^ u32(modulo_euclidean(vertex.pos.y,2.0)<1.0)
+		//^ u32(modulo_euclidean(vertex.pos.z,2.0)<1.0)
+	);
+	return vec4<f32>(vec3<f32>(1.0)*voxel_parity, 1.0);
+}
+
+@fragment
+fn fs_overwrite(vertex: GroundOutput) {}
