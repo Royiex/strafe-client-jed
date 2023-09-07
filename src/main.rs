@@ -340,7 +340,7 @@ impl strafe_client::framework::Example for Skybox {
 						});
 						modeldatas.push(ModelData {
 							transform: glam::Mat4::from_translation(
-								glam::Vec3::new(cf.position.x,cf.position.y-13f32,cf.position.z)
+								glam::Vec3::new(cf.position.x,cf.position.y-12f32,cf.position.z)
 							)
 							* glam::Mat4::from_mat3(
 								glam::Mat3::from_cols(
@@ -763,8 +763,8 @@ impl strafe_client::framework::Example for Skybox {
 		}
 		self.camera.vel+=self.camera.gravity*dt;
 		self.camera.pos+=self.camera.vel*dt;
-		if self.camera.pos.y<0.0{
-			self.camera.pos.y=0.0;
+		if self.camera.pos.y<3.0{
+			self.camera.pos.y=3.0;
 			self.camera.vel.y=0.0;
 			self.camera.grounded=true;
 		}
