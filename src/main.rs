@@ -532,7 +532,7 @@ impl strafe_client::framework::Example for Skybox {
 				vertex_buf:modeldata.vertex_buf,
 				entities: modeldata.entities,
 				bind_group: model_bind_group,
-				model_buf: model_buf,
+				model_buf,
 			})
 		}
 
