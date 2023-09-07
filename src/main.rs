@@ -307,7 +307,7 @@ impl strafe_client::framework::Example for Skybox {
 							for end_index in 2..4 {
 								for &index in &[0, end_index - 1, end_index] {
 									let vert = face*4+index;
-									let unique_id=vert * 1<<0 + index * 1<<8 + face * 1<<16;
+									let unique_id=(vert * 1<<0) + (index * 1<<8) + (face * 1<<16);
 									if let Some(&i)=vertex_index.get(&unique_id){
 										indices.push(i as u16);
 									}else{
