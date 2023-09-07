@@ -344,9 +344,9 @@ impl strafe_client::framework::Example for Skybox {
 							)
 							* glam::Mat4::from_mat3(
 								glam::Mat3::from_cols(
-									glam::Vec3::new(cf.orientation.x.x,cf.orientation.x.y,cf.orientation.x.z),
-									glam::Vec3::new(cf.orientation.y.x,cf.orientation.y.y,cf.orientation.y.z),
-									glam::Vec3::new(cf.orientation.z.x,cf.orientation.z.y,cf.orientation.z.z),
+									glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
+									glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
+									glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
 								),
 							)
 							* glam::Mat4::from_scale(
