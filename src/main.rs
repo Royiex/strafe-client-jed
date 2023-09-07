@@ -20,12 +20,16 @@ struct Entity {
 //temp?
 struct ModelData {
 	transform: glam::Mat4,
+	transform_depth: glam::Mat4,
+	use_depth: glam::Vec4,
 	vertex_buf: wgpu::Buffer,
 	entities: Vec<Entity>,
 }
 
 struct Model {
 	transform: glam::Mat4,
+	transform_depth: glam::Mat4,
+	use_depth: glam::Vec4,
 	vertex_buf: wgpu::Buffer,
 	entities: Vec<Entity>,
 	bind_group: wgpu::BindGroup,
@@ -131,6 +135,7 @@ pub struct Skybox {
 	models: Vec<Model>,
 	depth_view: wgpu::TextureView,
 	staging_belt: wgpu::util::StagingBelt,
+	start_time: Instant,
 }
 
 impl Skybox {
@@ -159,9 +164,18 @@ impl Skybox {
 	}
 }
 
-fn get_transform_uniform_data(transform:&glam::Mat4) -> [f32; 4*4] {
-	let mut raw = [0f32; 4*4];
-	raw[0..16].copy_from_slice(&AsRef::<[f32; 4*4]>::as_ref(transform)[..]);
+fn get_model_uniform_data(model:&Model) -> [f32; 4*4*2+4] {
+	let mut raw = [0f32; 4*4*2+4];
+	raw[0..16].copy_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&model.transform)[..]);
+	raw[16..32].copy_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&model.transform_depth)[..]);
+	raw[32..36].copy_from_slice(AsRef::<[f32; 4]>::as_ref(&model.use_depth));
+	raw
+}
+fn get_modeldata_uniform_data(model:&ModelData) -> [f32; 4*4*2+4] {
+	let mut raw = [0f32; 4*4*2+4];
+	raw[0..16].copy_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&model.transform)[..]);
+	raw[16..32].copy_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&model.transform_depth)[..]);
+	raw[32..36].copy_from_slice(AsRef::<[f32; 4]>::as_ref(&model.use_depth));
 	raw
 }
 
@@ -209,6 +223,8 @@ fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,source:&[u8]){
 		});
 		modeldatas.push(ModelData {
 			transform: glam::Mat4::default(),
+			transform_depth: glam::Mat4::default(),
+			use_depth: glam::Vec4::ZERO,
 			vertex_buf,
 			entities,
 		})
@@ -234,7 +250,15 @@ impl strafe_client::framework::Example for Skybox {
 		add_obj(device,& mut modeldatas,include_bytes!("../models/teapot.obj"));
 		println!("models.len = {:?}", modeldatas.len());
 		modeldatas[1].transform=glam::Mat4::from_translation(glam::vec3(10.,5.,10.));
-		modeldatas[2].transform=glam::Mat4::from_translation(glam::vec3(-10.,5.,10.));
+
+		let proj = glam::Mat4::orthographic_rh(-10.0, 10.0, -10.0, 10.0, -10.0, 10.0);
+		let view = glam::Mat4::from_translation(glam::vec3(0.,0.,10.));
+		let view_inv = view.inverse();
+		let model = glam::Mat4::from_translation(glam::vec3(-10.,5.,10.));
+
+		modeldatas[2].transform=model;
+		modeldatas[2].transform_depth=proj * view_inv;
+		modeldatas[2].use_depth=glam::Vec4::Z;
 
 		let main_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: None,
@@ -510,7 +534,7 @@ impl strafe_client::framework::Example for Skybox {
 		//drain the modeldata vec so entities can be /moved/ to models.entities
 		let mut models = Vec::<Model>::with_capacity(modeldatas.len());
 		for (i,modeldata) in modeldatas.drain(..).enumerate() {
-			let model_uniforms = get_transform_uniform_data(&modeldata.transform);
+			let model_uniforms = get_modeldata_uniform_data(&modeldata);
 			let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 				label: Some(format!("Model{}",i).as_str()),
 				contents: bytemuck::cast_slice(&model_uniforms),
@@ -529,6 +553,8 @@ impl strafe_client::framework::Example for Skybox {
 			//all of these are being moved here
 			models.push(Model{
 				transform: modeldata.transform,
+				transform_depth: modeldata.transform_depth,
+				use_depth: modeldata.use_depth,
 				vertex_buf:modeldata.vertex_buf,
 				entities: modeldata.entities,
 				bind_group: model_bind_group,
@@ -548,6 +574,7 @@ impl strafe_client::framework::Example for Skybox {
 			models,
 			depth_view,
 			staging_belt: wgpu::util::StagingBelt::new(0x100),
+			start_time: Instant::now(),
 		}
 	}
 
@@ -658,6 +685,12 @@ impl strafe_client::framework::Example for Skybox {
 			}
 		}
 
+		let proj = glam::Mat4::orthographic_rh(-10.0, 10.0, -10.0, 10.0, -10.0, 10.0);
+		let view_inv = glam::Mat4::from_translation(glam::vec3(0.,0.,10.)).inverse();
+		let model = glam::Mat4::from_euler(glam::EulerRot::YXZ, self.start_time.elapsed().as_secs_f32(),0f32,0f32);
+
+		self.models[2].transform_depth=proj * view_inv * model;
+
 		let mut encoder =
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
@@ -674,7 +707,7 @@ impl strafe_client::framework::Example for Skybox {
 			.copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
 		//This code only needs to run when the uniforms change
 		for model in self.models.iter() {
-			let model_uniforms = get_transform_uniform_data(&model.transform);
+			let model_uniforms = get_model_uniform_data(&model);
 			self.staging_belt
 				.write_buffer(
 					&mut encoder,

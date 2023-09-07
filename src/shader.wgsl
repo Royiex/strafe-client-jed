@@ -68,9 +68,15 @@ struct EntityOutput {
 	@location(3) view: vec3<f32>,
 };
 
+struct TransformData {
+	transform: mat4x4<f32>,
+	depth: mat4x4<f32>,
+	use_depth: vec4<f32>,
+};
+
 @group(1)
 @binding(0)
-var<uniform> r_EntityTransform: mat4x4<f32>;
+var<uniform> transform: TransformData;
 
 @vertex
 fn vs_entity(
@@ -78,12 +84,17 @@ fn vs_entity(
 	@location(1) texture: vec2<f32>,
 	@location(2) normal: vec3<f32>,
 ) -> EntityOutput {
-	var position: vec4<f32> = r_EntityTransform * vec4<f32>(pos, 1.0);
+	var position_depth: vec4<f32> = transform.depth * vec4<f32>(pos, 1.0);
+	var position_depth_0: vec4<f32> = position_depth;
+	position_depth_0.z=0.0;
+	var position: vec4<f32> = transform.transform * mix(position_depth,position_depth_0,transform.use_depth);
+
 	var result: EntityOutput;
-	result.normal = (r_EntityTransform * vec4<f32>(normal, 0.0)).xyz;
+	result.normal = (transform.transform * mix(vec4<f32>(normal,0.0),vec4<f32>(0.0,0.0,1.0,0.0),transform.use_depth.z)).xyz;
 	result.texture=texture;
 	result.view = position.xyz - r_data.cam_pos.xyz;
-	result.position = r_data.proj * r_data.view * position;
+	var screen_position: vec4<f32> = r_data.proj * r_data.view * position;
+	result.position = mix(screen_position,position_depth,transform.use_depth);
 	return result;
 }
 
