@@ -178,7 +178,7 @@ fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,source:&[u8]){
 					for &index in &[0, end_index - 1, end_index] {
 						let vert = poly.0[index];
 						if let Some(&i)=vertex_index.get(&vert){
-							indices.push(i as u16);
+							indices.push(i);
 						}else{
 							let i=vertices.len() as u16;
 							vertices.push(Vertex {
@@ -309,7 +309,7 @@ impl strafe_client::framework::Example for Skybox {
 									let vert = face*4+index;
 									let unique_id=(vert * 1<<0) + (index * 1<<8) + (face * 1<<16);
 									if let Some(&i)=vertex_index.get(&unique_id){
-										indices.push(i as u16);
+										indices.push(i);
 									}else{
 										let i=vertices.len() as u16;
 										vertices.push(Vertex {
