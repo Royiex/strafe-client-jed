@@ -254,7 +254,6 @@ impl strafe_client::framework::Example for Skybox {
 							continue;
 						}
 						//simply draw a box
-						let mut vertices = Vec::new();
 						let face_data = [
 							[0.0f32, 0., 1.],
 							[0.0f32, 0., -1.],
@@ -262,6 +261,12 @@ impl strafe_client::framework::Example for Skybox {
 							[-1.0f32, 0., 0.],
 							[0.0f32, 1., 0.],
 							[0.0f32, -1., 0.],
+						];
+						let texture_data = [
+							[1.0f32, 0.],
+							[0.0f32, 0.],
+							[0.0f32, 1.],
+							[1.0f32, 1.],
 						];
 						let vertex_data = [
 							// top (0, 0, 1)
@@ -295,42 +300,61 @@ impl strafe_client::framework::Example for Skybox {
 							[-1.0f32, -1., -1.],
 							[1.0f32, -1., -1.],
 						];
+						let mut indices = Vec::new();
+						let mut vertices = Vec::new();
+						let mut vertex_index = std::collections::HashMap::<usize,u16>::new();
 						for face in 0..6 {
 							for end_index in 2..4 {
 								for &index in &[0, end_index - 1, end_index] {
-									vertices.push(Vertex {
-										pos: vertex_data[face*4+index],
-										normal: face_data[face],
-									})
+									let vert = face*4+index;
+									let unique_id=vert * 1<<0 + index * 1<<8 + face * 1<<16;
+									if let Some(&i)=vertex_index.get(&unique_id){
+										indices.push(i as u16);
+									}else{
+										let i=vertices.len() as u16;
+										vertices.push(Vertex {
+											pos: vertex_data[vert],
+											texture: texture_data[index],
+											normal: face_data[face],
+										});
+										vertex_index.insert(unique_id,i);
+										indices.push(i);
+									}
 								}
 							}
 						}
+						let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+							label: Some("Index"),
+							contents: bytemuck::cast_slice(&indices),
+							usage: wgpu::BufferUsages::INDEX,
+						});
+						let mut entities = Vec::<Entity>::new();
+						entities.push(Entity {
+							index_buf,
+							index_count: indices.len() as u32,
+						});
 						let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 							label: Some("Vertex"),
 							contents: bytemuck::cast_slice(&vertices),
 							usage: wgpu::BufferUsages::VERTEX,
 						});
-						let mut entities = Vec::<Entity>::new();
-						entities.push(Entity {
-							vertex_count: vertices.len() as u32,
-							vertex_buf,
-						});
 						modeldatas.push(ModelData {
-							transform: glam::Affine3A::from_translation(
+							transform: glam::Mat4::from_translation(
 								glam::Vec3::new(cf.position.x,cf.position.y-13f32,cf.position.z)
 							)
-							* glam::Affine3A::from_mat3(
+							* glam::Mat4::from_mat3(
 								glam::Mat3::from_cols(
 									glam::Vec3::new(cf.orientation.x.x,cf.orientation.x.y,cf.orientation.x.z),
 									glam::Vec3::new(cf.orientation.y.x,cf.orientation.y.y,cf.orientation.y.z),
 									glam::Vec3::new(cf.orientation.z.x,cf.orientation.z.y,cf.orientation.z.z),
 								),
 							)
-							* glam::Affine3A::from_scale(
+							* glam::Mat4::from_scale(
 								glam::Vec3::new(size.x,size.y,size.z)/2.0
 							),
+							vertex_buf,
 							entities,
-						})
+						});
 					}
 				}
 			},
