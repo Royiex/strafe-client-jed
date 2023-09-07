@@ -98,8 +98,14 @@ fn vs_entity(
 	return result;
 }
 
+struct SquareOutput {
+	@builtin(position) position: vec4<f32>,
+	@location(2) normal: vec3<f32>,
+	@location(3) view: vec3<f32>,
+	@location(4) pos: vec3<f32>,
+};
 @vertex
-fn vs_square(@builtin(vertex_index) vertex_index: u32) -> GroundOutput {
+fn vs_square(@builtin(vertex_index) vertex_index: u32) -> SquareOutput {
 	// hacky way to draw two triangles that make a square
 	let tmp1 = i32(vertex_index)/2-i32(vertex_index)/3;
 	let tmp2 = i32(vertex_index)&1;
@@ -109,8 +115,10 @@ fn vs_square(@builtin(vertex_index) vertex_index: u32) -> GroundOutput {
 		0.0
 	);
 
-	var result: GroundOutput;
+	var result: SquareOutput;
+	result.normal = vec3<f32>(0.0,0.0,1.0);
 	result.pos = (transform.transform * vec4<f32>(pos, 1.0)).xyz;
+	result.view = result.pos - r_data.cam_pos.xyz;
 	result.position = r_data.proj * r_data.view * transform.transform * vec4<f32>(pos, 1.0);
 	return result;
 }
@@ -159,14 +167,22 @@ fn fs_ground(vertex: GroundOutput) -> @location(0) vec4<f32> {
 }
 
 @fragment
-fn fs_checkered(vertex: GroundOutput) -> @location(0) vec4<f32> {
+fn fs_checkered(vertex: SquareOutput) -> @location(0) vec4<f32> {
 	let voxel_parity: f32 = f32(
 		u32(modulo_euclidean(vertex.pos.x,2.0)<1.0)
 		^ u32(modulo_euclidean(vertex.pos.y,2.0)<1.0)
 		//^ u32(modulo_euclidean(vertex.pos.z,2.0)<1.0)
 	);
-	return vec4<f32>(vec3<f32>(1.0)*voxel_parity, 1.0);
+
+	let incident = normalize(vertex.view);
+	let normal = normalize(vertex.normal);
+	let d = dot(normal, incident);
+	let reflected = incident - 2.0 * d * normal;
+
+	let texture_color = vec3<f32>(1.0)*voxel_parity;
+	let reflected_color = textureSample(r_texture, r_sampler, reflected).rgb;
+	return vec4<f32>(mix(vec3<f32>(0.1) + 0.5 * reflected_color,texture_color,1.0-pow(1.0-abs(d),2.0)), 1.0);
 }
 
 @fragment
-fn fs_overwrite(vertex: GroundOutput) {}
+fn fs_overwrite(vertex: SquareOutput) {}
