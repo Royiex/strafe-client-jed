@@ -10,11 +10,11 @@ pub struct PhysicsState {
 	pub time: TIME,
 	pub strafe_tick_period: TIME,
 	pub tick: u32,
-	pub gravity: glam::Vec3,
-	pub friction: f32,
 	pub mv: f32,
-	pub grounded: bool,
 	pub walkspeed: f32,
+	pub friction: f32,
+	pub gravity: glam::Vec3,
+	pub grounded: bool,
 	pub jump_trying: bool,
 }
 
