@@ -111,6 +111,7 @@ impl crate::event::EventTrait for PhysicsState {
 	}
 }
 
+//something that implements body + hitbox can predict collision
 impl crate::sweep::PredictCollision for Model {
 	fn predict_collision(&self,other:&Model) -> Option<crate::event::EventStruct> {
 		//math!
