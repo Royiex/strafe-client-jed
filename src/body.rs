@@ -9,6 +9,7 @@ pub struct Body {
 pub struct PhysicsState {
 	pub body: Body,
 	pub contacts: Vec<RelativeCollision>,
+	pub models_cringe_clone: Vec<Model>,
 	pub time: TIME,
 	pub strafe_tick_num: TIME,
 	pub strafe_tick_den: TIME,
@@ -213,6 +214,12 @@ impl PhysicsState {
 		//check if you are accelerating towards a walk target velocity and create an event
 		return None;
 	}
+	fn predict_collision_end(&self,model:&Model) -> Option<EventStruct> {
+		None
+	}
+	fn predict_collision_start(&self,model:&Model) -> Option<EventStruct> {
+		None
+	}
 }
 
 impl crate::event::EventTrait for PhysicsState {
@@ -230,11 +237,12 @@ impl crate::event::EventTrait for PhysicsState {
 		}
 		//check for collision stop events with curent contacts
 		for collision_data in self.contacts.iter() {
-			best.collect(self.predict_collision(collision_data.model));
+			best.collect(self.predict_collision_end(self.models_cringe_clone.get(collision_data.model as usize).unwrap()));
 		}
 		//check for collision start events (against every part in the game with no optimization!!)
-		for &model in self.world.models {
-			best.collect(self.predict_collision(&model));
+		for model in &self.models_cringe_clone {
+			best.collect(self.predict_collision_start(model));
+		}
 		if self.grounded {
 			//walk maintenance
 			best.collect(self.next_walk_event());
