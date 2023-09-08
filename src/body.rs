@@ -54,6 +54,7 @@ impl PhysicsState {
 				if applied_friction*applied_friction<diffv.length_squared() {
 					self.body.velocity+=applied_friction*diffv.normalize();
 				} else {
+					//EventEnum::WalkTargetReached
 					self.body.velocity=targetv;
 				}
 			}
@@ -73,6 +74,11 @@ impl PhysicsState {
 			time:(self.time*self.strafe_tick_num/self.strafe_tick_den+1)*self.strafe_tick_den/self.strafe_tick_num,
 			event:crate::event::EventEnum::StrafeTick
 		});
+	}
+
+	fn next_walk_event(&self) -> Option<EventStruct> {
+		//check if you are accelerating towards a walk target velocity and create an event
+		return None;
 	}
 }
 
@@ -96,9 +102,13 @@ impl crate::event::EventTrait for PhysicsState {
 		//check for collision start events (against every part in the game with no optimization!!)
 		for &model in self.world.models {
 			best.collect(self.predict_collision(&model));
+		if self.grounded {
+			//walk maintenance
+			best.collect(self.next_walk_event());
+		}else{
+			//check to see when the next strafe tick is
+			best.collect(self.next_strafe_event());
 		}
-		//check to see when the next strafe tick is
-		best.collect(self.next_strafe_event());
 		best.event()
 	}
 }
