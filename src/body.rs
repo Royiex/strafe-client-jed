@@ -7,6 +7,7 @@ pub struct Body {
 pub struct PhysicsState {
 	pub body: Body,
 	pub time: TIME,
+	pub strafe_tick_rate: TIME,
 	pub tick: u32,
 	pub gravity: glam::Vec3,
 	pub friction: f32,
@@ -60,6 +61,13 @@ impl PhysicsState {
 	pub fn extrapolate_position(&self, time: TIME) -> glam::Vec3 {
 		let dt=(time-self.body.time) as f64/1_000_000_000f64;
 		self.body.position+self.body.velocity*(dt as f32)+self.gravity*((0.5*dt*dt) as f32)
+	}
+
+	fn next_strafe_event(&self) -> Option<crate::event::EventStruct> {
+		return Some(crate::event::EventStruct{
+			time:self.time/self.strafe_tick_rate*self.strafe_tick_rate,//this is floor(n) I need ceil(n)+1
+			event:crate::event::EventEnum::StrafeTick
+		});
 	}
 }
 
