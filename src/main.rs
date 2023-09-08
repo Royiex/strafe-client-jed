@@ -24,7 +24,7 @@ struct ModelData {
 	entities: Vec<Entity>,
 }
 
-struct Model {
+struct ModelGraphics {
 	transform: glam::Mat4,
 	vertex_buf: wgpu::Buffer,
 	entities: Vec<Entity>,
@@ -122,7 +122,7 @@ pub struct Skybox {
 	ground_pipeline: wgpu::RenderPipeline,
 	main_bind_group: wgpu::BindGroup,
 	camera_buf: wgpu::Buffer,
-	models: Vec<Model>,
+	models: Vec<ModelGraphics>,
 	depth_view: wgpu::TextureView,
 	staging_belt: wgpu::util::StagingBelt,
 }
@@ -315,6 +315,35 @@ impl strafe_client::framework::Example for Skybox {
 			contents: bytemuck::cast_slice(&camera_uniforms),
 			usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 		});
+
+		//drain the modeldata vec so entities can be /moved/ to models.entities
+		let mut models = Vec::<ModelGraphics>::with_capacity(modeldatas.len());
+		for (i,modeldata) in modeldatas.drain(..).enumerate() {
+			let model_uniforms = get_transform_uniform_data(&modeldata.transform);
+			let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+				label: Some(format!("ModelGraphics{}",i).as_str()),
+				contents: bytemuck::cast_slice(&model_uniforms),
+				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+			});
+			let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+				layout: &model_bind_group_layout,
+				entries: &[
+					wgpu::BindGroupEntry {
+						binding: 0,
+						resource: model_buf.as_entire_binding(),
+					},
+				],
+				label: Some(format!("ModelGraphics{}",i).as_str()),
+			});
+			//all of these are being moved here
+			models.push(ModelGraphics{
+				transform: modeldata.transform,
+				vertex_buf:modeldata.vertex_buf,
+				entities: modeldata.entities,
+				bind_group: model_bind_group,
+				model_buf,
+			})
+		}
 
 		let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 			label: None,
@@ -510,35 +539,6 @@ impl strafe_client::framework::Example for Skybox {
 			],
 			label: Some("Camera"),
 		});
-
-		//drain the modeldata vec so entities can be /moved/ to models.entities
-		let mut models = Vec::<Model>::with_capacity(modeldatas.len());
-		for (i,modeldata) in modeldatas.drain(..).enumerate() {
-			let model_uniforms = get_transform_uniform_data(&modeldata.transform);
-			let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some(format!("Model{}",i).as_str()),
-				contents: bytemuck::cast_slice(&model_uniforms),
-				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-			});
-			let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-				layout: &model_bind_group_layout,
-				entries: &[
-					wgpu::BindGroupEntry {
-						binding: 0,
-						resource: model_buf.as_entire_binding(),
-					},
-				],
-				label: Some(format!("Model{}",i).as_str()),
-			});
-			//all of these are being moved here
-			models.push(Model{
-				transform: modeldata.transform,
-				vertex_buf:modeldata.vertex_buf,
-				entities: modeldata.entities,
-				bind_group: model_bind_group,
-				model_buf,
-			})
-		}
 
 		let depth_view = Self::create_depth_texture(config, device);
 
