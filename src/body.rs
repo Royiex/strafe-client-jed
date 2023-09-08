@@ -64,11 +64,39 @@ impl PhysicsState {
 }
 
 impl crate::event::EventTrait for PhysicsState {
-	fn next_event(&self) -> Option<crate::event::EventEnum> {
+	//this little next event function can cache its return value and invalidate the cached value by watching the State.
+	fn next_event(&self) -> Option<crate::event::EventStruct> {
+		//JUST POLLING!!! NO MUTATION
+		let mut best_event: Option<crate::event::EventStruct> = None;
+		let collect_event = |test_event:Option<crate::event::EventStruct>|{
+			match test_event {
+				Some(unwrap_test_event) => match best_event {
+					Some(unwrap_best_event) => if unwrap_test_event.time<unwrap_best_event.time {
+						best_event=test_event;
+					},
+					None => best_event=test_event,
+				},
+				None => (),
+			}
+		};
+		//check to see if yee need to jump (this is not the way lol)
+		if self.grounded&&self.jump_trying {
+			//scroll will be implemented with InputEvent::InstantJump rather than InputEvent::Jump(true)
+			collect_event(Some(crate::event::EventStruct{
+				time:self.time,
+				event:crate::event::EventEnum::Jump
+			}));
+		}
 		//check for collision stop events with curent contacts
-		//check for collision start events against (every part in the ghamemem!!)
-		//check to see if yee need to jump
+		for collision_data in self.contacts.iter() {
+			collect_event(self.model.predict_collision(collision_data.model));
+		}
+		//check for collision start events (against every part in the game with no optimization!!)
+		for &model in self.world.models {
+			collect_event(self.model.predict_collision(&model));
+		}
 		//check to see when the next strafe tick is
-		None
+		collect_event(self.next_strafe_event());
+		best_event
 	}
 }
