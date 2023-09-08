@@ -304,6 +304,7 @@ impl strafe_client::framework::Example for Skybox {
 			friction: 90.0,
 			mv: 2.7,
 			grounded: true,
+			jump_trying: false,
 			walkspeed: 18.0,
 		};
 

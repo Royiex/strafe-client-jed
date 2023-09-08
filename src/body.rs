@@ -6,6 +6,7 @@ pub struct Body {
 
 pub struct PhysicsState {
 	pub body: Body,
+	//pub contacts: Vec<RelativeCollision>,
 	pub time: TIME,
 	pub strafe_tick_period: TIME,
 	pub tick: u32,
@@ -14,6 +15,7 @@ pub struct PhysicsState {
 	pub mv: f32,
 	pub grounded: bool,
 	pub walkspeed: f32,
+	pub jump_trying: bool,
 }
 
 pub type TIME = i64;
@@ -61,5 +63,50 @@ impl PhysicsState {
 	pub fn extrapolate_position(&self, time: TIME) -> glam::Vec3 {
 		let dt=(time-self.body.time) as f64/1_000_000_000f64;
 		self.body.position+self.body.velocity*(dt as f32)+self.gravity*((0.5*dt*dt) as f32)
+	}
+
+	fn next_strafe_event(&self) -> Option<crate::event::EventStruct> {
+		return Some(crate::event::EventStruct{
+			time:(self.time/self.strafe_tick_period+1)*self.strafe_tick_period,
+			event:crate::event::EventEnum::StrafeTick
+		});
+	}
+}
+
+impl crate::event::EventTrait for PhysicsState {
+	//this little next event function can cache its return value and invalidate the cached value by watching the State.
+	fn next_event(&self) -> Option<crate::event::EventStruct> {
+		//JUST POLLING!!! NO MUTATION
+		let mut best_event: Option<crate::event::EventStruct> = None;
+		let collect_event = |test_event:Option<crate::event::EventStruct>|{
+			match test_event {
+				Some(unwrap_test_event) => match best_event {
+					Some(unwrap_best_event) => if unwrap_test_event.time<unwrap_best_event.time {
+						best_event=test_event;
+					},
+					None => best_event=test_event,
+				},
+				None => (),
+			}
+		};
+		//check to see if yee need to jump (this is not the way lol)
+		if self.grounded&&self.jump_trying {
+			//scroll will be implemented with InputEvent::InstantJump rather than InputEvent::Jump(true)
+			collect_event(Some(crate::event::EventStruct{
+				time:self.time,
+				event:crate::event::EventEnum::Jump
+			}));
+		}
+		//check for collision stop events with curent contacts
+		for collision_data in self.contacts.iter() {
+			collect_event(self.model.predict_collision(collision_data.model));
+		}
+		//check for collision start events (against every part in the game with no optimization!!)
+		for &model in self.world.models {
+			collect_event(self.model.predict_collision(&model));
+		}
+		//check to see when the next strafe tick is
+		collect_event(self.next_strafe_event());
+		best_event
 	}
 }
