@@ -10,7 +10,8 @@ pub struct PhysicsState {
 	pub body: Body,
 	//pub contacts: Vec<RelativeCollision>,
 	pub time: TIME,
-	pub strafe_tick_period: TIME,
+	pub strafe_tick_num: TIME,
+	pub strafe_tick_den: TIME,
 	pub tick: u32,
 	pub mv: f32,
 	pub walkspeed: f32,
@@ -26,7 +27,7 @@ const CONTROL_JUMP:u32 = 0b01000000;//temp
 impl PhysicsState {
 	//delete this, we are tickless gamers
 	pub fn run(&mut self, time: TIME, control_dir: glam::Vec3, controls: u32){
-		let target_tick = (time/self.strafe_tick_period) as u32;//100t
+		let target_tick = (time*self.strafe_tick_num/self.strafe_tick_den) as u32;
 		//the game code can run for 1 month before running out of ticks
 		while self.tick<target_tick {
 			self.tick += 1;
@@ -58,7 +59,7 @@ impl PhysicsState {
 			}
 		}
 
-		self.body.time=target_tick as TIME*self.strafe_tick_period;
+		self.body.time=target_tick as TIME*self.strafe_tick_den/self.strafe_tick_num;
 	}
 
 	//delete this
@@ -69,7 +70,7 @@ impl PhysicsState {
 
 	fn next_strafe_event(&self) -> Option<EventStruct> {
 		return Some(EventStruct{
-			time:(self.time/self.strafe_tick_period+1)*self.strafe_tick_period,
+			time:(self.time*self.strafe_tick_num/self.strafe_tick_den+1)*self.strafe_tick_den/self.strafe_tick_num,
 			event:crate::event::EventEnum::StrafeTick
 		});
 	}

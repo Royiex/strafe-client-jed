@@ -299,7 +299,8 @@ impl strafe_client::framework::Example for Skybox {
 			},
 			time: 0,
 			tick: 0,
-			strafe_tick_period: 1_000_000_000/100,//100t
+			strafe_tick_num: 100,//100t
+			strafe_tick_den: 1_000_000_000,
 			gravity: glam::Vec3::new(0.0,-100.0,0.0),
 			friction: 90.0,
 			mv: 2.7,
