@@ -1,3 +1,5 @@
+use crate::event::EventStruct;
+
 pub struct Body {
 	pub position: glam::Vec3,//I64 where 2^32 = 1 u
 	pub velocity: glam::Vec3,//I64 where 2^32 = 1 u/s
@@ -65,8 +67,8 @@ impl PhysicsState {
 		self.body.position+self.body.velocity*(dt as f32)+self.gravity*((0.5*dt*dt) as f32)
 	}
 
-	fn next_strafe_event(&self) -> Option<crate::event::EventStruct> {
-		return Some(crate::event::EventStruct{
+	fn next_strafe_event(&self) -> Option<EventStruct> {
+		return Some(EventStruct{
 			time:(self.time/self.strafe_tick_period+1)*self.strafe_tick_period,
 			event:crate::event::EventEnum::StrafeTick
 		});
@@ -75,10 +77,10 @@ impl PhysicsState {
 
 impl crate::event::EventTrait for PhysicsState {
 	//this little next event function can cache its return value and invalidate the cached value by watching the State.
-	fn next_event(&self) -> Option<crate::event::EventStruct> {
+	fn next_event(&self) -> Option<EventStruct> {
 		//JUST POLLING!!! NO MUTATION
-		let mut best_event: Option<crate::event::EventStruct> = None;
-		let collect_event = |test_event:Option<crate::event::EventStruct>|{
+		let mut best_event: Option<EventStruct> = None;
+		let collect_event = |test_event:Option<EventStruct>|{
 			match test_event {
 				Some(unwrap_test_event) => match best_event {
 					Some(unwrap_best_event) => if unwrap_test_event.time<unwrap_best_event.time {
@@ -92,7 +94,7 @@ impl crate::event::EventTrait for PhysicsState {
 		//check to see if yee need to jump (this is not the way lol)
 		if self.grounded&&self.jump_trying {
 			//scroll will be implemented with InputEvent::InstantJump rather than InputEvent::Jump(true)
-			collect_event(Some(crate::event::EventStruct{
+			collect_event(Some(EventStruct{
 				time:self.time,
 				event:crate::event::EventEnum::Jump
 			}));
