@@ -8,7 +8,7 @@ pub struct Body {
 
 pub struct PhysicsState {
 	pub body: Body,
-	//pub contacts: Vec<RelativeCollision>,
+	pub contacts: Vec<RelativeCollision>,
 	pub time: TIME,
 	pub strafe_tick_num: TIME,
 	pub strafe_tick_den: TIME,
@@ -19,6 +19,20 @@ pub struct PhysicsState {
 	pub gravity: glam::Vec3,
 	pub grounded: bool,
 	pub jump_trying: bool,
+}
+
+pub struct RelativeCollision {
+	face: Face,//just an id
+	model: u32,//using id to avoid lifetimes
+}
+
+impl RelativeCollision {
+	pub fn mesh(&self,models:&Vec<Model>) -> TreyMesh {
+		return models.get(self.model as usize).unwrap().face_mesh(self.face)
+	}
+	pub fn normal(&self,models:&Vec<Model>) -> glam::Vec3 {
+		return models.get(self.model as usize).unwrap().face_normal(self.face)
+	}
 }
 
 pub type TIME = i64;

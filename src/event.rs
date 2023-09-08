@@ -4,8 +4,8 @@ pub struct EventStruct {
 }
 
 pub enum EventEnum {
-	CollisionStart,//(Collideable),//Body::CollisionStart
-	CollisionEnd,//(Collideable),//Body::CollisionEnd
+	CollisionStart(crate::body::RelativeCollision),//Body::CollisionStart
+	CollisionEnd(crate::body::RelativeCollision),//Body::CollisionEnd
 	StrafeTick,
 	Jump,
 }
