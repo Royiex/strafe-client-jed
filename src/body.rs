@@ -157,7 +157,7 @@ impl RelativeCollision {
 
 pub type TIME = i64;
 
-const CONTROL_JUMP:u32 = 0b01000000;//temp
+const CONTROL_JUMP:u32 = 0b01000000;//temp DATA NORMALIZATION!@#$
 impl PhysicsState {
 	//delete this, we are tickless gamers
 	pub fn run(&mut self, time: TIME, control_dir: glam::Vec3, controls: u32){
