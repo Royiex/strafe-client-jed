@@ -6,14 +6,16 @@ pub struct Body {
 
 pub struct PhysicsState {
 	pub body: Body,
+	//pub contacts: Vec<RelativeCollision>,
 	pub time: TIME,
 	pub strafe_tick_rate: TIME,
 	pub tick: u32,
-	pub gravity: glam::Vec3,
-	pub friction: f32,
 	pub mv: f32,
-	pub grounded: bool,
 	pub walkspeed: f32,
+	pub friction: f32,
+	pub gravity: glam::Vec3,
+	pub grounded: bool,
+	pub jump_trying: bool,
 }
 
 pub type TIME = i64;
