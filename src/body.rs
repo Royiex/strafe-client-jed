@@ -102,11 +102,11 @@ impl crate::event::EventTrait for PhysicsState {
 		}
 		//check for collision stop events with curent contacts
 		for collision_data in self.contacts.iter() {
-			collect_event(self.model.predict_collision(collision_data.model));
+			collect_event(self.predict_collision(collision_data.model));
 		}
 		//check for collision start events (against every part in the game with no optimization!!)
 		for &model in self.world.models {
-			collect_event(self.model.predict_collision(&model));
+			collect_event(self.predict_collision(&model));
 		}
 		//check to see when the next strafe tick is
 		collect_event(self.next_strafe_event());
