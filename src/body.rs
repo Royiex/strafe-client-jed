@@ -91,9 +91,9 @@ impl crate::event::EventTrait for PhysicsState {
 				None => (),
 			}
 		};
-		//check to see if yee need to jump (this is not the way lol)
+		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
 		if self.grounded&&self.jump_trying {
-			//scroll will be implemented with InputEvent::InstantJump rather than InputEvent::Jump(true)
+			//scroll will be implemented with InputEvent::Jump(true) but it blocks setting self.jump_trying=true
 			collect_event(Some(EventStruct{
 				time:self.time,
 				event:crate::event::EventEnum::Jump
