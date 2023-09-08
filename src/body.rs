@@ -23,7 +23,7 @@ pub struct PhysicsState {
 }
 
 #[derive(Clone,Copy)]
-enum AabbFace{
+pub enum AabbFace{
 	Right,//+X
 	Top,
 	Back,
@@ -32,7 +32,7 @@ enum AabbFace{
 	Front,
 }
 
-struct Aabb {
+pub struct Aabb {
 	min: glam::Vec3,
 	max: glam::Vec3,
 }
@@ -46,37 +46,37 @@ impl Aabb {
 	// 	[0.0f32, 1., 0.],
 	// 	[0.0f32, -1., 0.],
 	// ];
-	const VERTEX_DATA_RIGHT: &'static [glam::Vec3; 4] = &[
+	const VERTEX_DATA_RIGHT: [glam::Vec3; 4] = [
 		glam::vec3(1., -1., -1.),
 		glam::vec3(1., 1., -1.),
 		glam::vec3(1., 1., 1.),
 		glam::vec3(1., -1., 1.),
 	];
-	const VERTEX_DATA_TOP: &'static [glam::Vec3; 4] = &[
+	const VERTEX_DATA_TOP: [glam::Vec3; 4] = [
 		glam::vec3(1., 1., -1.),
 		glam::vec3(-1., 1., -1.),
 		glam::vec3(-1., 1., 1.),
 		glam::vec3(1., 1., 1.),
 	];
-	const VERTEX_DATA_BACK: &'static [glam::Vec3; 4] = &[
+	const VERTEX_DATA_BACK: [glam::Vec3; 4] = [
 		glam::vec3(-1., -1., 1.),
 		glam::vec3(1., -1., 1.),
 		glam::vec3(1., 1., 1.),
 		glam::vec3(-1., 1., 1.),
 	];
-	const VERTEX_DATA_LEFT: &'static [glam::Vec3; 4] = &[
+	const VERTEX_DATA_LEFT: [glam::Vec3; 4] = [
 		glam::vec3(-1., -1., 1.),
 		glam::vec3(-1., 1., 1.),
 		glam::vec3(-1., 1., -1.),
 		glam::vec3(-1., -1., -1.),
 	];
-	const VERTEX_DATA_BOTTOM: &'static [glam::Vec3; 4] = &[
+	const VERTEX_DATA_BOTTOM: [glam::Vec3; 4] = [
 		glam::vec3(1., -1., 1.),
 		glam::vec3(-1., -1., 1.),
 		glam::vec3(-1., -1., -1.),
 		glam::vec3(1., -1., -1.),
 	];
-	const VERTEX_DATA_FRONT: &'static [glam::Vec3; 4] = &[
+	const VERTEX_DATA_FRONT: [glam::Vec3; 4] = [
 		glam::vec3(-1., 1., -1.),
 		glam::vec3(1., 1., -1.),
 		glam::vec3(1., -1., -1.),
@@ -102,7 +102,7 @@ impl Aabb {
 			AabbFace::Front => glam::vec3(0.,0.,-1.),
 		}
 	}
-	pub fn face_vertices(face:AabbFace) -> &'static [glam::Vec3;4] {
+	pub fn face_vertices(face:AabbFace) -> [glam::Vec3;4] {
 		match face {
 			AabbFace::Right => Self::VERTEX_DATA_RIGHT,
 			AabbFace::Top => Self::VERTEX_DATA_TOP,
@@ -124,7 +124,10 @@ pub struct Model {
 }
 
 impl Model {
-	pub fn face_vertices(&self,face:Face) -> &'static [glam::Vec3;4] {
+	pub fn new(transform:glam::Mat4) -> Self {
+		Self{transform}
+	}
+	pub fn face_vertices(&self,face:Face) -> [glam::Vec3;4] {
 		Aabb::face_vertices(face)
 	}
 	pub fn face_mesh(&self,face:Face) -> TreyMesh {

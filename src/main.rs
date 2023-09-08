@@ -307,8 +307,8 @@ impl strafe_client::framework::Example for Skybox {
 			grounded: true,
 			jump_trying: false,
 			walkspeed: 18.0,
-			contacts: Vec::<crate::body::RelativeCollision>::new(),
-    		models_cringe_clone: modeldatas.iter().map(|m|crate::body::Model{transform:m.transform}),
+			contacts: Vec::<strafe_client::body::RelativeCollision>::new(),
+    		models_cringe_clone: modeldatas.iter().map(|m|strafe_client::body::Model::new(m.transform)).collect(),
 		};
 
 		let camera_uniforms = camera.to_uniform_data(physics.extrapolate_position(0));
