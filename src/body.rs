@@ -21,6 +21,125 @@ pub struct PhysicsState {
 	pub jump_trying: bool,
 }
 
+#[derive(Clone,Copy)]
+enum AabbFace{
+	Right,//+X
+	Top,
+	Back,
+	Left,
+	Bottom,
+	Front,
+}
+
+struct Aabb {
+	min: glam::Vec3,
+	max: glam::Vec3,
+}
+
+impl Aabb {
+	// const FACE_DATA: [[f32; 3]; 6] = [
+	// 	[0.0f32, 0., 1.],
+	// 	[0.0f32, 0., -1.],
+	// 	[1.0f32, 0., 0.],
+	// 	[-1.0f32, 0., 0.],
+	// 	[0.0f32, 1., 0.],
+	// 	[0.0f32, -1., 0.],
+	// ];
+	const VERTEX_DATA_RIGHT: &'static [glam::Vec3; 4] = &[
+		glam::vec3(1., -1., -1.),
+		glam::vec3(1., 1., -1.),
+		glam::vec3(1., 1., 1.),
+		glam::vec3(1., -1., 1.),
+	];
+	const VERTEX_DATA_TOP: &'static [glam::Vec3; 4] = &[
+		glam::vec3(1., 1., -1.),
+		glam::vec3(-1., 1., -1.),
+		glam::vec3(-1., 1., 1.),
+		glam::vec3(1., 1., 1.),
+	];
+	const VERTEX_DATA_BACK: &'static [glam::Vec3; 4] = &[
+		glam::vec3(-1., -1., 1.),
+		glam::vec3(1., -1., 1.),
+		glam::vec3(1., 1., 1.),
+		glam::vec3(-1., 1., 1.),
+	];
+	const VERTEX_DATA_LEFT: &'static [glam::Vec3; 4] = &[
+		glam::vec3(-1., -1., 1.),
+		glam::vec3(-1., 1., 1.),
+		glam::vec3(-1., 1., -1.),
+		glam::vec3(-1., -1., -1.),
+	];
+	const VERTEX_DATA_BOTTOM: &'static [glam::Vec3; 4] = &[
+		glam::vec3(1., -1., 1.),
+		glam::vec3(-1., -1., 1.),
+		glam::vec3(-1., -1., -1.),
+		glam::vec3(1., -1., -1.),
+	];
+	const VERTEX_DATA_FRONT: &'static [glam::Vec3; 4] = &[
+		glam::vec3(-1., 1., -1.),
+		glam::vec3(1., 1., -1.),
+		glam::vec3(1., -1., -1.),
+		glam::vec3(-1., -1., -1.),
+	];
+
+	pub fn new() -> Self {
+		Self {min: glam::Vec3::INFINITY,max: glam::Vec3::NEG_INFINITY}
+	}
+
+	pub fn grow(&mut self, point:glam::Vec3){
+		self.min=self.min.min(point);
+		self.max=self.max.max(point);
+	}
+
+	pub fn normal(face:AabbFace) -> glam::Vec3 {
+		match face {
+			AabbFace::Right => glam::vec3(1.,0.,0.),
+			AabbFace::Top => glam::vec3(0.,1.,0.),
+			AabbFace::Back => glam::vec3(0.,0.,1.),
+			AabbFace::Left => glam::vec3(-1.,0.,0.),
+			AabbFace::Bottom => glam::vec3(0.,-1.,0.),
+			AabbFace::Front => glam::vec3(0.,0.,-1.),
+		}
+	}
+	pub fn face_vertices(face:AabbFace) -> &'static [glam::Vec3;4] {
+		match face {
+			AabbFace::Right => Self::VERTEX_DATA_RIGHT,
+			AabbFace::Top => Self::VERTEX_DATA_TOP,
+			AabbFace::Back => Self::VERTEX_DATA_BACK,
+			AabbFace::Left => Self::VERTEX_DATA_LEFT,
+			AabbFace::Bottom => Self::VERTEX_DATA_BOTTOM,
+			AabbFace::Front => Self::VERTEX_DATA_FRONT,
+		}
+	}
+}
+
+type Face = AabbFace;
+type TreyMesh = Aabb;
+
+pub struct Model {
+	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
+	//in this iteration, all it needs is extents.
+	transform: glam::Mat4,
+}
+
+impl Model {
+	pub fn face_vertices(&self,face:Face) -> &'static [glam::Vec3;4] {
+		Aabb::face_vertices(face)
+	}
+	pub fn face_mesh(&self,face:Face) -> TreyMesh {
+		let mut aabb=Aabb::new();
+		for &vertex in self.face_vertices(face).iter() {
+			aabb.grow(vertex);
+		}
+		return aabb;
+	}
+	pub fn face_normal(&self,face:Face) -> glam::Vec3 {
+		let mut n=glam::Vec3Swizzles::xyzz(Aabb::normal(face));
+		n.w=0.0;//what a man will do to avoid writing out the components
+		glam::Vec4Swizzles::xyz(self.transform*n)//this is wrong for scale
+	}
+}
+
 pub struct RelativeCollision {
 	face: Face,//just an id
 	model: u32,//using id to avoid lifetimes
