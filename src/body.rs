@@ -22,7 +22,8 @@ impl PhysicsState {
 	pub fn run(&mut self, time: TIMESTAMP, control_dir: glam::Vec3, controls: u32){
 		let target_tick = (time/10_000_000) as u32;//100t
 		//the game code can run for 1 month before running out of ticks
-		for tick in self.tick+1..=target_tick {
+		while self.tick<target_tick {
+			self.tick += 1;
 			let dt=0.01;
 			let d=self.body.velocity.dot(control_dir);
 			if d<self.mv {
@@ -50,7 +51,6 @@ impl PhysicsState {
 				}
 			}
 		}
-		self.tick=target_tick;
 
 		self.body.time=target_tick as TIMESTAMP*10_000_000;
 	}
