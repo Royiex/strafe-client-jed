@@ -19,6 +19,7 @@ pub type TIMESTAMP = i64;
 
 const CONTROL_JUMP:u32 = 0b01000000;//temp
 impl PhysicsState {
+	//delete this, we are tickless gamers
 	pub fn run(&mut self, time: TIMESTAMP, control_dir: glam::Vec3, controls: u32){
 		let target_tick = (time/10_000_000) as u32;//100t
 		//the game code can run for 1 month before running out of ticks
@@ -55,8 +56,19 @@ impl PhysicsState {
 		self.body.time=target_tick as TIMESTAMP*10_000_000;
 	}
 
+	//delete this
 	pub fn extrapolate_position(&self, time: TIMESTAMP) -> glam::Vec3 {
 		let dt=(time-self.body.time) as f64/1_000_000_000f64;
 		self.body.position+self.body.velocity*(dt as f32)+self.gravity*((0.5*dt*dt) as f32)
+	}
+}
+
+impl crate::event::EventTrait for PhysicsState {
+	fn next_event(&self) -> Option<crate::event::EventEnum> {
+		//check for collision stop events with curent contacts
+		//check for collision start events against (every part in the ghamemem!!)
+		//check to see if yee need to jump
+		//check to see when the next strafe tick is
+		None
 	}
 }
