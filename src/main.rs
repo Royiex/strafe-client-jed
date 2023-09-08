@@ -34,20 +34,12 @@ struct Model {
 
 // Note: we use the Y=up coordinate space in this example.
 struct Camera {
-	time: Instant,
-	pos: glam::Vec3,
-	vel: glam::Vec3,
-	gravity: glam::Vec3,
-	friction: f32,
 	screen_size: (u32, u32),
 	offset: glam::Vec3,
 	fov: f32,
 	yaw: f32,
 	pitch: f32,
 	controls: u32,
-	mv: f32,
-	grounded: bool,
-	walkspeed: f32,
 }
 
 const CONTROL_MOVEFORWARD:u32 = 0b00000001;
@@ -100,7 +92,7 @@ fn get_control_dir(controls: u32) -> glam::Vec3{
 	}
 
 impl Camera {
-	fn to_uniform_data(&self) -> [f32; 16 * 3 + 4] {
+	fn to_uniform_data(&self, pos: glam::Vec3) -> [f32; 16 * 3 + 4] {
 		let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
 		let fov = if self.controls&CONTROL_ZOOM==0 {
 			self.fov
@@ -109,7 +101,7 @@ impl Camera {
 		};
 		let proj = perspective_rh(fov, aspect, 0.5, 1000.0);
 		let proj_inv = proj.inverse();
-		let view = glam::Mat4::from_translation(self.pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.yaw, self.pitch, 0f32);
+		let view = glam::Mat4::from_translation(pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.yaw, self.pitch, 0f32);
 		let view_inv = view.inverse();
 
 		let mut raw = [0f32; 16 * 3 + 4];
@@ -122,7 +114,9 @@ impl Camera {
 }
 
 pub struct Skybox {
+	start_time: std::time::Instant,
 	camera: Camera,
+	physics: strafe_client::body::PhysicsState,
 	sky_pipeline: wgpu::RenderPipeline,
 	entity_pipeline: wgpu::RenderPipeline,
 	ground_pipeline: wgpu::RenderPipeline,
@@ -290,22 +284,30 @@ impl strafe_client::framework::Example for Skybox {
 		});
 
 		let camera = Camera {
-			time: Instant::now(),
-			pos: glam::Vec3::new(5.0,0.0,5.0),
-			vel: glam::Vec3::new(0.0,0.0,0.0),
-			gravity: glam::Vec3::new(0.0,-100.0,0.0),
-			friction: 90.0,
 			screen_size: (config.width, config.height),
 			offset: glam::Vec3::new(0.0,4.5,0.0),
 			fov: 1.0, //fov_slope = tan(fov_y/2)
 			pitch: 0.0,
 			yaw: 0.0,
-			mv: 2.7,
 			controls:0,
+		};
+		let physics = strafe_client::body::PhysicsState {
+			body: strafe_client::body::Body {
+				position: glam::Vec3::new(5.0,0.0,5.0),
+				velocity: glam::Vec3::new(0.0,0.0,0.0),
+				time: 0,
+			},
+			time: 0,
+			tick: 0,
+			strafe_tick_period: 1_000_000_000/100,//100t
+			gravity: glam::Vec3::new(0.0,-100.0,0.0),
+			friction: 90.0,
+			mv: 2.7,
 			grounded: true,
 			walkspeed: 18.0,
 		};
-		let camera_uniforms = camera.to_uniform_data();
+
+		let camera_uniforms = camera.to_uniform_data(physics.extrapolate_position(0));
 		let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 			label: Some("Camera"),
 			contents: bytemuck::cast_slice(&camera_uniforms),
@@ -539,7 +541,9 @@ impl strafe_client::framework::Example for Skybox {
 		let depth_view = Self::create_depth_texture(config, device);
 
 		Skybox {
+			start_time: Instant::now(),
 			camera,
+			physics,
 			sky_pipeline,
 			entity_pipeline,
 			ground_pipeline,
@@ -625,44 +629,18 @@ impl strafe_client::framework::Example for Skybox {
 		queue: &wgpu::Queue,
 		_spawner: &strafe_client::framework::Spawner,
 	) {
-		let time = Instant::now();
-
-		//physique
-		let dt=(time-self.camera.time).as_secs_f32();
-		self.camera.time=time;
 		let camera_mat=glam::Mat3::from_euler(glam::EulerRot::YXZ,self.camera.yaw,0f32,0f32);
 		let control_dir=camera_mat*get_control_dir(self.camera.controls&(CONTROL_MOVELEFT|CONTROL_MOVERIGHT|CONTROL_MOVEFORWARD|CONTROL_MOVEBACK)).normalize_or_zero();
-		let d=self.camera.vel.dot(control_dir);
-		if d<self.camera.mv {
-			self.camera.vel+=(self.camera.mv-d)*control_dir;
-		}
-		self.camera.vel+=self.camera.gravity*dt;
-		self.camera.pos+=self.camera.vel*dt;
-		if self.camera.pos.y<0.0{
-			self.camera.pos.y=0.0;
-			self.camera.vel.y=0.0;
-			self.camera.grounded=true;
-		}
-		if self.camera.grounded&&(self.camera.controls&CONTROL_JUMP)!=0 {
-			self.camera.grounded=false;
-			self.camera.vel+=glam::Vec3::new(0.0,0.715588/2.0*100.0,0.0);
-		}
-		if self.camera.grounded {
-			let applied_friction=self.camera.friction*dt;
-			let targetv=control_dir*self.camera.walkspeed;
-			let diffv=targetv-self.camera.vel;
-			if applied_friction*applied_friction<diffv.length_squared() {
-				self.camera.vel+=applied_friction*diffv.normalize();
-			} else {
-				self.camera.vel=targetv;
-			}
-		}
+
+		let time=self.start_time.elapsed().as_nanos() as i64;
+
+		self.physics.run(time,control_dir,self.camera.controls);
 
 		let mut encoder =
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
 		// update rotation
-		let camera_uniforms = self.camera.to_uniform_data();
+		let camera_uniforms = self.camera.to_uniform_data(self.physics.extrapolate_position(time));
 		self.staging_belt
 			.write_buffer(
 				&mut encoder,
