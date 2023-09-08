@@ -110,3 +110,10 @@ impl crate::event::EventTrait for PhysicsState {
 		best_event
 	}
 }
+
+impl crate::sweep::PredictCollision for Model {
+	fn predict_collision(&self,other:&Model) -> Option<crate::event::EventStruct> {
+		//math!
+		None
+	}
+}
