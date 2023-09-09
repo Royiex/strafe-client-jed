@@ -5,6 +5,8 @@ pub enum PhysicsInstruction {
 	CollisionEnd(RelativeCollision),
 	StrafeTick,
 	Jump,
+	SetWalkTargetVelocity(glam::Vec3),
+	ReachWalkTargetVelocity,
 	// Water,
 	// Spawn(
 	// 	Option<SpawnId>,
@@ -14,15 +16,25 @@ pub enum PhysicsInstruction {
 }
 
 pub struct Body {
-	pub position: glam::Vec3,//I64 where 2^32 = 1 u
-	pub velocity: glam::Vec3,//I64 where 2^32 = 1 u/s
-	pub time: TIME,//nanoseconds x xxxxD!
+	position: glam::Vec3,//I64 where 2^32 = 1 u
+	velocity: glam::Vec3,//I64 where 2^32 = 1 u/s
+	acceleration: glam::Vec3,//I64 where 2^32 = 1 u/s/s
+	time: TIME,//nanoseconds x xxxxD!
+}
+
+pub enum MoveRestriction {
+	Air,
+	Water,
+	Ground,
+	Ladder,//multiple ladders how
 }
 
 pub struct PhysicsState {
 	pub body: Body,
 	pub contacts: Vec<RelativeCollision>,
+	//temp
 	pub models_cringe_clone: Vec<Model>,
+	pub temp_control_dir: glam::Vec3,
 	pub time: TIME,
 	pub strafe_tick_num: TIME,
 	pub strafe_tick_den: TIME,
@@ -30,6 +42,7 @@ pub struct PhysicsState {
 	pub mv: f32,
 	pub walkspeed: f32,
 	pub friction: f32,
+	pub walk_target_velocity: glam::Vec3,
 	pub gravity: glam::Vec3,
 	pub grounded: bool,
 	pub jump_trying: bool,
@@ -173,50 +186,45 @@ impl RelativeCollision {
 
 pub type TIME = i64;
 
+impl Body {
+	pub fn with_position(position:glam::Vec3) -> Self {
+		Self{
+			position: position,
+			velocity: glam::Vec3::ZERO,
+			acceleration: glam::Vec3::ZERO,
+			time: 0,
+		}
+	}
+	pub fn extrapolated_position(&self,time: TIME)->glam::Vec3{
+		let dt=(time-self.time) as f64/1_000_000_000f64;
+		self.position+self.velocity*(dt as f32)+self.acceleration*((0.5*dt*dt) as f32)
+	}
+	pub fn advance_time(&mut self, time: TIME){
+		self.position=self.extrapolated_position(time);
+		self.time=time;
+	}
+}
+
 const CONTROL_JUMP:u32 = 0b01000000;//temp DATA NORMALIZATION!@#$
 impl PhysicsState {
-	//delete this, we are tickless gamers
-	pub fn run(&mut self, time: TIME, control_dir: glam::Vec3, controls: u32){
-		let target_tick = (time*self.strafe_tick_num/self.strafe_tick_den) as u32;
-		//the game code can run for 1 month before running out of ticks
-		while self.tick<target_tick {
-			self.tick += 1;
-			let dt=0.01;
-			let d=self.body.velocity.dot(control_dir);
-			if d<self.mv {
-				self.body.velocity+=(self.mv-d)*control_dir;
+	//tickless gaming
+	pub fn run(&mut self, time: TIME){
+		//prepare is ommitted - everything is done via instructions.
+		while let Some(instruction) = self.next_instruction() {//collect
+			if time<instruction.time {
+				break;
 			}
-			self.body.velocity+=self.gravity*dt;
-			self.body.position+=self.body.velocity*dt;
-			if self.body.position.y<0.0{
-				self.body.position.y=0.0;
-				self.body.velocity.y=0.0;
-				self.grounded=true;
-			}
-			if self.grounded&&(controls&CONTROL_JUMP)!=0 {
-				self.grounded=false;
-				self.body.velocity+=glam::Vec3::new(0.0,0.715588/2.0*100.0,0.0);
-			}
-			if self.grounded {
-				let applied_friction=self.friction*dt;
-				let targetv=control_dir*self.walkspeed;
-				let diffv=targetv-self.body.velocity;
-				if applied_friction*applied_friction<diffv.length_squared() {
-					self.body.velocity+=applied_friction*diffv.normalize();
-				} else {
-					//PhysicsInstruction::WalkTargetReached
-					self.body.velocity=targetv;
-				}
-			}
+			//advance
+			//self.advance_time(instruction.time);
+			//process
+			self.process_instruction(instruction);
+			//write hash lol
 		}
-
-		self.body.time=target_tick as TIME*self.strafe_tick_den/self.strafe_tick_num;
 	}
 
-	//delete this
-	pub fn extrapolate_position(&self, time: TIME) -> glam::Vec3 {
-		let dt=(time-self.body.time) as f64/1_000_000_000f64;
-		self.body.position+self.body.velocity*(dt as f32)+self.gravity*((0.5*dt*dt) as f32)
+	pub fn advance_time(&mut self, time: TIME){
+		self.body.advance_time(time);
+		self.time=time;
 	}
 
 	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
@@ -304,7 +312,31 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 }
 
 impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
-	fn process_instruction(&mut self, instruction:TimedInstruction<PhysicsInstruction>) {
-		//
+	fn process_instruction(&mut self, ins:TimedInstruction<PhysicsInstruction>) {
+		//mutate position and velocity and time
+		self.advance_time(ins.time);//should this be in run?
+		match ins.instruction {
+			PhysicsInstruction::CollisionStart(_) => todo!(),
+			PhysicsInstruction::CollisionEnd(_) => todo!(),
+			PhysicsInstruction::StrafeTick => {
+				//let control_dir=self.get_control_dir();//this should respect your mouse interpolation settings
+				let d=self.body.velocity.dot(self.temp_control_dir);
+				if d<self.mv {
+					self.body.velocity+=(self.mv-d)*self.temp_control_dir;
+				}
+			}
+			PhysicsInstruction::Jump => {
+				self.grounded=false;//do I need this?
+				self.body.velocity+=glam::Vec3::new(0.0,0.715588/2.0*100.0,0.0);
+			}
+			PhysicsInstruction::ReachWalkTargetVelocity => {
+				//precisely set velocity
+				self.body.velocity=self.walk_target_velocity;
+			}
+			PhysicsInstruction::SetWalkTargetVelocity(v) => {
+				self.walk_target_velocity=v;
+				//calculate acceleration yada yada
+			},
+		}
 	}
 }
