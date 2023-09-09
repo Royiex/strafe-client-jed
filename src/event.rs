@@ -1,37 +1,37 @@
-pub struct EventStruct<E> {
+pub struct TimedInstruction<I> {
 	pub time: crate::body::TIME,
-	pub event: E,
+	pub instruction: I,
 }
 
-pub trait EventEmitter<E> {
-	fn next_event(&self) -> Option<EventStruct<E>>;
+pub trait InstructionEmitter<I> {
+	fn next_instruction(&self) -> Option<TimedInstruction<I>>;
 }
-pub trait EventConsumer<E> {
-	fn process_event(&mut self, event:EventStruct<E>);
+pub trait InstructionConsumer<I> {
+	fn process_instruction(&mut self, instruction:TimedInstruction<I>);
 }
 
 //PROPER PRIVATE FIELDS!!!
-pub struct EventCollector<E> {
-	event: Option<EventStruct<E>>,
+pub struct InstructionCollector<I> {
+	instruction: Option<TimedInstruction<I>>,
 }
-impl<E> EventCollector<E> {
+impl<I> InstructionCollector<I> {
 	pub fn new() -> Self {
-		Self{event:None}
+		Self{instruction:None}
 	}
 
-	pub fn collect(&mut self,test_event:Option<EventStruct<E>>){
-		match &test_event {
-			Some(unwrap_test_event) => match &self.event {
-				Some(unwrap_best_event) => if unwrap_test_event.time<unwrap_best_event.time {
-					self.event=test_event;
+	pub fn collect(&mut self,instruction:Option<TimedInstruction<I>>){
+		match &instruction {
+			Some(unwrap_instruction) => match &self.instruction {
+				Some(unwrap_best_instruction) => if unwrap_instruction.time<unwrap_best_instruction.time {
+					self.instruction=instruction;
 				},
-				None => self.event=test_event,
+				None => self.instruction=instruction,
 			},
 			None => (),
 		}
 	}
-	pub fn event(self) -> Option<EventStruct<E>> {
-		//STEAL EVENT AND DESTROY EVENTCOLLECTOR
-		return self.event
+	pub fn instruction(self) -> Option<TimedInstruction<I>> {
+		//STEAL INSTRUCTION AND DESTROY INSTRUCTIONCOLLECTOR
+		return self.instruction
 	}
 }

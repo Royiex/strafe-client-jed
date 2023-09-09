@@ -1,6 +1,6 @@
-use crate::event::EventStruct;
+use crate::instruction::TimedInstruction;
 
-pub enum PhysicsEvent {
+pub enum PhysicsInstruction {
 	CollisionStart(RelativeCollision),
 	CollisionEnd(RelativeCollision),
 	StrafeTick,
@@ -198,7 +198,7 @@ impl PhysicsState {
 				if applied_friction*applied_friction<diffv.length_squared() {
 					self.body.velocity+=applied_friction*diffv.normalize();
 				} else {
-					//EventEnum::WalkTargetReached
+					//PhysicsInstruction::WalkTargetReached
 					self.body.velocity=targetv;
 				}
 			}
@@ -213,59 +213,59 @@ impl PhysicsState {
 		self.body.position+self.body.velocity*(dt as f32)+self.gravity*((0.5*dt*dt) as f32)
 	}
 
-	fn next_strafe_event(&self) -> Option<EventStruct<PhysicsEvent>> {
-		return Some(EventStruct{
+	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
+		return Some(TimedInstruction{
 			time:(self.time*self.strafe_tick_num/self.strafe_tick_den+1)*self.strafe_tick_den/self.strafe_tick_num,
-			event:PhysicsEvent::StrafeTick
+			instruction:PhysicsInstruction::StrafeTick
 		});
 	}
 
-	fn next_walk_event(&self) -> Option<EventStruct<PhysicsEvent>> {
-		//check if you are accelerating towards a walk target velocity and create an event
+	fn next_walk_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
+		//check if you are accelerating towards a walk target velocity and create an instruction
 		return None;
 	}
-	fn predict_collision_end(&self,model:&Model) -> Option<EventStruct<PhysicsEvent>> {
+	fn predict_collision_end(&self,model:&Model) -> Option<TimedInstruction<PhysicsInstruction>> {
 		None
 	}
-	fn predict_collision_start(&self,model:&Model) -> Option<EventStruct<PhysicsEvent>> {
+	fn predict_collision_start(&self,model:&Model) -> Option<TimedInstruction<PhysicsInstruction>> {
 		None
 	}
 }
 
-impl crate::event::EventEmitter<PhysicsEvent> for PhysicsState {
-	//this little next event function can cache its return value and invalidate the cached value by watching the State.
-	fn next_event(&self) -> Option<EventStruct<PhysicsEvent>> {
+impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState {
+	//this little next instruction function can cache its return value and invalidate the cached value by watching the State.
+	fn next_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//JUST POLLING!!! NO MUTATION
-		let mut best = crate::event::EventCollector::new();
+		let mut best = crate::instruction::InstructionCollector::new();
 		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
 		if self.grounded&&self.jump_trying {
-			//scroll will be implemented with InputEvent::Jump(true) but it blocks setting self.jump_trying=true
-			best.collect(Some(EventStruct{
+			//scroll will be implemented with InputInstruction::Jump(true) but it blocks setting self.jump_trying=true
+			best.collect(Some(TimedInstruction{
 				time:self.time,
-				event:PhysicsEvent::Jump
+				instruction:PhysicsInstruction::Jump
 			}));
 		}
-		//check for collision stop events with curent contacts
+		//check for collision stop instructions with curent contacts
 		for collision_data in self.contacts.iter() {
 			best.collect(self.predict_collision_end(self.models_cringe_clone.get(collision_data.model as usize).unwrap()));
 		}
-		//check for collision start events (against every part in the game with no optimization!!)
+		//check for collision start instructions (against every part in the game with no optimization!!)
 		for model in &self.models_cringe_clone {
 			best.collect(self.predict_collision_start(model));
 		}
 		if self.grounded {
 			//walk maintenance
-			best.collect(self.next_walk_event());
+			best.collect(self.next_walk_instruction());
 		}else{
 			//check to see when the next strafe tick is
-			best.collect(self.next_strafe_event());
+			best.collect(self.next_strafe_instruction());
 		}
-		best.event()
+		best.instruction()
 	}
 }
 
-impl crate::event::EventConsumer<PhysicsEvent> for PhysicsState {
-	fn process_event(&mut self, event:EventStruct<PhysicsEvent>) {
+impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
+	fn process_instruction(&mut self, instruction:TimedInstruction<PhysicsInstruction>) {
 		//
 	}
 }
