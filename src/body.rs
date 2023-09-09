@@ -263,3 +263,9 @@ impl crate::event::EventEmitter<PhysicsEvent> for PhysicsState {
 		best.event()
 	}
 }
+
+impl crate::event::EventConsumer<PhysicsEvent> for PhysicsState {
+	fn process_event(&mut self, event:EventStruct<PhysicsEvent>) {
+		//
+	}
+}

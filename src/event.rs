@@ -6,6 +6,9 @@ pub struct EventStruct<E> {
 pub trait EventEmitter<E> {
 	fn next_event(&self) -> Option<EventStruct<E>>;
 }
+pub trait EventConsumer<E> {
+	fn process_event(&mut self, event:EventStruct<E>);
+}
 
 //PROPER PRIVATE FIELDS!!!
 pub struct EventCollector<E> {
