@@ -292,11 +292,7 @@ impl strafe_client::framework::Example for Skybox {
 			controls:0,
 		};
 		let physics = strafe_client::body::PhysicsState {
-			body: strafe_client::body::Body {
-				position: glam::Vec3::new(5.0,0.0,5.0),
-				velocity: glam::Vec3::new(0.0,0.0,0.0),
-				time: 0,
-			},
+			body: strafe_client::body::Body::with_position(glam::Vec3::new(5.0,5.0,5.0)),
 			time: 0,
 			tick: 0,
 			strafe_tick_num: 100,//100t
@@ -306,12 +302,14 @@ impl strafe_client::framework::Example for Skybox {
 			mv: 2.7,
 			grounded: true,
 			jump_trying: false,
+			temp_control_dir: glam::Vec3::ZERO,
 			walkspeed: 18.0,
 			contacts: Vec::<strafe_client::body::RelativeCollision>::new(),
     		models_cringe_clone: modeldatas.iter().map(|m|strafe_client::body::Model::new(m.transform)).collect(),
+    		walk_target_velocity: glam::Vec3::ZERO,
 		};
 
-		let camera_uniforms = camera.to_uniform_data(physics.extrapolate_position(0));
+		let camera_uniforms = camera.to_uniform_data(physics.body.extrapolated_position(0));
 		let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 			label: Some("Camera"),
 			contents: bytemuck::cast_slice(&camera_uniforms),
@@ -638,13 +636,15 @@ impl strafe_client::framework::Example for Skybox {
 
 		let time=self.start_time.elapsed().as_nanos() as i64;
 
-		self.physics.run(time,control_dir,self.camera.controls);
+		self.physics.temp_control_dir=control_dir;
+		self.physics.jump_trying=self.camera.controls&CONTROL_JUMP!=0;
+		self.physics.run(time);
 
 		let mut encoder =
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
 		// update rotation
-		let camera_uniforms = self.camera.to_uniform_data(self.physics.extrapolate_position(time));
+		let camera_uniforms = self.camera.to_uniform_data(self.physics.body.extrapolated_position(time));
 		self.staging_belt
 			.write_buffer(
 				&mut encoder,
