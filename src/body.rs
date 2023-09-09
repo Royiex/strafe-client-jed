@@ -205,7 +205,6 @@ impl Body {
 	}
 }
 
-const CONTROL_JUMP:u32 = 0b01000000;//temp DATA NORMALIZATION!@#$
 impl PhysicsState {
 	//tickless gaming
 	pub fn run(&mut self, time: TIME){
