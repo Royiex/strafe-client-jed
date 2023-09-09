@@ -1,29 +1,22 @@
-pub struct EventStruct {
+pub struct EventStruct<E> {
 	pub time: crate::body::TIME,
-	pub event: EventEnum,
+	pub event: E,
 }
 
-pub enum EventEnum {
-	CollisionStart(crate::body::RelativeCollision),//Body::CollisionStart
-	CollisionEnd(crate::body::RelativeCollision),//Body::CollisionEnd
-	StrafeTick,
-	Jump,
-}
-
-pub trait EventTrait {
-	fn next_event(&self) -> Option<EventStruct>;
+pub trait EventEmitter<E> {
+	fn next_event(&self) -> Option<EventStruct<E>>;
 }
 
 //PROPER PRIVATE FIELDS!!!
-pub struct EventCollector {
-	event: Option<EventStruct>,
+pub struct EventCollector<E> {
+	event: Option<EventStruct<E>>,
 }
-impl EventCollector {
+impl<E> EventCollector<E> {
 	pub fn new() -> Self {
 		Self{event:None}
 	}
 
-	pub fn collect(&mut self,test_event:Option<EventStruct>){
+	pub fn collect(&mut self,test_event:Option<EventStruct<E>>){
 		match &test_event {
 			Some(unwrap_test_event) => match &self.event {
 				Some(unwrap_best_event) => if unwrap_test_event.time<unwrap_best_event.time {
@@ -34,7 +27,7 @@ impl EventCollector {
 			None => (),
 		}
 	}
-	pub fn event(self) -> Option<EventStruct> {
+	pub fn event(self) -> Option<EventStruct<E>> {
 		//STEAL EVENT AND DESTROY EVENTCOLLECTOR
 		return self.event
 	}

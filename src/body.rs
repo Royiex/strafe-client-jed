@@ -1,5 +1,12 @@
 use crate::event::EventStruct;
 
+pub enum PhysicsEvent {
+	CollisionStart(RelativeCollision),
+	CollisionEnd(RelativeCollision),
+	StrafeTick,
+	Jump,
+}
+
 pub struct Body {
 	pub position: glam::Vec3,//I64 where 2^32 = 1 u
 	pub velocity: glam::Vec3,//I64 where 2^32 = 1 u/s
@@ -206,28 +213,28 @@ impl PhysicsState {
 		self.body.position+self.body.velocity*(dt as f32)+self.gravity*((0.5*dt*dt) as f32)
 	}
 
-	fn next_strafe_event(&self) -> Option<EventStruct> {
+	fn next_strafe_event(&self) -> Option<EventStruct<PhysicsEvent>> {
 		return Some(EventStruct{
 			time:(self.time*self.strafe_tick_num/self.strafe_tick_den+1)*self.strafe_tick_den/self.strafe_tick_num,
-			event:crate::event::EventEnum::StrafeTick
+			event:PhysicsEvent::StrafeTick
 		});
 	}
 
-	fn next_walk_event(&self) -> Option<EventStruct> {
+	fn next_walk_event(&self) -> Option<EventStruct<PhysicsEvent>> {
 		//check if you are accelerating towards a walk target velocity and create an event
 		return None;
 	}
-	fn predict_collision_end(&self,model:&Model) -> Option<EventStruct> {
+	fn predict_collision_end(&self,model:&Model) -> Option<EventStruct<PhysicsEvent>> {
 		None
 	}
-	fn predict_collision_start(&self,model:&Model) -> Option<EventStruct> {
+	fn predict_collision_start(&self,model:&Model) -> Option<EventStruct<PhysicsEvent>> {
 		None
 	}
 }
 
-impl crate::event::EventTrait for PhysicsState {
+impl crate::event::EventEmitter<PhysicsEvent> for PhysicsState {
 	//this little next event function can cache its return value and invalidate the cached value by watching the State.
-	fn next_event(&self) -> Option<EventStruct> {
+	fn next_event(&self) -> Option<EventStruct<PhysicsEvent>> {
 		//JUST POLLING!!! NO MUTATION
 		let mut best = crate::event::EventCollector::new();
 		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
@@ -235,7 +242,7 @@ impl crate::event::EventTrait for PhysicsState {
 			//scroll will be implemented with InputEvent::Jump(true) but it blocks setting self.jump_trying=true
 			best.collect(Some(EventStruct{
 				time:self.time,
-				event:crate::event::EventEnum::Jump
+				event:PhysicsEvent::Jump
 			}));
 		}
 		//check for collision stop events with curent contacts
