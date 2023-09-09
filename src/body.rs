@@ -5,6 +5,12 @@ pub enum PhysicsInstruction {
 	CollisionEnd(RelativeCollision),
 	StrafeTick,
 	Jump,
+	// Water,
+	// Spawn(
+	// 	Option<SpawnId>,
+	// 	bool,//true = Trigger; false = teleport
+	// 	bool,//true = Force
+	// )
 }
 
 pub struct Body {
@@ -216,15 +222,48 @@ impl PhysicsState {
 	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		return Some(TimedInstruction{
 			time:(self.time*self.strafe_tick_num/self.strafe_tick_den+1)*self.strafe_tick_den/self.strafe_tick_num,
+			//only poll the physics if there is a before and after mouse event
 			instruction:PhysicsInstruction::StrafeTick
 		});
 	}
+
+	//state mutated on collision:
+	//Accelerator
+	//stair step-up
+
+	//state mutated on instruction
+	//change fly acceleration (fly_sustain)
+	//change fly velocity
+
+	//generic event emmiters
+	//PlatformStandTime
+	//walk/swim/air/ladder sounds
+	//VState?
+
+	//falling under the map
+	// fn next_respawn_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
+	// 	if self.body.position<self.world.min_y {
+	// 		return Some(TimedInstruction{
+	// 			time:self.time,
+	// 			instruction:PhysicsInstruction::Trigger(None)
+	// 		});
+	// 	}
+	// }
+
+	// fn next_water_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
+	// 	return Some(TimedInstruction{
+	// 		time:(self.time*self.strafe_tick_num/self.strafe_tick_den+1)*self.strafe_tick_den/self.strafe_tick_num,
+	// 		//only poll the physics if there is a before and after mouse event
+	// 		instruction:PhysicsInstruction::Water
+	// 	});
+	// }
 
 	fn next_walk_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//check if you are accelerating towards a walk target velocity and create an instruction
 		return None;
 	}
 	fn predict_collision_end(&self,model:&Model) -> Option<TimedInstruction<PhysicsInstruction>> {
+		//must treat cancollide false objects differently: you may not exit through the same face you entered.
 		None
 	}
 	fn predict_collision_start(&self,model:&Model) -> Option<TimedInstruction<PhysicsInstruction>> {
