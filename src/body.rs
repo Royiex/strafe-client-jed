@@ -1,4 +1,4 @@
-use crate::instruction::TimedInstruction;
+use crate::instruction::{InstructionEmitter, InstructionConsumer, TimedInstruction};
 
 pub enum PhysicsInstruction {
 	CollisionStart(RelativeCollision),
@@ -210,10 +210,7 @@ impl PhysicsState {
 	//tickless gaming
 	pub fn run(&mut self, time: TIME){
 		//prepare is ommitted - everything is done via instructions.
-		while let Some(instruction) = self.next_instruction() {//collect
-			if time<instruction.time {
-				break;
-			}
+		while let Some(instruction) = self.next_instruction(time) {//collect
 			//advance
 			//self.advance_time(instruction.time);
 			//process
@@ -281,9 +278,9 @@ impl PhysicsState {
 
 impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState {
 	//this little next instruction function can cache its return value and invalidate the cached value by watching the State.
-	fn next_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn next_instruction(&self,time_limit:TIME) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//JUST POLLING!!! NO MUTATION
-		let mut collector = crate::instruction::InstructionCollector::new();
+		let mut collector = crate::instruction::InstructionCollector::new(time_limit);
 		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
 		if self.grounded&&self.jump_trying {
 			//scroll will be implemented with InputInstruction::Jump(true) but it blocks setting self.jump_trying=true
