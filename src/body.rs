@@ -29,12 +29,56 @@ pub enum MoveRestriction {
 	Ladder,//multiple ladders how
 }
 
+enum MouseInterpolation {
+	First,//just checks the last value
+	Lerp,//lerps between
+}
+
+enum InputInstruction {
+	MoveMouse(glam::IVec2),
+	Jump(bool),
+}
+
+pub struct MouseInterpolationState {
+	interpolation: MouseInterpolation,
+	time0: TIME,
+	time1: TIME,
+	mouse0: glam::IVec2,
+	mouse1: glam::IVec2,
+}
+
+impl MouseInterpolationState {
+	pub fn move_mouse(&mut self,time:TIME,pos:glam::IVec2){
+		self.time0=self.time1;
+		self.mouse0=self.mouse1;
+		self.time1=time;
+		self.mouse1=pos;
+	}
+	pub fn interpolated_position(&self,time:TIME) -> glam::IVec2 {
+		match self.interpolation {
+			MouseInterpolation::First => self.mouse0,
+			MouseInterpolation::Lerp => {
+				let m0=self.mouse0.as_i64vec2();
+				let m1=self.mouse1.as_i64vec2();
+				//these are deltas
+				let t1t=(self.time1-time) as i64;
+				let tt0=(time-self.time0) as i64;
+				let dt=(self.time1-self.time0) as i64;
+				((m0*t1t+m1*tt0)/dt).as_ivec2()
+			}
+		}
+	}
+}
+
 pub struct PhysicsState {
 	pub body: Body,
 	pub contacts: Vec<RelativeCollision>,
 	//temp
 	pub models_cringe_clone: Vec<Model>,
 	pub temp_control_dir: glam::Vec3,
+	//camera must exist in state because wormholes modify the camera, also camera punch
+	//pub camera: Camera,
+	//pub mouse_interpolation: MouseInterpolationState,
 	pub time: TIME,
 	pub strafe_tick_num: TIME,
 	pub strafe_tick_den: TIME,
