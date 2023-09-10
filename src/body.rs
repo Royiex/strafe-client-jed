@@ -23,10 +23,10 @@ pub struct Body {
 }
 
 pub enum MoveRestriction {
-    Air,
-    Water,
-    Ground,
-    Ladder,//multiple ladders how
+	Air,
+	Water,
+	Ground,
+	Ladder,//multiple ladders how
 }
 
 pub struct PhysicsState {
@@ -312,27 +312,27 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		//mutate position and velocity and time
 		self.advance_time(ins.time);//should this be in run?
 		match ins.instruction {
-		    PhysicsInstruction::CollisionStart(_) => todo!(),
-		    PhysicsInstruction::CollisionEnd(_) => todo!(),
-		    PhysicsInstruction::StrafeTick => {
-		    	//let control_dir=self.get_control_dir();//this should respect your mouse interpolation settings
-    			let d=self.body.velocity.dot(self.temp_control_dir);
-    			if d<self.mv {
-    				self.body.velocity+=(self.mv-d)*self.temp_control_dir;
-    			}
-    		}
-		    PhysicsInstruction::Jump => {
+			PhysicsInstruction::CollisionStart(_) => todo!(),
+			PhysicsInstruction::CollisionEnd(_) => todo!(),
+			PhysicsInstruction::StrafeTick => {
+				//let control_dir=self.get_control_dir();//this should respect your mouse interpolation settings
+				let d=self.body.velocity.dot(self.temp_control_dir);
+				if d<self.mv {
+					self.body.velocity+=(self.mv-d)*self.temp_control_dir;
+				}
+			}
+			PhysicsInstruction::Jump => {
 				self.grounded=false;//do I need this?
 				self.body.velocity+=glam::Vec3::new(0.0,0.715588/2.0*100.0,0.0);
 			}
-		    PhysicsInstruction::ReachWalkTargetVelocity => {
-		    	//precisely set velocity
+			PhysicsInstruction::ReachWalkTargetVelocity => {
+				//precisely set velocity
 				self.body.velocity=self.walk_target_velocity;
 			}
-    		PhysicsInstruction::SetWalkTargetVelocity(v) => {
-    			self.walk_target_velocity=v;
-    			//calculate acceleration yada yada
-    		},
+			PhysicsInstruction::SetWalkTargetVelocity(v) => {
+				self.walk_target_velocity=v;
+				//calculate acceleration yada yada
+			},
 		}
 	}
 }
