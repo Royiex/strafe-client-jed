@@ -39,6 +39,18 @@ enum InputInstruction {
 	Jump(bool),
 }
 
+struct InputState {
+	controls: u32,
+	mouse_interpolation: MouseInterpolation,
+	time: TIME,
+}
+
+impl InputState {
+	pub fn get_control(&self,control:u32) -> bool {
+		self.controls&control!=0
+	}
+}
+
 pub struct MouseInterpolationState {
 	interpolation: MouseInterpolation,
 	time0: TIME,
