@@ -29,12 +29,61 @@ pub enum MoveRestriction {
 	Ladder,//multiple ladders how
 }
 
+enum MouseInterpolation {
+	First,//just checks the last value
+	Lerp,//lerps between
+}
+
+enum InputInstruction {
+	MoveMouse(glam::IVec2),
+	Jump(bool),
+}
+
+pub struct MouseInterpolationState {
+	interpolation: MouseInterpolation,
+	time0: TIME,
+	time1: TIME,
+	mouse0: glam::IVec2,
+	mouse1: glam::IVec2,
+}
+
+impl MouseInterpolationState {
+	pub fn move_mouse(&mut self,time:TIME,pos:glam::IVec2){
+		self.time0=self.time1;
+		self.mouse0=self.mouse1;
+		self.time1=time;
+		self.mouse1=pos;
+	}
+	pub fn interpolated_position(&self,time:TIME) -> glam::IVec2 {
+		match self.interpolation {
+			MouseInterpolation::First => self.mouse0,
+			MouseInterpolation::Lerp => {
+				//a 5 hour run uses 45 bits of TIME
+				//mouse positions may accumulate on a map where the player spins, especially for high dpi...
+				let x0=self.mouse0.x as i128;
+				let y0=self.mouse0.y as i128;
+				let x1=self.mouse1.x as i128;
+				let y1=self.mouse1.y as i128;
+				let t1t=(self.time1-time) as i128;
+				let tt0=(time-self.time0) as i128;
+				let dt=(self.time1-self.time0) as i128;
+				glam::ivec2(
+					((x0*t1t+x1*tt0)/dt) as i32,
+					((y0*t1t+y1*tt0)/dt) as i32)
+			}
+		}
+	}
+}
+
 pub struct PhysicsState {
 	pub body: Body,
 	pub contacts: Vec<RelativeCollision>,
 	//temp
 	pub models_cringe_clone: Vec<Model>,
 	pub temp_control_dir: glam::Vec3,
+	//camera must exist in state because wormholes modify the camera, also camera punch
+	//pub camera: Camera,
+	//pub mouse_interpolation: MouseInterpolationState,
 	pub time: TIME,
 	pub strafe_tick_num: TIME,
 	pub strafe_tick_den: TIME,
