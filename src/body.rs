@@ -49,6 +49,12 @@ impl InputState {
 	pub fn get_control(&self,control:u32) -> bool {
 		self.controls&control!=0
 	}
+	pub fn process_instruction(&mut self,ins:InputInstruction){
+		match ins {
+			InputInstruction::MoveMouse(m) => todo!("set mouse_interpolation"),
+			InputInstruction::Jump(b) => todo!("how does info about style modifiers get here"),
+		}
+	}
 }
 
 pub struct MouseInterpolationState {
