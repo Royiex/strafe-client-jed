@@ -278,11 +278,11 @@ impl RelativeCollision {
 pub type TIME = i64;
 
 impl Body {
-	pub fn with_position(position:glam::Vec3) -> Self {
+	pub fn with_pva(position:glam::Vec3,velocity:glam::Vec3,acceleration:glam::Vec3) -> Self {
 		Self{
-			position: position,
-			velocity: glam::Vec3::ZERO,
-			acceleration: glam::Vec3::ZERO,
+			position,
+			velocity,
+			acceleration,
 			time: 0,
 		}
 	}

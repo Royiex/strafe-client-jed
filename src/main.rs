@@ -292,7 +292,7 @@ impl strafe_client::framework::Example for Skybox {
 			controls:0,
 		};
 		let physics = strafe_client::body::PhysicsState {
-			body: strafe_client::body::Body::with_position(glam::Vec3::new(5.0,5.0,5.0)),
+			body: strafe_client::body::Body::with_pva(glam::vec3(0.0,50.0,0.0),glam::vec3(0.0,0.0,0.0),glam::vec3(0.0,-100.0,0.0)),
 			time: 0,
 			tick: 0,
 			strafe_tick_num: 100,//100t
