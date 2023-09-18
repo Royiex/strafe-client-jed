@@ -300,7 +300,7 @@ impl strafe_client::framework::Example for Skybox {
 			gravity: glam::vec3(0.0,-100.0,0.0),
 			friction: 90.0,
 			mv: 2.7,
-			grounded: true,
+			grounded: false,
 			jump_trying: false,
 			temp_control_dir: glam::Vec3::ZERO,
 			walkspeed: 18.0,
