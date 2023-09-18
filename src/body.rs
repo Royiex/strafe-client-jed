@@ -382,7 +382,7 @@ impl PhysicsState {
 			if 0<=t_time&&t_time<best_time&&0f32<v.x+a.x*-t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh0.max.y-mesh1.min.y<dp.y&&mesh0.min.y-mesh1.max.y>dp.y&&mesh0.max.z-mesh1.min.z<dp.z&&mesh0.min.z-mesh1.max.z>dp.z {
+				if mesh0.max.y+dp.y<mesh1.min.y&&mesh0.min.y+dp.y>mesh1.max.y&&mesh0.max.z+dp.z<mesh1.min.z&&mesh0.min.z+dp.z>mesh1.max.z {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Left);
@@ -398,7 +398,7 @@ impl PhysicsState {
 			if 0<=t_time&&t_time<best_time&&v.x+a.x*-t<0f32{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh0.max.y-mesh1.min.y<dp.y&&mesh0.min.y-mesh1.max.y>dp.y&&mesh0.max.z-mesh1.min.z<dp.z&&mesh0.min.z-mesh1.max.z>dp.z {
+				if mesh0.max.y+dp.y<mesh1.min.y&&mesh0.min.y+dp.y>mesh1.max.y&&mesh0.max.z+dp.z<mesh1.min.z&&mesh0.min.z+dp.z>mesh1.max.z {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Right);
@@ -415,7 +415,7 @@ impl PhysicsState {
 			if 0<=t_time&&t_time<best_time&&0f32<v.y+a.y*-t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh0.max.x-mesh1.min.x<dp.x&&mesh0.min.x-mesh1.max.x>dp.x&&mesh0.max.z-mesh1.min.z<dp.z&&mesh0.min.z-mesh1.max.z>dp.z {
+				if mesh0.max.x+dp.x<mesh1.min.x&&mesh0.min.x+dp.x>mesh1.max.x&&mesh0.max.z+dp.z<mesh1.min.z&&mesh0.min.z+dp.z>mesh1.max.z {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Top);
@@ -431,7 +431,7 @@ impl PhysicsState {
 			if 0<=t_time&&t_time<best_time&&v.y+a.y*-t<0f32{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh0.max.x-mesh1.min.x<dp.x&&mesh0.min.x-mesh1.max.x>dp.x&&mesh0.max.z-mesh1.min.z<dp.z&&mesh0.min.z-mesh1.max.z>dp.z {
+				if mesh0.max.x+dp.x<mesh1.min.x&&mesh0.min.x+dp.x>mesh1.max.x&&mesh0.max.z+dp.z<mesh1.min.z&&mesh0.min.z+dp.z>mesh1.max.z {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Bottom);
@@ -448,7 +448,7 @@ impl PhysicsState {
 			if 0<=t_time&&t_time<best_time&&0f32<v.z+a.z*-t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh0.max.y-mesh1.min.y<dp.y&&mesh0.min.y-mesh1.max.y>dp.y&&mesh0.max.x-mesh1.min.x<dp.x&&mesh0.min.x-mesh1.max.x>dp.x {
+				if mesh0.max.y+dp.y<mesh1.min.y&&mesh0.min.y+dp.y>mesh1.max.y&&mesh0.max.x+dp.x<mesh1.min.x&&mesh0.min.x+dp.x>mesh1.max.x {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Back);
@@ -464,7 +464,7 @@ impl PhysicsState {
 			if 0<=t_time&&t_time<best_time&&v.z+a.z*-t<0f32{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh0.max.y-mesh1.min.y<dp.y&&mesh0.min.y-mesh1.max.y>dp.y&&mesh0.max.x-mesh1.min.x<dp.x&&mesh0.min.x-mesh1.max.x>dp.x {
+				if mesh0.max.y+dp.y<mesh1.min.y&&mesh0.min.y+dp.y>mesh1.max.y&&mesh0.max.x+dp.x<mesh1.min.x&&mesh0.min.x+dp.x>mesh1.max.x {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Front);
@@ -500,7 +500,7 @@ impl PhysicsState {
 			if 0<=t_time&&t_time<best_time&&0f32<v.x+a.x*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh0.max.y-mesh1.min.y<dp.y&&mesh0.min.y-mesh1.max.y>dp.y&&mesh0.max.z-mesh1.min.z<dp.z&&mesh0.min.z-mesh1.max.z>dp.z {
+				if mesh0.max.y+dp.y<mesh1.min.y&&mesh0.min.y+dp.y>mesh1.max.y&&mesh0.max.z+dp.z<mesh1.min.z&&mesh0.min.z+dp.z>mesh1.max.z {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Left);
@@ -516,7 +516,7 @@ impl PhysicsState {
 			if 0<=t_time&&t_time<best_time&&v.x+a.x*t<0f32{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh0.max.y-mesh1.min.y<dp.y&&mesh0.min.y-mesh1.max.y>dp.y&&mesh0.max.z-mesh1.min.z<dp.z&&mesh0.min.z-mesh1.max.z>dp.z {
+				if mesh0.max.y+dp.y<mesh1.min.y&&mesh0.min.y+dp.y>mesh1.max.y&&mesh0.max.z+dp.z<mesh1.min.z&&mesh0.min.z+dp.z>mesh1.max.z {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Right);
@@ -533,7 +533,7 @@ impl PhysicsState {
 			if 0<=t_time&&t_time<best_time&&0f32<v.y+a.y*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh0.max.x-mesh1.min.x<dp.x&&mesh0.min.x-mesh1.max.x>dp.x&&mesh0.max.z-mesh1.min.z<dp.z&&mesh0.min.z-mesh1.max.z>dp.z {
+				if mesh0.max.x+dp.x<mesh1.min.x&&mesh0.min.x+dp.x>mesh1.max.x&&mesh0.max.z+dp.z<mesh1.min.z&&mesh0.min.z+dp.z>mesh1.max.z {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Top);
@@ -549,7 +549,7 @@ impl PhysicsState {
 			if 0<=t_time&&t_time<best_time&&v.y+a.y*t<0f32{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh0.max.x-mesh1.min.x<dp.x&&mesh0.min.x-mesh1.max.x>dp.x&&mesh0.max.z-mesh1.min.z<dp.z&&mesh0.min.z-mesh1.max.z>dp.z {
+				if mesh0.max.x+dp.x<mesh1.min.x&&mesh0.min.x+dp.x>mesh1.max.x&&mesh0.max.z+dp.z<mesh1.min.z&&mesh0.min.z+dp.z>mesh1.max.z {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Bottom);
@@ -566,7 +566,7 @@ impl PhysicsState {
 			if 0<=t_time&&t_time<best_time&&0f32<v.z+a.z*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh0.max.y-mesh1.min.y<dp.y&&mesh0.min.y-mesh1.max.y>dp.y&&mesh0.max.x-mesh1.min.x<dp.x&&mesh0.min.x-mesh1.max.x>dp.x {
+				if mesh0.max.y+dp.y<mesh1.min.y&&mesh0.min.y+dp.y>mesh1.max.y&&mesh0.max.x+dp.x<mesh1.min.x&&mesh0.min.x+dp.x>mesh1.max.x {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Back);
@@ -582,7 +582,7 @@ impl PhysicsState {
 			if 0<=t_time&&t_time<best_time&&v.z+a.z*t<0f32{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh0.max.y-mesh1.min.y<dp.y&&mesh0.min.y-mesh1.max.y>dp.y&&mesh0.max.x-mesh1.min.x<dp.x&&mesh0.min.x-mesh1.max.x>dp.x {
+				if mesh0.max.y+dp.y<mesh1.min.y&&mesh0.min.y+dp.y>mesh1.max.y&&mesh0.max.x+dp.x<mesh1.min.x&&mesh0.min.x+dp.x>mesh1.max.x {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Front);
