@@ -304,7 +304,7 @@ impl strafe_client::framework::Example for Skybox {
 			jump_trying: false,
 			temp_control_dir: glam::Vec3::ZERO,
 			walkspeed: 18.0,
-			contacts: Vec::<strafe_client::body::RelativeCollision>::new(),
+			contacts: std::collections::HashSet::new(),
     		models_cringe_clone: modeldatas.iter().map(|m|strafe_client::body::Model::new(m.transform)).collect(),
     		walk_target_velocity: glam::Vec3::ZERO,
     		hitbox_size: glam::vec3(2.0,5.0,2.0),
