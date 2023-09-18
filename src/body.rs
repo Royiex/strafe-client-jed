@@ -91,7 +91,8 @@ impl MouseInterpolationState {
 pub struct PhysicsState {
 	pub body: Body,
 	pub hitbox_size: glam::Vec3,
-	pub contacts: Vec<RelativeCollision>,
+	pub contacts: std::collections::HashSet::<RelativeCollision>,
+	//pub intersections: Vec<ModelId>,
 	//temp
 	pub models_cringe_clone: Vec<Model>,
 	pub temp_control_dir: glam::Vec3,
@@ -111,7 +112,7 @@ pub struct PhysicsState {
 	pub jump_trying: bool,
 }
 
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Hash,Eq,PartialEq)]
 pub enum AabbFace{
 	Right,//+X
 	Top,
@@ -256,6 +257,8 @@ impl Model {
 }
 
 //need non-face (full model) variant for CanCollide false objects
+//OR have a separate list from contacts for model intersection
+#[derive(Eq, Hash, PartialEq)]
 pub struct RelativeCollision {
 	face: TreyMeshFace,//just an id
 	model: u32,//using id to avoid lifetimes
@@ -651,6 +654,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			        },
 			        _ => (),
 			    }
+			    self.contacts.insert(c);
 			},
 			PhysicsInstruction::CollisionEnd(c) => {
 				//check ground
@@ -661,6 +665,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			        },
 			        _ => (),
 			    }
+			    self.contacts.remove(&c);
 			},
 			PhysicsInstruction::StrafeTick => {
 				//let control_dir=self.get_control_dir();//this should respect your mouse interpolation settings
