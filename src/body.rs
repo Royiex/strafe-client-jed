@@ -290,8 +290,13 @@ impl Body {
 		let dt=(time-self.time) as f64/1_000_000_000f64;
 		self.position+self.velocity*(dt as f32)+self.acceleration*((0.5*dt*dt) as f32)
 	}
+	pub fn extrapolated_velocity(&self,time: TIME)->glam::Vec3{
+		let dt=(time-self.time) as f64/1_000_000_000f64;
+		self.velocity+self.acceleration*(dt as f32)
+	}
 	pub fn advance_time(&mut self, time: TIME){
 		self.position=self.extrapolated_position(time);
+		self.velocity=self.extrapolated_velocity(time);
 		self.time=time;
 	}
 }
