@@ -373,7 +373,7 @@ impl PhysicsState {
 		let mesh1=model.mesh();
 		let (p,v,a)=(self.body.position,-self.body.velocity,self.body.acceleration);
 		//collect x
-		for &t in zeroes2(mesh0.max.x-mesh1.min.x, v.x, a.x).iter() {
+		for t in zeroes2(mesh0.max.x-mesh1.min.x, v.x, a.x) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
@@ -389,7 +389,7 @@ impl PhysicsState {
 				}
 			}
 		}
-		for &t in zeroes2(mesh0.min.x-mesh1.max.x, v.x, a.x).iter() {
+		for t in zeroes2(mesh0.min.x-mesh1.max.x, v.x, a.x) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
@@ -406,7 +406,7 @@ impl PhysicsState {
 			}
 		}
 		//collect y
-		for &t in zeroes2(mesh0.max.y-mesh1.min.y, v.y, a.y).iter() {
+		for t in zeroes2(mesh0.max.y-mesh1.min.y, v.y, a.y) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
@@ -422,7 +422,7 @@ impl PhysicsState {
 				}
 			}
 		}
-		for &t in zeroes2(mesh0.min.y-mesh1.max.y, v.y, a.y).iter() {
+		for t in zeroes2(mesh0.min.y-mesh1.max.y, v.y, a.y) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
@@ -439,7 +439,7 @@ impl PhysicsState {
 			}
 		}
 		//collect z
-		for &t in zeroes2(mesh0.max.z-mesh1.min.z, v.z, a.z).iter() {
+		for t in zeroes2(mesh0.max.z-mesh1.min.z, v.z, a.z) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
@@ -455,7 +455,7 @@ impl PhysicsState {
 				}
 			}
 		}
-		for &t in zeroes2(mesh0.min.z-mesh1.max.z, v.z, a.z).iter() {
+		for t in zeroes2(mesh0.min.z-mesh1.max.z, v.z, a.z) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
@@ -491,7 +491,7 @@ impl PhysicsState {
 		let mesh1=model.mesh();
 		let (p,v,a)=(self.body.position,self.body.velocity,self.body.acceleration);
 		//collect x
-		for &t in zeroes2(mesh0.max.x-mesh1.min.x, v.x, a.x).iter() {
+		for t in zeroes2(mesh0.max.x-mesh1.min.x, v.x, a.x) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
@@ -507,7 +507,7 @@ impl PhysicsState {
 				}
 			}
 		}
-		for &t in zeroes2(mesh0.min.x-mesh1.max.x, v.x, a.x).iter() {
+		for t in zeroes2(mesh0.min.x-mesh1.max.x, v.x, a.x) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
@@ -524,7 +524,7 @@ impl PhysicsState {
 			}
 		}
 		//collect y
-		for &t in zeroes2(mesh0.max.y-mesh1.min.y, v.y, a.y).iter() {
+		for t in zeroes2(mesh0.max.y-mesh1.min.y, v.y, a.y) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
@@ -540,7 +540,7 @@ impl PhysicsState {
 				}
 			}
 		}
-		for &t in zeroes2(mesh0.min.y-mesh1.max.y, v.y, a.y).iter() {
+		for t in zeroes2(mesh0.min.y-mesh1.max.y, v.y, a.y) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
@@ -557,7 +557,7 @@ impl PhysicsState {
 			}
 		}
 		//collect z
-		for &t in zeroes2(mesh0.max.z-mesh1.min.z, v.z, a.z).iter() {
+		for t in zeroes2(mesh0.max.z-mesh1.min.z, v.z, a.z) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
@@ -573,7 +573,7 @@ impl PhysicsState {
 				}
 			}
 		}
-		for &t in zeroes2(mesh0.min.z-mesh1.max.z, v.z, a.z).iter() {
+		for t in zeroes2(mesh0.min.z-mesh1.max.z, v.z, a.z) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
