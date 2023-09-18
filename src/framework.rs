@@ -279,11 +279,6 @@ fn start<E: Example>(
 	log::info!("Initializing the example...");
 	let mut example = E::init(&config, &adapter, &device, &queue);
 
-	#[cfg(not(target_arch = "wasm32"))]
-	let mut last_frame_inst = Instant::now();
-	#[cfg(not(target_arch = "wasm32"))]
-	let (mut frame_count, mut accum_time) = (0, 0.0);
-
 	log::info!("Entering render loop...");
 	event_loop.run(move |event, _, control_flow| {
 		let _ = (&instance, &adapter); // force ownership by the closure
@@ -364,20 +359,6 @@ fn start<E: Example>(
 				example.move_mouse(delta);
 			},
 			event::Event::RedrawRequested(_) => {
-				#[cfg(not(target_arch = "wasm32"))]
-				{
-					accum_time += last_frame_inst.elapsed().as_secs_f32();
-					last_frame_inst = Instant::now();
-					frame_count += 1;
-					if frame_count == 100 {
-						println!(
-							"Avg frame time {}ms",
-							accum_time * 1000.0 / frame_count as f32
-						);
-						accum_time = 0.0;
-						frame_count = 0;
-					}
-				}
 
 				let frame = match surface.get_current_texture() {
 					Ok(frame) => frame,
