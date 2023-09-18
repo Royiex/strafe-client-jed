@@ -642,8 +642,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		match ins.instruction {
 			PhysicsInstruction::CollisionStart(c) => {
 				//flatten v
-				let n=c.normal(&self.models_cringe_clone).normalize();
-				let d=self.body.velocity.dot(n);
+				let n=c.normal(&self.models_cringe_clone);
+				let d=self.body.velocity.dot(n)/n.length_squared();
 				self.body.velocity-=d*n;
 				//check ground
 				match c.face {
