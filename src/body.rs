@@ -90,7 +90,7 @@ impl MouseInterpolationState {
 
 pub struct PhysicsState {
 	pub body: Body,
-	pub hitbox_size: glam::Vec3,
+	pub hitbox_halfsize: glam::Vec3,
 	pub contacts: std::collections::HashSet::<RelativeCollision>,
 	//pub intersections: Vec<ModelId>,
 	//temp
@@ -358,7 +358,7 @@ impl PhysicsState {
 	fn mesh(&self) -> TreyMesh {
 		let mut aabb=Aabb::new();
 		for vertex in Aabb::unit_vertices(){
-			aabb.grow(self.body.position+self.hitbox_size*vertex);
+			aabb.grow(self.body.position+self.hitbox_halfsize*vertex);
 		}
 		aabb
 	}
