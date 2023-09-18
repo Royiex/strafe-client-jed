@@ -20,6 +20,8 @@ pub struct Body {
 	velocity: glam::Vec3,//I64 where 2^32 = 1 u/s
 	acceleration: glam::Vec3,//I64 where 2^32 = 1 u/s/s
 	time: TIME,//nanoseconds x xxxxD!
+	//origin_time = timestamp of position and velocity
+	//processed_time = starting time for new events. prevents colliding with the analytic euqation in the past
 }
 
 pub enum MoveRestriction {
