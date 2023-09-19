@@ -20,8 +20,6 @@ pub struct Body {
 	velocity: glam::Vec3,//I64 where 2^32 = 1 u/s
 	acceleration: glam::Vec3,//I64 where 2^32 = 1 u/s/s
 	time: TIME,//nanoseconds x xxxxD!
-	//origin_time = timestamp of position and velocity
-	//processed_time = starting time for new events. prevents colliding with the analytic euqation in the past
 }
 
 pub enum MoveRestriction {
@@ -260,7 +258,7 @@ impl Model {
 
 //need non-face (full model) variant for CanCollide false objects
 //OR have a separate list from contacts for model intersection
-#[derive(Eq, Hash, PartialEq)]
+#[derive(Clone,Eq,Hash,PartialEq)]
 pub struct RelativeCollision {
 	face: TreyMeshFace,//just an id
 	model: u32,//using id to avoid lifetimes
@@ -303,9 +301,9 @@ impl Body {
 
 impl PhysicsState {
 	//tickless gaming
-	pub fn run(&mut self, time: TIME){
+	pub fn run(&mut self, time_limit:TIME){
 		//prepare is ommitted - everything is done via instructions.
-		while let Some(instruction) = self.next_instruction(time) {//collect
+		while let Some(instruction) = self.next_instruction(time_limit) {//collect
 			//advance
 			//self.advance_time(instruction.time);
 			//process
@@ -369,229 +367,256 @@ impl PhysicsState {
 		}
 		aabb
 	}
-	fn predict_collision_end(&self,model:&Model,time_limit:TIME,model_id:u32) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn predict_collision_end(&self,time:TIME,time_limit:TIME,collision_data:&RelativeCollision) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//must treat cancollide false objects differently: you may not exit through the same face you entered.
 		//RelativeCollsion must reference the full model instead of a particular face
 		//this is Ctrl+C Ctrl+V of predict_collision_start but with v=-v before the calc and t=-t after the calc
 		//find best t
-		let mut best_delta_time=time_limit-self.body.time;
-		let mut best_face:Option<TreyMeshFace>=None;
+		let mut best_time=time_limit;
+		let mut exit_face:Option<TreyMeshFace>=None;
 		let mesh0=self.mesh();
-		let mesh1=model.mesh();
-		let (p,v,a)=(self.body.position,-self.body.velocity,self.body.acceleration);
+		let mesh1=self.models_cringe_clone.get(collision_data.model as usize).unwrap().mesh();
+		let (v,a)=(-self.body.velocity,self.body.acceleration);
 		//collect x
-		for t in zeroes2(mesh0.max.x-mesh1.min.x, v.x, a.x) {
-			//negative t = back in time
-			//must be moving towards surface to collide
-			//must beat the current soonest collision time
-			//must be moving towards surface
-			let t_time=((-t as f64)*1_000_000_000f64) as TIME;
-			if 0<=t_time&&t_time<best_delta_time&&0f32<(-v.x+a.x*t){
-				let dp=self.body.extrapolated_position(self.body.time+t_time)-p;
-				//faces must be overlapping
-				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
-					//collect valid t
-					best_delta_time=t_time;
-					best_face=Some(TreyMeshFace::Left);
+		match collision_data.face {
+			AabbFace::Top|AabbFace::Back|AabbFace::Bottom|AabbFace::Front=>{
+				for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,a.x) {
+					//negative t = back in time
+					//must be moving towards surface to collide
+					//must beat the current soonest collision time
+					//must be moving towards surface
+					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
+					if time<=t_time&&t_time<best_time&&0f32<(-v.x+a.x*t){
+						//collect valid t
+						best_time=t_time;
+						exit_face=Some(TreyMeshFace::Left);
+					}
 				}
-			}
-		}
-		for t in zeroes2(mesh0.min.x-mesh1.max.x, v.x, a.x) {
-			//negative t = back in time
-			//must be moving towards surface to collide
-			//must beat the current soonest collision time
-			//must be moving towards surface
-			let t_time=((-t as f64)*1_000_000_000f64) as TIME;
-			if 0<=t_time&&t_time<best_delta_time&&(-v.x+a.x*t)<0f32{
-				let dp=self.body.extrapolated_position(self.body.time+t_time)-p;
-				//faces must be overlapping
-				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
-					//collect valid t
-					best_delta_time=t_time;
-					best_face=Some(TreyMeshFace::Right);
+				for t in zeroes2(mesh0.min.x-mesh1.max.x,v.x,a.x) {
+					//negative t = back in time
+					//must be moving towards surface to collide
+					//must beat the current soonest collision time
+					//must be moving towards surface
+					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
+					if time<=t_time&&t_time<best_time&&(-v.x+a.x*t)<0f32{
+						//collect valid t
+						best_time=t_time;
+						exit_face=Some(TreyMeshFace::Right);
+					}
 				}
-			}
+			},
+			AabbFace::Left=>{
+				//generate event if v.x<0||a.x<0
+				if -v.x<0f32{
+					best_time=time;
+					exit_face=Some(TreyMeshFace::Left);
+				}
+			},
+			AabbFace::Right=>{
+				//generate event if 0<v.x||0<a.x
+				if 0f32<(-v.x){
+					best_time=time;
+					exit_face=Some(TreyMeshFace::Right);
+				}
+			},
 		}
 		//collect y
-		for t in zeroes2(mesh0.max.y-mesh1.min.y, v.y, a.y) {
-			//negative t = back in time
-			//must be moving towards surface to collide
-			//must beat the current soonest collision time
-			//must be moving towards surface
-			let t_time=((-t as f64)*1_000_000_000f64) as TIME;
-			if 0<=t_time&&t_time<best_delta_time&&0f32<(-v.y+a.y*t){
-				let dp=self.body.extrapolated_position(self.body.time+t_time)-p;
-				//faces must be overlapping
-				if mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
-					//collect valid t
-					best_delta_time=t_time;
-					best_face=Some(TreyMeshFace::Bottom);
+		match collision_data.face {
+			AabbFace::Left|AabbFace::Back|AabbFace::Right|AabbFace::Front=>{
+				for t in zeroes2(mesh0.max.y-mesh1.min.y,v.y,a.y) {
+					//negative t = back in time
+					//must be moving towards surface to collide
+					//must beat the current soonest collision time
+					//must be moving towards surface
+					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
+					if time<=t_time&&t_time<best_time&&0f32<(-v.y+a.y*t){
+						//collect valid t
+						best_time=t_time;
+						exit_face=Some(TreyMeshFace::Bottom);
+					}
 				}
-			}
-		}
-		for t in zeroes2(mesh0.min.y-mesh1.max.y, v.y, a.y) {
-			//negative t = back in time
-			//must be moving towards surface to collide
-			//must beat the current soonest collision time
-			//must be moving towards surface
-			let t_time=((-t as f64)*1_000_000_000f64) as TIME;
-			if 0<=t_time&&t_time<best_delta_time&&(-v.y+a.y*t)<0f32{
-				let dp=self.body.extrapolated_position(self.body.time+t_time)-p;
-				//faces must be overlapping
-				if mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
-					//collect valid t
-					best_delta_time=t_time;
-					best_face=Some(TreyMeshFace::Top);
+				for t in zeroes2(mesh0.min.y-mesh1.max.y,v.y,a.y) {
+					//negative t = back in time
+					//must be moving towards surface to collide
+					//must beat the current soonest collision time
+					//must be moving towards surface
+					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
+					if time<=t_time&&t_time<best_time&&(-v.y+a.y*t)<0f32{
+						//collect valid t
+						best_time=t_time;
+						exit_face=Some(TreyMeshFace::Top);
+					}
 				}
-			}
+			},
+			AabbFace::Bottom=>{
+				//generate event if v.y<0||a.y<0
+				if -v.y<0f32{
+					best_time=time;
+					exit_face=Some(TreyMeshFace::Bottom);
+				}
+			},
+			AabbFace::Top=>{
+				//generate event if 0<v.y||0<a.y
+				if 0f32<(-v.y){
+					best_time=time;
+					exit_face=Some(TreyMeshFace::Top);
+				}
+			},
 		}
 		//collect z
-		for t in zeroes2(mesh0.max.z-mesh1.min.z, v.z, a.z) {
-			//negative t = back in time
-			//must be moving towards surface to collide
-			//must beat the current soonest collision time
-			//must be moving towards surface
-			let t_time=((-t as f64)*1_000_000_000f64) as TIME;
-			if 0<=t_time&&t_time<best_delta_time&&0f32<(-v.z+a.z*t){
-				let dp=self.body.extrapolated_position(self.body.time+t_time)-p;
-				//faces must be overlapping
-				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x {
-					//collect valid t
-					best_delta_time=t_time;
-					best_face=Some(TreyMeshFace::Front);
+		match collision_data.face {
+			AabbFace::Left|AabbFace::Bottom|AabbFace::Right|AabbFace::Top=>{
+				for t in zeroes2(mesh0.max.z-mesh1.min.z,v.z,a.z) {
+					//negative t = back in time
+					//must be moving towards surface to collide
+					//must beat the current soonest collision time
+					//must be moving towards surface
+					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
+					if time<=t_time&&t_time<best_time&&0f32<(-v.z+a.z*t){
+						//collect valid t
+						best_time=t_time;
+						exit_face=Some(TreyMeshFace::Front);
+					}
 				}
-			}
-		}
-		for t in zeroes2(mesh0.min.z-mesh1.max.z, v.z, a.z) {
-			//negative t = back in time
-			//must be moving towards surface to collide
-			//must beat the current soonest collision time
-			//must be moving towards surface
-			let t_time=((-t as f64)*1_000_000_000f64) as TIME;
-			if 0<=t_time&&t_time<best_delta_time&&(-v.z+a.z*t)<0f32{
-				let dp=self.body.extrapolated_position(self.body.time+t_time)-p;
-				//faces must be overlapping
-				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x {
-					//collect valid t
-					best_delta_time=t_time;
-					best_face=Some(TreyMeshFace::Back);
+				for t in zeroes2(mesh0.min.z-mesh1.max.z,v.z,a.z) {
+					//negative t = back in time
+					//must be moving towards surface to collide
+					//must beat the current soonest collision time
+					//must be moving towards surface
+					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
+					if time<=t_time&&t_time<best_time&&(-v.z+a.z*t)<0f32{
+						//collect valid t
+						best_time=t_time;
+						exit_face=Some(TreyMeshFace::Back);
+					}
 				}
-			}
+			},
+			AabbFace::Front=>{
+				//generate event if v.z<0||a.z<0
+				if -v.z<0f32{
+					best_time=time;
+					exit_face=Some(TreyMeshFace::Front);
+				}
+			},
+			AabbFace::Back=>{
+				//generate event if 0<v.z||0<a.z
+				if 0f32<(-v.z){
+					best_time=time;
+					exit_face=Some(TreyMeshFace::Back);
+				}
+			},
 		}
 		//generate instruction
-		if let Some(face) = best_face{
+		if let Some(face) = exit_face{
 			return Some(TimedInstruction {
-				time: self.body.time+best_delta_time,
-				instruction: PhysicsInstruction::CollisionStart(RelativeCollision {
-					face,
-					model: model_id
-				})
+				time: best_time,
+				instruction: PhysicsInstruction::CollisionEnd(collision_data.clone())
 			})
 		}
 		None
 	}
-	fn predict_collision_start(&self,model:&Model,time_limit:TIME,model_id:u32) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn predict_collision_start(&self,time:TIME,time_limit:TIME,model_id:u32) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//find best t
-		let mut best_delta_time=time_limit-self.body.time;
+		let mut best_time=time_limit;
 		let mut best_face:Option<TreyMeshFace>=None;
 		let mesh0=self.mesh();
-		let mesh1=model.mesh();
+		let mesh1=self.models_cringe_clone.get(model_id as usize).unwrap().mesh();
 		let (p,v,a)=(self.body.position,self.body.velocity,self.body.acceleration);
 		//collect x
-		for t in zeroes2(mesh0.max.x-mesh1.min.x, v.x, a.x) {
+		for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,a.x) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=((t as f64)*1_000_000_000f64) as TIME;
-			if 0<=t_time&&t_time<best_delta_time&&0f32<v.x+a.x*t{
-				let dp=self.body.extrapolated_position(self.body.time+t_time)-p;
+			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
+			if time<=t_time&&t_time<best_time&&0f32<v.x+a.x*t{
+				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
 				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
 					//collect valid t
-					best_delta_time=t_time;
+					best_time=t_time;
 					best_face=Some(TreyMeshFace::Left);
 				}
 			}
 		}
-		for t in zeroes2(mesh0.min.x-mesh1.max.x, v.x, a.x) {
+		for t in zeroes2(mesh0.min.x-mesh1.max.x,v.x,a.x) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=((t as f64)*1_000_000_000f64) as TIME;
-			if 0<=t_time&&t_time<best_delta_time&&v.x+a.x*t<0f32{
-				let dp=self.body.extrapolated_position(self.body.time+t_time)-p;
+			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
+			if time<=t_time&&t_time<best_time&&v.x+a.x*t<0f32{
+				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
 				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
 					//collect valid t
-					best_delta_time=t_time;
+					best_time=t_time;
 					best_face=Some(TreyMeshFace::Right);
 				}
 			}
 		}
 		//collect y
-		for t in zeroes2(mesh0.max.y-mesh1.min.y, v.y, a.y) {
+		for t in zeroes2(mesh0.max.y-mesh1.min.y,v.y,a.y) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=((t as f64)*1_000_000_000f64) as TIME;
-			if 0<=t_time&&t_time<best_delta_time&&0f32<v.y+a.y*t{
-				let dp=self.body.extrapolated_position(self.body.time+t_time)-p;
+			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
+			if time<=t_time&&t_time<best_time&&0f32<v.y+a.y*t{
+				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
 				if mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
 					//collect valid t
-					best_delta_time=t_time;
+					best_time=t_time;
 					best_face=Some(TreyMeshFace::Bottom);
 				}
 			}
 		}
-		for t in zeroes2(mesh0.min.y-mesh1.max.y, v.y, a.y) {
+		for t in zeroes2(mesh0.min.y-mesh1.max.y,v.y,a.y) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=((t as f64)*1_000_000_000f64) as TIME;
-			if 0<=t_time&&t_time<best_delta_time&&v.y+a.y*t<0f32{
-				let dp=self.body.extrapolated_position(self.body.time+t_time)-p;
+			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
+			if time<=t_time&&t_time<best_time&&v.y+a.y*t<0f32{
+				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
 				if mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
 					//collect valid t
-					best_delta_time=t_time;
+					best_time=t_time;
 					best_face=Some(TreyMeshFace::Top);
 				}
 			}
 		}
 		//collect z
-		for t in zeroes2(mesh0.max.z-mesh1.min.z, v.z, a.z) {
+		for t in zeroes2(mesh0.max.z-mesh1.min.z,v.z,a.z) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=((t as f64)*1_000_000_000f64) as TIME;
-			if 0<=t_time&&t_time<best_delta_time&&0f32<v.z+a.z*t{
-				let dp=self.body.extrapolated_position(self.body.time+t_time)-p;
+			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
+			if time<=t_time&&t_time<best_time&&0f32<v.z+a.z*t{
+				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
 				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x {
 					//collect valid t
-					best_delta_time=t_time;
+					best_time=t_time;
 					best_face=Some(TreyMeshFace::Front);
 				}
 			}
 		}
-		for t in zeroes2(mesh0.min.z-mesh1.max.z, v.z, a.z) {
+		for t in zeroes2(mesh0.min.z-mesh1.max.z,v.z,a.z) {
 			//negative t = back in time
 			//must be moving towards surface to collide
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=((t as f64)*1_000_000_000f64) as TIME;
-			if 0<=t_time&&t_time<best_delta_time&&v.z+a.z*t<0f32{
-				let dp=self.body.extrapolated_position(self.body.time+t_time)-p;
+			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
+			if time<=t_time&&t_time<best_time&&v.z+a.z*t<0f32{
+				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
 				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x {
 					//collect valid t
-					best_delta_time=t_time;
+					best_time=t_time;
 					best_face=Some(TreyMeshFace::Back);
 				}
 			}
@@ -599,7 +624,7 @@ impl PhysicsState {
 		//generate instruction
 		if let Some(face) = best_face{
 			return Some(TimedInstruction {
-				time: self.body.time+best_delta_time,
+				time: best_time,
 				instruction: PhysicsInstruction::CollisionStart(RelativeCollision {
 					face,
 					model: model_id
@@ -625,11 +650,11 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 		}
 		//check for collision stop instructions with curent contacts
 		for collision_data in self.contacts.iter() {
-			collector.collect(self.predict_collision_end(self.models_cringe_clone.get(collision_data.model as usize).unwrap(),time_limit,collision_data.model));
+			collector.collect(self.predict_collision_end(self.time,time_limit,collision_data));
 		}
 		//check for collision start instructions (against every part in the game with no optimization!!)
-		for (i,model) in self.models_cringe_clone.iter().enumerate() {
-			collector.collect(self.predict_collision_start(model,time_limit,i as u32));
+		for i in 0..self.models_cringe_clone.len() {
+			collector.collect(self.predict_collision_start(self.time,time_limit,i as u32));
 		}
 		if self.grounded {
 			//walk maintenance

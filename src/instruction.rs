@@ -4,7 +4,7 @@ pub struct TimedInstruction<I> {
 }
 
 pub trait InstructionEmitter<I> {
-	fn next_instruction(&self, time:crate::body::TIME) -> Option<TimedInstruction<I>>;
+	fn next_instruction(&self, time_limit:crate::body::TIME) -> Option<TimedInstruction<I>>;
 }
 pub trait InstructionConsumer<I> {
 	fn process_instruction(&mut self, instruction:TimedInstruction<I>);
