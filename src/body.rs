@@ -386,7 +386,7 @@ impl PhysicsState {
 					//must beat the current soonest collision time
 					//must be moving towards surface
 					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
-					if time<=t_time&&t_time<best_time&&0f32<(-v.x+a.x*t){
+					if time<=t_time&&t_time<best_time&&0f32<v.x+a.x*-t{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Left);
@@ -398,7 +398,7 @@ impl PhysicsState {
 					//must beat the current soonest collision time
 					//must be moving towards surface
 					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
-					if time<=t_time&&t_time<best_time&&(-v.x+a.x*t)<0f32{
+					if time<=t_time&&t_time<best_time&&v.x+a.x*-t<0f32{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Right);
@@ -429,7 +429,7 @@ impl PhysicsState {
 					//must beat the current soonest collision time
 					//must be moving towards surface
 					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
-					if time<=t_time&&t_time<best_time&&0f32<(-v.y+a.y*t){
+					if time<=t_time&&t_time<best_time&&0f32<v.y+a.y*-t{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Bottom);
@@ -441,7 +441,7 @@ impl PhysicsState {
 					//must beat the current soonest collision time
 					//must be moving towards surface
 					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
-					if time<=t_time&&t_time<best_time&&(-v.y+a.y*t)<0f32{
+					if time<=t_time&&t_time<best_time&&v.y+a.y*-t<0f32{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Top);
@@ -472,7 +472,7 @@ impl PhysicsState {
 					//must beat the current soonest collision time
 					//must be moving towards surface
 					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
-					if time<=t_time&&t_time<best_time&&0f32<(-v.z+a.z*t){
+					if time<=t_time&&t_time<best_time&&0f32<v.z+a.z*-t{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Front);
@@ -484,7 +484,7 @@ impl PhysicsState {
 					//must beat the current soonest collision time
 					//must be moving towards surface
 					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
-					if time<=t_time&&t_time<best_time&&(-v.z+a.z*t)<0f32{
+					if time<=t_time&&t_time<best_time&&v.z+a.z*-t<0f32{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Back);
