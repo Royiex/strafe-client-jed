@@ -246,14 +246,20 @@ impl Model {
 		Aabb::unit_face_vertices(face)
 	}
 	pub fn face_mesh(&self,face:TreyMeshFace) -> TreyMesh {
-		let mut aabb=Aabb::new();
-		for &vertex in self.unit_face_vertices(face).iter() {
-			aabb.grow(glam::Vec4Swizzles::xyz(self.transform*vertex.extend(1.0)));
+		let mut aabb=self.mesh();
+		//in this implementation face = worldspace aabb face
+		match face {
+			AabbFace::Right => aabb.min.x=aabb.max.x,
+			AabbFace::Top => aabb.min.y=aabb.max.y,
+			AabbFace::Back => aabb.min.z=aabb.max.z,
+			AabbFace::Left => aabb.max.x=aabb.min.x,
+			AabbFace::Bottom => aabb.max.y=aabb.min.y,
+			AabbFace::Front => aabb.max.z=aabb.min.z,
 		}
 		return aabb;
 	}
 	pub fn face_normal(&self,face:TreyMeshFace) -> glam::Vec3 {
-		glam::Vec4Swizzles::xyz(self.transform*Aabb::normal(face).extend(0.0))//this is wrong for scale
+		glam::Vec4Swizzles::xyz(Aabb::normal(face).extend(0.0))//this is wrong for scale
 	}
 }
 
