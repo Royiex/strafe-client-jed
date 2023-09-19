@@ -298,7 +298,8 @@ impl strafe_client::framework::Example for Skybox {
 			strafe_tick_num: 100,//100t
 			strafe_tick_den: 1_000_000_000,
 			gravity: glam::vec3(0.0,-100.0,0.0),
-			friction: 90.0,
+			friction: 1.2,
+			walk_accel: 90.0,
 			mv: 2.7,
 			grounded: false,
 			jump_trying: false,
@@ -306,7 +307,7 @@ impl strafe_client::framework::Example for Skybox {
 			walkspeed: 18.0,
 			contacts: std::collections::HashSet::new(),
     		models_cringe_clone: modeldatas.iter().map(|m|strafe_client::body::Model::new(m.transform)).collect(),
-    		walk_target_velocity: glam::Vec3::ZERO,
+    		walk: strafe_client::body::WalkState::new(),
     		hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
 		};
 
@@ -636,6 +637,16 @@ impl strafe_client::framework::Example for Skybox {
 		let control_dir=camera_mat*get_control_dir(self.camera.controls&(CONTROL_MOVELEFT|CONTROL_MOVERIGHT|CONTROL_MOVEFORWARD|CONTROL_MOVEBACK)).normalize_or_zero();
 
 		let time=self.start_time.elapsed().as_nanos() as i64;
+
+		let walk_target_velocity=self.physics.walkspeed*control_dir;
+		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
+		if walk_target_velocity!=self.physics.walk.target_velocity {
+			//scroll will be implemented with InputInstruction::Jump(true) but it blocks setting self.jump_trying=true
+			strafe_client::instruction::InstructionConsumer::process_instruction(&mut self.physics, strafe_client::instruction::TimedInstruction{
+				time,//this is in the past when there is no instructions!
+				instruction:strafe_client::body::PhysicsInstruction::SetWalkTargetVelocity(walk_target_velocity)
+			});
+		}
 
 		self.physics.temp_control_dir=control_dir;
 		self.physics.jump_trying=self.camera.controls&CONTROL_JUMP!=0;

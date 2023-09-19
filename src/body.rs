@@ -22,6 +22,25 @@ pub struct Body {
 	acceleration: glam::Vec3,//I64 where 2^32 = 1 u/s/s
 	time: TIME,//nanoseconds x xxxxD!
 }
+trait MyHash{
+	fn hash(&self) -> u64;
+}
+impl MyHash for Body {
+    fn hash(&self) -> u64 {
+		let mut hasher=std::collections::hash_map::DefaultHasher::new();
+        for &el in self.position.as_ref().iter() {
+            std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
+        }
+        for &el in self.velocity.as_ref().iter() {
+            std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
+        }
+        for &el in self.acceleration.as_ref().iter() {
+             std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
+        }
+        std::hash::Hasher::write(&mut hasher, self.time.to_ne_bytes().as_slice());
+		return std::hash::Hasher::finish(&hasher);//hash check to see if walk target is valid
+    }
+}
 
 pub enum MoveRestriction {
 	Air,
@@ -89,6 +108,21 @@ impl MouseInterpolationState {
 	}
 }
 
+pub struct WalkState {
+	pub target_velocity: glam::Vec3,
+	pub target_time: TIME,
+	pub body_hash: u64,
+}
+impl WalkState {
+	pub fn new() -> Self {
+		Self{
+			target_velocity:glam::Vec3::ZERO,
+			target_time:0,
+			body_hash:0,//oh no, hash collisions
+		}
+	}
+}
+
 pub struct PhysicsState {
 	pub body: Body,
 	pub hitbox_halfsize: glam::Vec3,
@@ -105,9 +139,10 @@ pub struct PhysicsState {
 	pub strafe_tick_den: TIME,
 	pub tick: u32,
 	pub mv: f32,
+	pub walk: WalkState,
 	pub walkspeed: f32,
 	pub friction: f32,
-	pub walk_target_velocity: glam::Vec3,
+	pub walk_accel:  f32,
 	pub gravity: glam::Vec3,
 	pub grounded: bool,
 	pub jump_trying: bool,
@@ -364,8 +399,15 @@ impl PhysicsState {
 	// }
 
 	fn next_walk_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
-		//check if you are accelerating towards a walk target velocity and create an instruction
-		return None;
+		//check if you have a valid walk state and create an instruction
+		if self.walk.body_hash==self.body.hash(){
+			Some(TimedInstruction{
+				time:self.walk.target_time,
+				instruction:PhysicsInstruction::ReachWalkTargetVelocity
+			})
+		}else{
+			return None;
+		}
 	}
 	fn mesh(&self) -> TreyMesh {
 		let mut aabb=Aabb::new();
@@ -705,11 +747,24 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			}
 			PhysicsInstruction::ReachWalkTargetVelocity => {
 				//precisely set velocity
-				self.body.velocity=self.walk_target_velocity;
+				self.body.acceleration=glam::Vec3::ZERO;
+				self.body.velocity=self.walk.target_velocity;
+				//what if it's exactly the same, and the time delta is 0?
+				//the hash will succeed and it will poll the same instruction infinitely...
 			}
 			PhysicsInstruction::SetWalkTargetVelocity(v) => {
-				self.walk_target_velocity=v;
 				//calculate acceleration yada yada
+				let target_diff=v-self.body.velocity;
+				if target_diff==glam::Vec3::ZERO{
+					self.body.acceleration=glam::Vec3::ZERO;
+				}else{
+					let accel=self.walk_accel.min(self.gravity.length()*self.friction);
+					let time_delta=target_diff.length()/accel;
+					self.body.acceleration=target_diff/time_delta;
+					self.walk.target_velocity=v;
+					self.walk.target_time=self.body.time+((time_delta as f64)*1_000_000_000f64) as TIME;
+					self.walk.body_hash=self.body.hash();//hash check to see if walk target is valid
+				}
 			},
 		}
 	}
