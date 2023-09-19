@@ -640,14 +640,6 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 	fn next_instruction(&self,time_limit:TIME) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//JUST POLLING!!! NO MUTATION
 		let mut collector = crate::instruction::InstructionCollector::new(time_limit);
-		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
-		if self.grounded&&self.jump_trying {
-			//scroll will be implemented with InputInstruction::Jump(true) but it blocks setting self.jump_trying=true
-			collector.collect(Some(TimedInstruction{
-				time:self.time,
-				instruction:PhysicsInstruction::Jump
-			}));
-		}
 		//check for collision stop instructions with curent contacts
 		for collision_data in self.contacts.iter() {
 			collector.collect(self.predict_collision_end(self.time,time_limit,collision_data));
