@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct TimedInstruction<I> {
 	pub time: crate::body::TIME,
 	pub instruction: I,

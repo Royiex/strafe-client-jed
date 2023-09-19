@@ -1,5 +1,6 @@
 use crate::{instruction::{InstructionEmitter, InstructionConsumer, TimedInstruction}, zeroes::zeroes2};
 
+#[derive(Debug)]
 pub enum PhysicsInstruction {
 	CollisionStart(RelativeCollision),
 	CollisionEnd(RelativeCollision),
@@ -112,7 +113,7 @@ pub struct PhysicsState {
 	pub jump_trying: bool,
 }
 
-#[derive(Clone,Copy,Hash,Eq,PartialEq)]
+#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
 pub enum AabbFace{
 	Right,//+X
 	Top,
@@ -258,7 +259,7 @@ impl Model {
 
 //need non-face (full model) variant for CanCollide false objects
 //OR have a separate list from contacts for model intersection
-#[derive(Clone,Eq,Hash,PartialEq)]
+#[derive(Debug,Clone,Eq,Hash,PartialEq)]
 pub struct RelativeCollision {
 	face: TreyMeshFace,//just an id
 	model: u32,//using id to avoid lifetimes
