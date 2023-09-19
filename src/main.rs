@@ -172,7 +172,7 @@ fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,source:&[u8]){
 					for &index in &[0, end_index - 1, end_index] {
 						let vert = poly.0[index];
 						if let Some(&i)=vertex_index.get(&vert){
-							indices.push(i as u16);
+							indices.push(i);
 						}else{
 							let i=vertices.len() as u16;
 							vertices.push(Vertex {
