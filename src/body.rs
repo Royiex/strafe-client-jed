@@ -429,7 +429,7 @@ impl PhysicsState {
 		//collect x
 		match collision_data.face {
 			AabbFace::Top|AabbFace::Back|AabbFace::Bottom|AabbFace::Front=>{
-				for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,a.x) {
+				for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,0.5*a.x) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
@@ -441,7 +441,7 @@ impl PhysicsState {
 						exit_face=Some(TreyMeshFace::Left);
 					}
 				}
-				for t in zeroes2(mesh0.min.x-mesh1.max.x,v.x,a.x) {
+				for t in zeroes2(mesh0.min.x-mesh1.max.x,v.x,0.5*a.x) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
@@ -472,7 +472,7 @@ impl PhysicsState {
 		//collect y
 		match collision_data.face {
 			AabbFace::Left|AabbFace::Back|AabbFace::Right|AabbFace::Front=>{
-				for t in zeroes2(mesh0.max.y-mesh1.min.y,v.y,a.y) {
+				for t in zeroes2(mesh0.max.y-mesh1.min.y,v.y,0.5*a.y) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
@@ -484,7 +484,7 @@ impl PhysicsState {
 						exit_face=Some(TreyMeshFace::Bottom);
 					}
 				}
-				for t in zeroes2(mesh0.min.y-mesh1.max.y,v.y,a.y) {
+				for t in zeroes2(mesh0.min.y-mesh1.max.y,v.y,0.5*a.y) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
@@ -515,7 +515,7 @@ impl PhysicsState {
 		//collect z
 		match collision_data.face {
 			AabbFace::Left|AabbFace::Bottom|AabbFace::Right|AabbFace::Top=>{
-				for t in zeroes2(mesh0.max.z-mesh1.min.z,v.z,a.z) {
+				for t in zeroes2(mesh0.max.z-mesh1.min.z,v.z,0.5*a.z) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
@@ -527,7 +527,7 @@ impl PhysicsState {
 						exit_face=Some(TreyMeshFace::Front);
 					}
 				}
-				for t in zeroes2(mesh0.min.z-mesh1.max.z,v.z,a.z) {
+				for t in zeroes2(mesh0.min.z-mesh1.max.z,v.z,0.5*a.z) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
@@ -572,7 +572,7 @@ impl PhysicsState {
 		let mesh1=self.models_cringe_clone.get(model_id as usize).unwrap().mesh();
 		let (p,v,a)=(self.body.position,self.body.velocity,self.body.acceleration);
 		//collect x
-		for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,a.x) {
+		for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,0.5*a.x) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
@@ -587,7 +587,7 @@ impl PhysicsState {
 				}
 			}
 		}
-		for t in zeroes2(mesh0.min.x-mesh1.max.x,v.x,a.x) {
+		for t in zeroes2(mesh0.min.x-mesh1.max.x,v.x,0.5*a.x) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
@@ -603,7 +603,7 @@ impl PhysicsState {
 			}
 		}
 		//collect y
-		for t in zeroes2(mesh0.max.y-mesh1.min.y,v.y,a.y) {
+		for t in zeroes2(mesh0.max.y-mesh1.min.y,v.y,0.5*a.y) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
@@ -618,7 +618,7 @@ impl PhysicsState {
 				}
 			}
 		}
-		for t in zeroes2(mesh0.min.y-mesh1.max.y,v.y,a.y) {
+		for t in zeroes2(mesh0.min.y-mesh1.max.y,v.y,0.5*a.y) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
@@ -634,7 +634,7 @@ impl PhysicsState {
 			}
 		}
 		//collect z
-		for t in zeroes2(mesh0.max.z-mesh1.min.z,v.z,a.z) {
+		for t in zeroes2(mesh0.max.z-mesh1.min.z,v.z,0.5*a.z) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
@@ -649,7 +649,7 @@ impl PhysicsState {
 				}
 			}
 		}
-		for t in zeroes2(mesh0.min.z-mesh1.max.z,v.z,a.z) {
+		for t in zeroes2(mesh0.min.z-mesh1.max.z,v.z,0.5*a.z) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
