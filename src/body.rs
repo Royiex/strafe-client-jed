@@ -743,13 +743,13 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		}
 		//selectively update body
 		match &ins.instruction {
-		    PhysicsInstruction::SetWalkTargetVelocity(_) => (),//TODO: queue instructions and do self.time=ins.time,
+		    PhysicsInstruction::SetWalkTargetVelocity(_)
+		    |PhysicsInstruction::SetControlDir(_) => self.time=ins.time,//TODO: queue instructions
 		    PhysicsInstruction::RefreshWalkTarget
 		    |PhysicsInstruction::ReachWalkTargetVelocity
 		    |PhysicsInstruction::CollisionStart(_)
 		    |PhysicsInstruction::CollisionEnd(_)
 		    |PhysicsInstruction::StrafeTick
-		    |PhysicsInstruction::SetControlDir(_)
 		    |PhysicsInstruction::Jump => self.advance_time(ins.time),
 		}
 		match ins.instruction {
