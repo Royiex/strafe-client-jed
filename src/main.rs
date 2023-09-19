@@ -285,7 +285,7 @@ impl strafe_client::framework::Example for Skybox {
 
 		let camera = Camera {
 			screen_size: (config.width, config.height),
-			offset: glam::Vec3::new(0.0,4.5,0.0),
+			offset: glam::Vec3::new(0.0,4.5-2.5,0.0),
 			fov: 1.0, //fov_slope = tan(fov_y/2)
 			pitch: 0.0,
 			yaw: 0.0,
