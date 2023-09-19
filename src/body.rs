@@ -4,9 +4,11 @@ use crate::{instruction::{InstructionEmitter, InstructionConsumer, TimedInstruct
 pub enum PhysicsInstruction {
 	CollisionStart(RelativeCollision),
 	CollisionEnd(RelativeCollision),
+	SetControlDir(glam::Vec3),
 	StrafeTick,
 	Jump,
 	SetWalkTargetVelocity(glam::Vec3),
+	RefreshWalkTarget,
 	ReachWalkTargetVelocity,
 	// Water,
 	// Spawn(
@@ -108,17 +110,22 @@ impl MouseInterpolationState {
 	}
 }
 
+pub enum WalkEnum{
+	Reached,
+	Transient,
+	Invalid,
+}
 pub struct WalkState {
 	pub target_velocity: glam::Vec3,
 	pub target_time: TIME,
-	pub body_hash: u64,
+	pub state: WalkEnum,
 }
 impl WalkState {
 	pub fn new() -> Self {
 		Self{
 			target_velocity:glam::Vec3::ZERO,
 			target_time:0,
-			body_hash:0,//oh no, hash collisions
+			state:WalkEnum::Invalid,
 		}
 	}
 }
@@ -359,6 +366,25 @@ impl PhysicsState {
 		self.time=time;
 	}
 
+	fn contact_constrain_velocity(&self,velocity:&mut glam::Vec3){
+		for contact in self.contacts.iter() {
+			let n=contact.normal(&self.models_cringe_clone);
+			let d=velocity.dot(n);
+			if d<0f32{
+				(*velocity)-=d/n.length_squared()*n;
+			}
+		}
+	}
+	fn contact_constrain_acceleration(&self,acceleration:&mut glam::Vec3){
+		for contact in self.contacts.iter() {
+			let n=contact.normal(&self.models_cringe_clone);
+			let d=acceleration.dot(n);
+			if d<0f32{
+				(*acceleration)-=d/n.length_squared()*n;
+			}
+		}
+	}
+
 	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		return Some(TimedInstruction{
 			time:(self.time*self.strafe_tick_num/self.strafe_tick_den+1)*self.strafe_tick_den/self.strafe_tick_num,
@@ -400,11 +426,18 @@ impl PhysicsState {
 
 	fn next_walk_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//check if you have a valid walk state and create an instruction
-		if self.grounded&&self.walk.body_hash==self.body.hash(){
-			Some(TimedInstruction{
-				time:self.walk.target_time,
-				instruction:PhysicsInstruction::ReachWalkTargetVelocity
-			})
+		if self.grounded{
+			match self.walk.state{
+				WalkEnum::Transient=>Some(TimedInstruction{
+					time:self.walk.target_time,
+					instruction:PhysicsInstruction::ReachWalkTargetVelocity
+				}),
+				WalkEnum::Invalid=>Some(TimedInstruction{
+					time:self.time,
+					instruction:PhysicsInstruction::RefreshWalkTarget,
+				}),
+				WalkEnum::Reached=>None,
+			}
 		}else{
 			return None;
 		}
@@ -704,69 +737,106 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 
 impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 	fn process_instruction(&mut self, ins:TimedInstruction<PhysicsInstruction>) {
-		//mutate position and velocity and time
-		self.advance_time(ins.time);//should this be in run?
+		match &ins.instruction {
+		    PhysicsInstruction::StrafeTick => (),
+		    _=>println!("{:?}",ins),
+		}
+		//selectively update body
+		match &ins.instruction {
+		    PhysicsInstruction::SetWalkTargetVelocity(_) => (),//TODO: queue instructions and do self.time=ins.time,
+		    PhysicsInstruction::RefreshWalkTarget
+		    |PhysicsInstruction::ReachWalkTargetVelocity
+		    |PhysicsInstruction::CollisionStart(_)
+		    |PhysicsInstruction::CollisionEnd(_)
+		    |PhysicsInstruction::StrafeTick
+		    |PhysicsInstruction::SetControlDir(_)
+		    |PhysicsInstruction::Jump => self.advance_time(ins.time),
+		}
 		match ins.instruction {
 			PhysicsInstruction::CollisionStart(c) => {
-				//flatten v
-				let n=c.normal(&self.models_cringe_clone);
-				let d=self.body.velocity.dot(n)/n.length_squared();
-				self.body.velocity-=d*n;
 				//check ground
-				match c.face {
+				match &c.face {
 			        AabbFace::Top => {
 			        	//ground
 			        	self.grounded=true;
-						self.body.acceleration=glam::Vec3::ZERO;
 			        },
 			        _ => (),
 			    }
 			    self.contacts.insert(c);
+				//flatten v
+				let mut v=self.body.velocity;
+				self.contact_constrain_velocity(&mut v);
+				self.body.velocity=v;
+				self.walk.state=WalkEnum::Invalid;
 			},
 			PhysicsInstruction::CollisionEnd(c) => {
+			    self.contacts.remove(&c);//remove contact before calling contact_constrain_acceleration
+				let mut a=self.gravity;
+				self.contact_constrain_acceleration(&mut a);
+				self.body.acceleration=a;
+				self.walk.state=WalkEnum::Invalid;
 				//check ground
-				match c.face {
+				match &c.face {
 			        AabbFace::Top => {
-			        	//this needs to be ContactConstrainAcceleration(gravity)
-						self.body.acceleration=self.gravity;
+			        	self.grounded=false;
 			        },
 			        _ => (),
 			    }
-			    self.contacts.remove(&c);
+			},
+			PhysicsInstruction::SetControlDir(control_dir)=>{
+				self.temp_control_dir=control_dir;
+				self.walk.state=WalkEnum::Invalid;
 			},
 			PhysicsInstruction::StrafeTick => {
 				//let control_dir=self.get_control_dir();//this should respect your mouse interpolation settings
 				let d=self.body.velocity.dot(self.temp_control_dir);
 				if d<self.mv {
-					self.body.velocity+=(self.mv-d)*self.temp_control_dir;
+					let mut v=self.body.velocity+(self.mv-d)*self.temp_control_dir;
+					self.contact_constrain_velocity(&mut v);
+					self.body.velocity=v;
 				}
 			}
 			PhysicsInstruction::Jump => {
 				self.grounded=false;//do I need this?
-				self.body.velocity+=glam::Vec3::new(0.0,0.715588/2.0*100.0,0.0);
-			}
+				let mut v=self.body.velocity+glam::Vec3::new(0.0,0.715588/2.0*100.0,0.0);
+				self.contact_constrain_velocity(&mut v);
+				self.body.velocity=v;
+				self.walk.state=WalkEnum::Invalid;
+			},
 			PhysicsInstruction::ReachWalkTargetVelocity => {
 				//precisely set velocity
-				self.body.acceleration=glam::Vec3::ZERO;
-				self.body.velocity=self.walk.target_velocity;
-				//what if it's exactly the same, and the time delta is 0?
-				//the hash will succeed and it will poll the same instruction infinitely...
-			}
-			PhysicsInstruction::SetWalkTargetVelocity(v) => {
+				let mut a=glam::Vec3::ZERO;
+				self.contact_constrain_acceleration(&mut a);
+				self.body.acceleration=a;
+				let mut v=self.walk.target_velocity;
+				self.contact_constrain_velocity(&mut v);
+				self.body.velocity=v;
+				self.walk.state=WalkEnum::Reached;
+			},
+			PhysicsInstruction::RefreshWalkTarget => {
 				//calculate acceleration yada yada
 				if self.grounded{
-					let target_diff=v-self.body.velocity;
+					let mut target_diff=self.walk.target_velocity-self.body.velocity;
+					target_diff.y=0f32;
 					if target_diff==glam::Vec3::ZERO{
-						self.body.acceleration=glam::Vec3::ZERO;
+						let mut a=glam::Vec3::ZERO;
+						self.contact_constrain_acceleration(&mut a);
+						self.body.acceleration=a;
+						self.walk.state=WalkEnum::Reached;
 					}else{
 						let accel=self.walk_accel.min(self.gravity.length()*self.friction);
 						let time_delta=target_diff.length()/accel;
-						self.body.acceleration=target_diff/time_delta;
-						self.walk.target_velocity=v;
+						let mut a=target_diff/time_delta;
+						self.contact_constrain_acceleration(&mut a);
+						self.body.acceleration=a;
 						self.walk.target_time=self.body.time+((time_delta as f64)*1_000_000_000f64) as TIME;
-						self.walk.body_hash=self.body.hash();//hash check to see if walk target is valid
+						self.walk.state=WalkEnum::Transient;
 					}
 				}
+			},
+			PhysicsInstruction::SetWalkTargetVelocity(v) => {
+				self.walk.target_velocity=v;
+				self.walk.state=WalkEnum::Invalid;
 			},
 		}
 	}
