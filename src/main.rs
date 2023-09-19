@@ -632,7 +632,7 @@ impl strafe_client::framework::Example for Skybox {
 		queue: &wgpu::Queue,
 		_spawner: &strafe_client::framework::Spawner,
 	) {
-		let camera_mat=glam::Mat3::from_euler(glam::EulerRot::YXZ,self.camera.yaw,0f32,0f32);
+		let camera_mat=glam::Mat3::from_rotation_y(self.camera.yaw);
 		let control_dir=camera_mat*get_control_dir(self.camera.controls&(CONTROL_MOVELEFT|CONTROL_MOVERIGHT|CONTROL_MOVEFORWARD|CONTROL_MOVEBACK)).normalize_or_zero();
 
 		let time=self.start_time.elapsed().as_nanos() as i64;
