@@ -525,8 +525,7 @@ impl PhysicsState {
 		let (p,v,a)=(self.body.position,self.body.velocity,self.body.acceleration);
 		//collect x
 		for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,a.x) {
-			//negative t = back in time
-			//must be moving towards surface to collide
+			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
 			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
@@ -541,8 +540,7 @@ impl PhysicsState {
 			}
 		}
 		for t in zeroes2(mesh0.min.x-mesh1.max.x,v.x,a.x) {
-			//negative t = back in time
-			//must be moving towards surface to collide
+			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
 			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
@@ -558,8 +556,7 @@ impl PhysicsState {
 		}
 		//collect y
 		for t in zeroes2(mesh0.max.y-mesh1.min.y,v.y,a.y) {
-			//negative t = back in time
-			//must be moving towards surface to collide
+			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
 			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
@@ -574,8 +571,7 @@ impl PhysicsState {
 			}
 		}
 		for t in zeroes2(mesh0.min.y-mesh1.max.y,v.y,a.y) {
-			//negative t = back in time
-			//must be moving towards surface to collide
+			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
 			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
@@ -591,8 +587,7 @@ impl PhysicsState {
 		}
 		//collect z
 		for t in zeroes2(mesh0.max.z-mesh1.min.z,v.z,a.z) {
-			//negative t = back in time
-			//must be moving towards surface to collide
+			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
 			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
@@ -607,8 +602,7 @@ impl PhysicsState {
 			}
 		}
 		for t in zeroes2(mesh0.min.z-mesh1.max.z,v.z,a.z) {
-			//negative t = back in time
-			//must be moving towards surface to collide
+			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
 			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
