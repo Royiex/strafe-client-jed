@@ -684,7 +684,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				//check ground
 				match c.face {
 			        AabbFace::Top => {
-			        	//ground
+			        	//this needs to be ContactConstrainAcceleration(gravity)
 						self.body.acceleration=self.gravity;
 			        },
 			        _ => (),
