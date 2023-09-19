@@ -400,7 +400,7 @@ impl PhysicsState {
 
 	fn next_walk_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//check if you have a valid walk state and create an instruction
-		if self.walk.body_hash==self.body.hash(){
+		if self.grounded&&self.walk.body_hash==self.body.hash(){
 			Some(TimedInstruction{
 				time:self.walk.target_time,
 				instruction:PhysicsInstruction::ReachWalkTargetVelocity
@@ -754,16 +754,18 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			}
 			PhysicsInstruction::SetWalkTargetVelocity(v) => {
 				//calculate acceleration yada yada
-				let target_diff=v-self.body.velocity;
-				if target_diff==glam::Vec3::ZERO{
-					self.body.acceleration=glam::Vec3::ZERO;
-				}else{
-					let accel=self.walk_accel.min(self.gravity.length()*self.friction);
-					let time_delta=target_diff.length()/accel;
-					self.body.acceleration=target_diff/time_delta;
-					self.walk.target_velocity=v;
-					self.walk.target_time=self.body.time+((time_delta as f64)*1_000_000_000f64) as TIME;
-					self.walk.body_hash=self.body.hash();//hash check to see if walk target is valid
+				if self.grounded{
+					let target_diff=v-self.body.velocity;
+					if target_diff==glam::Vec3::ZERO{
+						self.body.acceleration=glam::Vec3::ZERO;
+					}else{
+						let accel=self.walk_accel.min(self.gravity.length()*self.friction);
+						let time_delta=target_diff.length()/accel;
+						self.body.acceleration=target_diff/time_delta;
+						self.walk.target_velocity=v;
+						self.walk.target_time=self.body.time+((time_delta as f64)*1_000_000_000f64) as TIME;
+						self.walk.body_hash=self.body.hash();//hash check to see if walk target is valid
+					}
 				}
 			},
 		}
