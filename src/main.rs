@@ -646,7 +646,7 @@ impl strafe_client::framework::Example for Skybox {
 		if self.physics.grounded&&self.physics.jump_trying {
 			//scroll will be implemented with InputInstruction::Jump(true) but it blocks setting self.jump_trying=true
 			strafe_client::instruction::InstructionConsumer::process_instruction(&mut self.physics, strafe_client::instruction::TimedInstruction{
-				time:time,//this is in the past when there is no instructions!
+				time,//this is in the past when there is no instructions!
 				instruction:strafe_client::body::PhysicsInstruction::Jump
 			});
 		}
