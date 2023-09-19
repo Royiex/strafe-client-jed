@@ -638,6 +638,9 @@ impl strafe_client::framework::Example for Skybox {
 
 		let time=self.start_time.elapsed().as_nanos() as i64;
 
+		self.physics.run(time);
+
+		//ALL OF THIS IS TOTALLY WRONG!!!
 		let walk_target_velocity=self.physics.walkspeed*control_dir;
 		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
 		if self.physics.grounded&&walk_target_velocity!=self.physics.walk.target_velocity {
@@ -654,10 +657,8 @@ impl strafe_client::framework::Example for Skybox {
 				instruction:strafe_client::body::PhysicsInstruction::SetControlDir(control_dir)
 			});
 		}
-		self.physics.jump_trying=self.camera.controls&CONTROL_JUMP!=0;
-		self.physics.run(time);
 
-		//TOTALLY WRONG!!!
+		self.physics.jump_trying=self.camera.controls&CONTROL_JUMP!=0;
 		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
 		if self.physics.grounded&&self.physics.jump_trying {
 			//scroll will be implemented with InputInstruction::Jump(true) but it blocks setting self.jump_trying=true
