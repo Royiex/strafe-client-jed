@@ -1,6 +1,8 @@
 use std::{borrow::Cow, time::Instant};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 use model::{Vertex,ModelData,ModelInstance};
+use body::{InputInstruction, PhysicsInstruction};
+use instruction::{TimedInstruction, InstructionConsumer};
 
 mod body;
 mod model;
@@ -23,86 +25,6 @@ struct ModelGraphics {
 	model_buf: wgpu::Buffer,
 }
 
-// Note: we use the Y=up coordinate space in this example.
-struct Camera {
-	screen_size: (u32, u32),
-	offset: glam::Vec3,
-	fov: f32,
-	yaw: f32,
-	pitch: f32,
-	controls: u32,
-}
-
-const CONTROL_MOVEFORWARD:u32 = 0b00000001;
-const CONTROL_MOVEBACK:u32 = 0b00000010;
-const CONTROL_MOVERIGHT:u32 = 0b00000100;
-const CONTROL_MOVELEFT:u32 = 0b00001000;
-const CONTROL_MOVEUP:u32 = 0b00010000;
-const CONTROL_MOVEDOWN:u32 = 0b00100000;
-const CONTROL_JUMP:u32 = 0b01000000;
-const CONTROL_ZOOM:u32 = 0b10000000;
-
-const FORWARD_DIR:glam::Vec3 = glam::Vec3::new(0.0,0.0,-1.0);
-const RIGHT_DIR:glam::Vec3 = glam::Vec3::new(1.0,0.0,0.0);
-const UP_DIR:glam::Vec3 = glam::Vec3::new(0.0,1.0,0.0);
-
-fn get_control_dir(controls: u32) -> glam::Vec3{
-	//don't get fancy just do it
-	let mut control_dir:glam::Vec3 = glam::Vec3::new(0.0,0.0,0.0);
-	if controls & CONTROL_MOVEFORWARD == CONTROL_MOVEFORWARD {
-		control_dir+=FORWARD_DIR;
-	}
-	if controls & CONTROL_MOVEBACK == CONTROL_MOVEBACK {
-		control_dir+=-FORWARD_DIR;
-	}
-	if controls & CONTROL_MOVELEFT == CONTROL_MOVELEFT {
-		control_dir+=-RIGHT_DIR;
-	}
-	if controls & CONTROL_MOVERIGHT == CONTROL_MOVERIGHT {
-		control_dir+=RIGHT_DIR;
-	}
-	if controls & CONTROL_MOVEUP == CONTROL_MOVEUP {
-		control_dir+=UP_DIR;
-	}
-	if controls & CONTROL_MOVEDOWN == CONTROL_MOVEDOWN {
-		control_dir+=-UP_DIR;
-	}
-	return control_dir
-}
-
-	#[inline]
-	fn perspective_rh(fov_y_slope: f32, aspect_ratio: f32, z_near: f32, z_far: f32) -> glam::Mat4 {
-		//glam_assert!(z_near > 0.0 && z_far > 0.0);
-		let r = z_far / (z_near - z_far);
-		glam::Mat4::from_cols(
-			glam::Vec4::new(1.0/(fov_y_slope * aspect_ratio), 0.0, 0.0, 0.0),
-			glam::Vec4::new(0.0, 1.0/fov_y_slope, 0.0, 0.0),
-			glam::Vec4::new(0.0, 0.0, r, -1.0),
-			glam::Vec4::new(0.0, 0.0, r * z_near, 0.0),
-		)
-	}
-
-impl Camera {
-	fn to_uniform_data(&self, pos: glam::Vec3) -> [f32; 16 * 3 + 4] {
-		let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
-		let fov = if self.controls&CONTROL_ZOOM==0 {
-			self.fov
-		}else{
-			self.fov/5.0
-		};
-		let proj = perspective_rh(fov, aspect, 0.5, 1000.0);
-		let proj_inv = proj.inverse();
-		let view = glam::Mat4::from_translation(pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.yaw, self.pitch, 0f32);
-		let view_inv = view.inverse();
-
-		let mut raw = [0f32; 16 * 3 + 4];
-		raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj)[..]);
-		raw[16..32].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj_inv)[..]);
-		raw[32..48].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&view_inv)[..]);
-		raw[48..52].copy_from_slice(AsRef::<[f32; 4]>::as_ref(&view.col(3)));
-		raw
-	}
-}
 pub struct GraphicsSamplers{
 	repeat: wgpu::Sampler,
 }
@@ -123,7 +45,7 @@ pub struct GraphicsPipelines {
 
 pub struct GraphicsData {
 	start_time: std::time::Instant,
-	camera: Camera,
+	screen_size: (u32, u32),
 	physics: body::PhysicsState,
 	pipelines: GraphicsPipelines,
 	bind_groups: GraphicsBindGroups,
@@ -300,6 +222,20 @@ fn get_instances_buffer_data(instances:&[ModelInstance]) -> Vec<f32> {
 	raw
 }
 
+fn to_uniform_data(camera: &body::Camera, pos: glam::Vec3) -> [f32; 16 * 3 + 4] {
+	let proj=camera.proj();
+	let proj_inv = proj.inverse();
+	let view=camera.view(pos);
+	let view_inv = view.inverse();
+
+	let mut raw = [0f32; 16 * 3 + 4];
+	raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj)[..]);
+	raw[16..32].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj_inv)[..]);
+	raw[32..48].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&view_inv)[..]);
+	raw[48..52].copy_from_slice(AsRef::<[f32; 4]>::as_ref(&view.col(3)));
+	raw
+}
+
 impl framework::Example for GraphicsData {
 	fn optional_features() -> wgpu::Features {
 		wgpu::Features::TEXTURE_COMPRESSION_ASTC
@@ -449,15 +385,8 @@ impl framework::Example for GraphicsData {
 			source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
 		});
 
-		let camera = Camera {
-			screen_size: (config.width, config.height),
-			offset: glam::Vec3::new(0.0,4.5-2.5,0.0),
-			fov: 1.0, //fov_slope = tan(fov_y/2)
-			pitch: 0.0,
-			yaw: 0.0,
-			controls:0,
-		};
 		let physics = body::PhysicsState {
+			spawn_point:glam::vec3(0.0,50.0,0.0),
 			body: body::Body::with_pva(glam::vec3(0.0,50.0,0.0),glam::vec3(0.0,0.0,0.0),glam::vec3(0.0,-100.0,0.0)),
 			time: 0,
 			tick: 0,
@@ -468,13 +397,14 @@ impl framework::Example for GraphicsData {
 			walk_accel: 90.0,
 			mv: 2.7,
 			grounded: false,
-			jump_trying: false,
-			temp_control_dir: glam::Vec3::ZERO,
 			walkspeed: 18.0,
 			contacts: std::collections::HashSet::new(),
-    		models: Vec::new(),
-    		walk: body::WalkState::new(),
-    		hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
+			models: Vec::new(),
+			walk: body::WalkState::new(),
+			hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
+			camera: body::Camera::from_offset(glam::vec3(0.0,4.5-2.5,0.0),(config.width as f32)/(config.height as f32)),
+			mouse_interpolation: body::MouseInterpolationState::new(),
+			controls: 0,
 		};
 
 		//load textures
@@ -663,7 +593,7 @@ impl framework::Example for GraphicsData {
 			multiview: None,
 		});
 
-		let camera_uniforms = camera.to_uniform_data(physics.body.extrapolated_position(0));
+		let camera_uniforms = to_uniform_data(&physics.camera,physics.body.extrapolated_position(0));
 		let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 			label: Some("Camera"),
 			contents: bytemuck::cast_slice(&camera_uniforms),
@@ -698,7 +628,7 @@ impl framework::Example for GraphicsData {
 
 		let mut graphics=GraphicsData {
 			start_time: Instant::now(),
-			camera,
+			screen_size: (config.width,config.height),
 			physics,
 			pipelines:GraphicsPipelines{
 				skybox:sky_pipeline,
@@ -769,8 +699,12 @@ impl framework::Example for GraphicsData {
 							let time=self.physics.time;
 							instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
 								time,
-								instruction: body::PhysicsInstruction::SetPosition(spawn_point),
-							})
+								instruction: body::PhysicsInstruction::SetSpawnPosition(spawn_point),
+							});
+							instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
+								time,
+								instruction: body::PhysicsInstruction::Input(body::InputInstruction::Reset),
+							});
 						}else{
 							println!("No modeldatas were generated");
 						}
@@ -781,58 +715,68 @@ impl framework::Example for GraphicsData {
 					println!("Could not open file");
 				}
 			},
-			winit::event::WindowEvent::KeyboardInput {
-				input:
-					winit::event::KeyboardInput {
-						state,
-						virtual_keycode: Some(keycode),
-						..
-					},
-				..
-			} => {
-				match (state,keycode) {
-					(k,winit::event::VirtualKeyCode::W) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEFORWARD,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEFORWARD,
-					}
-					(k,winit::event::VirtualKeyCode::A) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVELEFT,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVELEFT,
-					}
-					(k,winit::event::VirtualKeyCode::S) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEBACK,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEBACK,
-					}
-					(k,winit::event::VirtualKeyCode::D) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVERIGHT,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVERIGHT,
-					}
-					(k,winit::event::VirtualKeyCode::E) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEUP,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEUP,
-					}
-					(k,winit::event::VirtualKeyCode::Q) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEDOWN,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEDOWN,
-					}
-					(k,winit::event::VirtualKeyCode::Space) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_JUMP,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_JUMP,
-					}
-					(k,winit::event::VirtualKeyCode::Z) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_ZOOM,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_ZOOM,
-					}
-					_ => (),
-				}
-			}
-			_ => {}
+			_=>(),
 		}
 	}
 
-	fn move_mouse(&mut self, delta: (f64,f64)) {
-		self.camera.pitch=(self.camera.pitch as f64+delta.1/-2048.) as f32;
-		self.camera.yaw=(self.camera.yaw as f64+delta.0/-2048.) as f32;
+	fn device_event(&mut self, event: winit::event::DeviceEvent) {
+		//there's no way this is the best way get a timestamp.
+		let time=self.start_time.elapsed().as_nanos() as i64;
+		match event {
+			winit::event::DeviceEvent::Key(winit::event::KeyboardInput {
+				state,
+				scancode: keycode,
+				..
+			}) => {
+				let s=match state {
+					winit::event::ElementState::Pressed => true,
+					winit::event::ElementState::Released => false,
+				};
+				if let Some(input_instruction)=match keycode {
+					17 => Some(InputInstruction::MoveForward(s)),//W
+					30 => Some(InputInstruction::MoveLeft(s)),//A
+					31 => Some(InputInstruction::MoveBack(s)),//S
+					32 => Some(InputInstruction::MoveRight(s)),//D
+					18 => Some(InputInstruction::MoveUp(s)),//E
+					16 => Some(InputInstruction::MoveDown(s)),//Q
+					57 => Some(InputInstruction::Jump(s)),//Space
+					44 => Some(InputInstruction::Zoom(s)),//Z
+					19 => if s{Some(InputInstruction::Reset)}else{None},//R
+					_ => None,
+				}
+				{
+					self.physics.run(time);
+					self.physics.process_instruction(TimedInstruction{
+						time,
+						instruction:PhysicsInstruction::Input(input_instruction),
+					})
+				}
+			},
+			winit::event::DeviceEvent::MouseMotion {
+			    delta,//these (f64,f64) are integers on my machine
+			} => {
+				//do not step the physics because the mouse polling rate is higher than the physics can run.
+				//essentially the previous input will be overwritten until a true step runs
+				//which is fine because they run all the time.
+				self.physics.process_instruction(TimedInstruction{
+					time,
+					instruction:PhysicsInstruction::Input(InputInstruction::MoveMouse(glam::ivec2(delta.0 as i32,delta.1 as i32))),
+				})
+			},
+			winit::event::DeviceEvent::MouseWheel {
+			    delta,
+			} => {
+				println!("mousewheel{:?}",delta);
+				if true{//self.physics.use_scroll
+					self.physics.run(time);
+					self.physics.process_instruction(TimedInstruction{
+						time,
+						instruction:PhysicsInstruction::Input(InputInstruction::Jump(true)),//activates the immediate jump path, but the style modifier prevents controls&CONTROL_JUMP bit from being set to auto jump
+					})
+				}
+			}
+			_=>(),
+		}
 	}
 
 	fn resize(
@@ -842,7 +786,8 @@ impl framework::Example for GraphicsData {
 		_queue: &wgpu::Queue,
 	) {
 		self.depth_view = Self::create_depth_texture(config, device);
-		self.camera.screen_size = (config.width, config.height);
+		self.screen_size = (config.width, config.height);
+		self.physics.camera.set_fov_aspect(1.0,(config.width as f32)/(config.height as f32));
 	}
 
 	fn render(
@@ -852,45 +797,15 @@ impl framework::Example for GraphicsData {
 		queue: &wgpu::Queue,
 		_spawner: &framework::Spawner,
 	) {
-		let camera_mat=glam::Mat3::from_rotation_y(self.camera.yaw);
-		let control_dir=camera_mat*get_control_dir(self.camera.controls&(CONTROL_MOVELEFT|CONTROL_MOVERIGHT|CONTROL_MOVEFORWARD|CONTROL_MOVEBACK)).normalize_or_zero();
-
 		let time=self.start_time.elapsed().as_nanos() as i64;
 
 		self.physics.run(time);
-
-		//ALL OF THIS IS TOTALLY WRONG!!!
-		let walk_target_velocity=self.physics.walkspeed*control_dir;
-		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
-		if self.physics.grounded&&walk_target_velocity!=self.physics.walk.target_velocity {
-			instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
-				time,
-				instruction:body::PhysicsInstruction::SetWalkTargetVelocity(walk_target_velocity)
-			});
-		}
-
-		if control_dir!=self.physics.temp_control_dir {
-			instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
-				time,
-				instruction:body::PhysicsInstruction::SetControlDir(control_dir)
-			});
-		}
-
-		self.physics.jump_trying=self.camera.controls&CONTROL_JUMP!=0;
-		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
-		if self.physics.grounded&&self.physics.jump_trying {
-			//scroll will be implemented with InputInstruction::Jump(true) but it blocks setting self.jump_trying=true
-			instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
-				time,
-				instruction:body::PhysicsInstruction::Jump
-			});
-		}
 
 		let mut encoder =
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
 		// update rotation
-		let camera_uniforms = self.camera.to_uniform_data(self.physics.body.extrapolated_position(time));
+		let camera_uniforms = to_uniform_data(&self.physics.camera,self.physics.body.extrapolated_position(time));
 		self.staging_belt
 			.write_buffer(
 				&mut encoder,
