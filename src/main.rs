@@ -34,6 +34,8 @@ struct ModelGraphics {
 }
 
 pub struct Skybox {
+	block_mouse:strafe_client::body::TIME,
+	period:strafe_client::body::TIME,
 	start_time: std::time::Instant,
 	screen_size: (u32, u32),
 	physics: strafe_client::body::PhysicsState,
@@ -473,6 +475,8 @@ impl strafe_client::framework::Example for Skybox {
 		let depth_view = Self::create_depth_texture(config, device);
 
 		Skybox {
+			block_mouse:0,
+			period:5_000_000,
 			start_time: Instant::now(),
 			screen_size: (config.width,config.height),
 			physics,
@@ -495,7 +499,6 @@ impl strafe_client::framework::Example for Skybox {
 	fn device_event(&mut self, event: winit::event::DeviceEvent) {
 		//there's no way this is the best way get a timestamp.
 		let time=self.start_time.elapsed().as_nanos() as i64;
-		self.physics.run(time);//call it a day
 		match event {
 			winit::event::DeviceEvent::Key(winit::event::KeyboardInput {
 				state,
@@ -519,6 +522,7 @@ impl strafe_client::framework::Example for Skybox {
 					_ => None,
 				}
 				{
+					self.physics.run(time);//call it a day
 					self.physics.process_instruction(TimedInstruction{
 						time,
 						instruction:PhysicsInstruction::Input(input_instruction),
@@ -528,16 +532,34 @@ impl strafe_client::framework::Example for Skybox {
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine
 			} => {
-				self.physics.process_instruction(TimedInstruction{
-					time,
-					instruction:PhysicsInstruction::Input(InputInstruction::MoveMouse(glam::ivec2(delta.0 as i32,delta.1 as i32))),
-				})
+				let run_the_physics=
+				if time<self.block_mouse{
+					false
+				}else{
+					if time-self.block_mouse<2*self.period{
+						self.block_mouse+=self.period
+					}else{
+						self.block_mouse=time+self.period
+					}
+					true
+				};
+				if run_the_physics{
+					//This lags like crazy if you require a substep for every mouse event (every 3ms)
+					//I'm going to forgo mouse interpolation for now
+					//because it's actually a hard problem to prevent the physics from running on every mouse update
+					self.physics.run(time);//call it a day
+					self.physics.process_instruction(TimedInstruction{
+						time,
+						instruction:PhysicsInstruction::Input(InputInstruction::MoveMouse(glam::ivec2(delta.0 as i32,delta.1 as i32))),
+					})
+				}
 			},
 			winit::event::DeviceEvent::MouseWheel {
 			    delta,
 			} => {
 				println!("mousewheel{:?}",delta);
 				if true{//self.physics.use_scroll
+					self.physics.run(time);//call it a day
 					self.physics.process_instruction(TimedInstruction{
 						time,
 						instruction:PhysicsInstruction::Input(InputInstruction::Jump(true)),//activates the immediate jump path, but the style modifier prevents controls&CONTROL_JUMP bit from being set to auto jump
