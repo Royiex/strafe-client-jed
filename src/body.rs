@@ -102,7 +102,7 @@ pub struct MouseInterpolationState {
 impl MouseInterpolationState {
 	pub fn new() -> Self {
 		Self {
-			interpolation:MouseInterpolation::Lerp,
+			interpolation:MouseInterpolation::First,
 			time0:0,
 			time1:1,//ONE NANOSECOND!!!! avoid divide by zero
 			mouse0:glam::IVec2::ZERO,
@@ -902,6 +902,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		}
 		//selectively update body
 		match &ins.instruction {
+		    PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),//dodge time for mouse movement
     		PhysicsInstruction::Input(_)
 		    |PhysicsInstruction::ReachWalkTargetVelocity
 		    |PhysicsInstruction::CollisionStart(_)
