@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use strafe_client::{instruction::{TimedInstruction, self}, body::MouseInterpolationState};
+use strafe_client::{instruction::{TimedInstruction, InstructionConsumer},body::{InputInstruction, PhysicsInstruction}};
 use std::{borrow::Cow, time::Instant};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 
@@ -129,22 +129,11 @@ fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,source:&[u8]){
 	}
 }
 
-#[inline]
-fn perspective_rh(fov_x_slope: f32, fov_y_slope: f32 z_near: f32, z_far: f32) -> glam::Mat4 {
-	//glam_assert!(z_near > 0.0 && z_far > 0.0);
-	let r = z_far / (z_near - z_far);
-	glam::Mat4::from_cols(
-		glam::Vec4::new(1.0/fov_x_slope, 0.0, 0.0, 0.0),
-		glam::Vec4::new(0.0, 1.0/fov_y_slope, 0.0, 0.0),
-		glam::Vec4::new(0.0, 0.0, r, -1.0),
-		glam::Vec4::new(0.0, 0.0, r * z_near, 0.0),
-	)
-}
 
-fn to_uniform_data(camera: &Camera, pos: glam::Vec3) -> [f32; 16 * 3 + 4] {
-	let proj = perspective_rh(self.fov_x, self.fov_y, 0.5, 1000.0);
+fn to_uniform_data(camera: &strafe_client::body::Camera, pos: glam::Vec3) -> [f32; 16 * 3 + 4] {
+	let proj=camera.proj();
 	let proj_inv = proj.inverse();
-	let view = glam::Mat4::from_translation(pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.angles.y, self.angles.x, self.angles.z);
+	let view=camera.view(pos);
 	let view_inv = view.inverse();
 
 	let mut raw = [0f32; 16 * 3 + 4];
@@ -243,15 +232,15 @@ impl strafe_client::framework::Example for Skybox {
 			jump_trying: false,
 			walkspeed: 18.0,
 			contacts: std::collections::HashSet::new(),
-    		models_cringe_clone: modeldatas.iter().map(|m|strafe_client::body::Model::new(m.transform)).collect(),
-    		walk: strafe_client::body::WalkState::new(),
-    		hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
-		    camera: Camera::from_offset(glam::vec3(0.0,4.5-2.5,0.0),(config.width as f32)/(config.height as f32)),
-		    mouse_interpolation: strafe_client::body::MouseInterpolationState::new(),
-		    controls: 0,
+			models_cringe_clone: modeldatas.iter().map(|m|strafe_client::body::Model::new(m.transform)).collect(),
+			walk: strafe_client::body::WalkState::new(),
+			hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
+			camera: strafe_client::body::Camera::from_offset(glam::vec3(0.0,4.5-2.5,0.0),(config.width as f32)/(config.height as f32)),
+			mouse_interpolation: strafe_client::body::MouseInterpolationState::new(),
+			controls: 0,
 		};
 
-		let camera_uniforms = to_uniform_data(camera,physics.body.extrapolated_position(0));
+		let camera_uniforms = to_uniform_data(&physics.camera,physics.body.extrapolated_position(0));
 		let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 			label: Some("Camera"),
 			contents: bytemuck::cast_slice(&camera_uniforms),
@@ -486,7 +475,7 @@ impl strafe_client::framework::Example for Skybox {
 
 		Skybox {
 			start_time: Instant::now(),
-			screen_size,
+			screen_size: (config.width,config.height),
 			physics,
 			sky_pipeline,
 			entity_pipeline,
@@ -507,58 +496,57 @@ impl strafe_client::framework::Example for Skybox {
 	fn device_event(&mut self, event: winit::event::DeviceEvent) {
 		//there's no way this is the best way get a timestamp.
 		let time=self.start_time.elapsed().as_nanos() as i64;
+		self.physics.run(time);//call it a day
 		match event {
-			winit::event::DeviceEvent::KeyboardInput {
-				input:
-					winit::event::KeyboardInput {
-						state,
-						scancode: keycode,
-						..
-					},
-			} => {
+			winit::event::DeviceEvent::Key(winit::event::KeyboardInput {
+				state,
+				scancode: keycode,
+				..
+			}) => {
 				let s=match state {
 					winit::event::ElementState::Pressed => true,
 					winit::event::ElementState::Released => false,
 				};
-				if let Some(instruction)=match keycode {
-					119 => Some(InputInstruction::MoveForward(s)),//W
-					97 => Some(InputInstruction::MoveLeft(s)),//A
-					115 => Some(InputInstruction::MoveBack(s)),//S
-					100 => Some(InputInstruction::MoveRight(s)),//D
-					101 => Some(InputInstruction::MoveUp(s)),//E
-					113 => Some(InputInstruction::MoveDown(s)),//Q
-					32 => Some(InputInstruction::Jump(s)),//Space
-					122 => Some(InputInstruction::Zoom(s)),//Z
-					114 => if s{Some(InputInstruction::Reset)}else{None},//R
+				if let Some(input_instruction)=match keycode {
+					17 => Some(InputInstruction::MoveForward(s)),//W
+					30 => Some(InputInstruction::MoveLeft(s)),//A
+					31 => Some(InputInstruction::MoveBack(s)),//S
+					32 => Some(InputInstruction::MoveRight(s)),//D
+					18 => Some(InputInstruction::MoveUp(s)),//E
+					16 => Some(InputInstruction::MoveDown(s)),//Q
+					57 => Some(InputInstruction::Jump(s)),//Space
+					44 => Some(InputInstruction::Zoom(s)),//Z
+					19 => if s{Some(InputInstruction::Reset)}else{None},//R
 					_ => None,
 				}
 				{
-					self.physics.queue_input_instruction(TimedInstruction{
+					self.physics.process_instruction(TimedInstruction{
 						time,
-						instruction,
+						instruction:PhysicsInstruction::Input(input_instruction),
 					})
 				}
 			},
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine
 			} => {
-				self.physics.queue_input_instruction(TimedInstruction{
+				self.physics.process_instruction(TimedInstruction{
 					time,
-					instruction:InputInstruction::MoveMouse(glam::ivec2(delta.0 as i32,delta.1 as i32))
+					instruction:PhysicsInstruction::Input(InputInstruction::MoveMouse(glam::ivec2(delta.0 as i32,delta.1 as i32))),
 				})
 			},
 			winit::event::DeviceEvent::MouseWheel {
-			    delta,//these (f64,f64) are integers on my machine
+			    delta,
 			} => {
-				if self.physics.use_scroll{
-					self.physics.queue_input_instruction(TimedInstruction{
+				println!("mousewheel{:?}",delta);
+				if true{//self.physics.use_scroll
+					self.physics.process_instruction(TimedInstruction{
 						time,
-						instruction:InputInstruction::Jump(true)//activates the immediate jump path, but the style modifier prevents controls&CONTROL_JUMP bit from being set to auto jump
+						instruction:PhysicsInstruction::Input(InputInstruction::Jump(true)),//activates the immediate jump path, but the style modifier prevents controls&CONTROL_JUMP bit from being set to auto jump
 					})
 				}
 			}
+			_=>(),
 		}
-		self.physics.queue_input_instruction()
 	}
 
 	fn resize(
@@ -569,7 +557,7 @@ impl strafe_client::framework::Example for Skybox {
 	) {
 		self.depth_view = Self::create_depth_texture(config, device);
 		self.screen_size = (config.width, config.height);
-		self.physics.camera.fov_x=self.physics.camera.fov_y*(config.width as f32)/(config.height as f32);
+		self.physics.camera.set_fov_aspect(1.0,(config.width as f32)/(config.height as f32));
 	}
 
 	fn render(
@@ -587,7 +575,7 @@ impl strafe_client::framework::Example for Skybox {
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
 		// update rotation
-		let camera_uniforms = to_uniform_data(self.camera,self.physics.body.extrapolated_position(time));
+		let camera_uniforms = to_uniform_data(&self.physics.camera,self.physics.body.extrapolated_position(time));
 		self.staging_belt
 			.write_buffer(
 				&mut encoder,
