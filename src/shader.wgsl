@@ -1,9 +1,4 @@
-struct SkyOutput {
-	@builtin(position) position: vec4<f32>,
-	@location(0) sampledir: vec3<f32>,
-};
-
-struct Data {
+struct Camera {
 	// from camera to screen
 	proj: mat4x4<f32>,
 	// from screen to camera
@@ -15,7 +10,12 @@ struct Data {
 };
 @group(0)
 @binding(0)
-var<uniform> r_data: Data;
+var<uniform> camera: Camera;
+
+struct SkyOutput {
+	@builtin(position) position: vec4<f32>,
+	@location(0) sampledir: vec3<f32>,
+};
 
 @vertex
 fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
@@ -30,8 +30,8 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
 	);
 
 	// transposition = inversion for this orthonormal matrix
-	let inv_model_view = transpose(mat3x3<f32>(r_data.view[0].xyz, r_data.view[1].xyz, r_data.view[2].xyz));
-	let unprojected = r_data.proj_inv * pos;
+	let inv_model_view = transpose(mat3x3<f32>(camera.view[0].xyz, camera.view[1].xyz, camera.view[2].xyz));
+	let unprojected = camera.proj_inv * pos;
 
 	var result: SkyOutput;
 	result.sampledir = inv_model_view * unprojected.xyz;
@@ -39,7 +39,7 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
 	return result;
 }
 
-struct EntityOutput {
+struct EntityOutputTexture {
 	@builtin(position) position: vec4<f32>,
 	@location(1) texture: vec2<f32>,
 	@location(2) normal: vec3<f32>,
@@ -48,45 +48,52 @@ struct EntityOutput {
 const MAX_ENTITY_INSTANCES=1024;
 @group(1)
 @binding(0)
-var<uniform> r_EntityTransform: array<mat4x4<f32>,MAX_ENTITY_INSTANCES>;
+var<uniform> entity_transforms: array<mat4x4<f32>,MAX_ENTITY_INSTANCES>;
+//var<uniform> entity_texture_transforms: array<mat3x3<f32>,MAX_ENTITY_INSTANCES>;
+//my fancy idea is to create a megatexture for each model that includes all the textures each intance will need
+//the texture transform then maps the texture coordinates to the location of the specific texture
+//how to do no texture?
 
 @vertex
-fn vs_entity(
+fn vs_entity_texture(
 	@builtin(instance_index) instance: u32,
 	@location(0) pos: vec3<f32>,
 	@location(1) texture: vec2<f32>,
 	@location(2) normal: vec3<f32>,
-) -> EntityOutput {
-	var position: vec4<f32> = r_EntityTransform[instance] * vec4<f32>(pos, 1.0);
-	var result: EntityOutput;
-	result.normal = (r_EntityTransform[instance] * vec4<f32>(normal, 0.0)).xyz;
-	result.texture=texture;
-	result.view = position.xyz - r_data.cam_pos.xyz;
-	result.position = r_data.proj * r_data.view * position;
+) -> EntityOutputTexture {
+	var position: vec4<f32> = entity_transforms[instance] * vec4<f32>(pos, 1.0);
+	var result: EntityOutputTexture;
+	result.normal = (entity_transforms[instance] * vec4<f32>(normal, 0.0)).xyz;
+	result.texture=texture;//(entity_texture_transforms[instance] * vec3<f32>(texture, 1.0)).xy;
+	result.view = position.xyz - camera.cam_pos.xyz;
+	result.position = camera.proj * camera.view * position;
 	return result;
 }
 
-@group(0)
-@binding(1)
-var r_texture: texture_cube<f32>;
-@group(0)
-@binding(2)
-var r_sampler: sampler;
+//group 2 is texture bindings
+@group(2)
+@binding(0)
+var cube_texture: texture_cube<f32>;
+
+//group 3 is texture sampler
+@group(3)
+@binding(0)
+var texture_sampler: sampler;
 
 @fragment
 fn fs_sky(vertex: SkyOutput) -> @location(0) vec4<f32> {
-	return textureSample(r_texture, r_sampler, vertex.sampledir);
+	return textureSample(cube_texture, texture_sampler, vertex.sampledir);
 }
 
 @fragment
-fn fs_entity(vertex: EntityOutput) -> @location(0) vec4<f32> {
+fn fs_entity_texture(vertex: EntityOutputTexture) -> @location(0) vec4<f32> {
 	let incident = normalize(vertex.view);
 	let normal = normalize(vertex.normal);
 	let d = dot(normal, incident);
 	let reflected = incident - 2.0 * d * normal;
 
 	let dir = vec3<f32>(-1.0)+2.0*vec3<f32>(vertex.texture.x,0.0,vertex.texture.y);
-	let texture_color = textureSample(r_texture, r_sampler, dir).rgb;
-	let reflected_color = textureSample(r_texture, r_sampler, reflected).rgb;
-	return vec4<f32>(mix(vec3<f32>(0.1) + 0.5 * reflected_color,texture_color,1.0-pow(1.0-abs(d),2.0)), 1.0);
+	let fragment_color = textureSample(cube_texture, texture_sampler, dir).rgb;
+	let reflected_color = textureSample(cube_texture, texture_sampler, reflected).rgb;
+	return vec4<f32>(mix(vec3<f32>(0.1) + 0.5 * reflected_color,fragment_color,1.0-pow(1.0-abs(d),2.0)), 1.0);
 }
