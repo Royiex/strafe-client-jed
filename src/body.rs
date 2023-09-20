@@ -204,7 +204,7 @@ impl Camera {
 	}
 	pub fn view(&self,pos:glam::Vec3)->glam::Mat4{
 		//f32 good enough for view matrix
-		glam::Mat4::from_translation(pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.angles.y as f32, self.angles.x as f32, 0f32)
+		glam::Mat4::from_translation(pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.angles.x as f32, self.angles.y as f32, 0f32)
 	}
 	pub fn set_fov_aspect(&mut self,fov:f32,aspect:f32){
 		self.fov.x=fov*aspect;
