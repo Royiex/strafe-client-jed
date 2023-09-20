@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use strafe_client::{instruction::{TimedInstruction, self}, body::MouseInterpolationState};
 use std::{borrow::Cow, time::Instant};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 
@@ -30,88 +31,6 @@ struct ModelGraphics {
 	bind_group: wgpu::BindGroup,
 	model_buf: wgpu::Buffer,
 }
-
-// Note: we use the Y=up coordinate space in this example.
-struct Camera {
-	screen_size: (u32, u32),
-	offset: glam::Vec3,
-	fov: f32,
-	yaw: f32,
-	pitch: f32,
-	controls: u32,
-}
-
-const CONTROL_MOVEFORWARD:u32 = 0b00000001;
-const CONTROL_MOVEBACK:u32 = 0b00000010;
-const CONTROL_MOVERIGHT:u32 = 0b00000100;
-const CONTROL_MOVELEFT:u32 = 0b00001000;
-const CONTROL_MOVEUP:u32 = 0b00010000;
-const CONTROL_MOVEDOWN:u32 = 0b00100000;
-const CONTROL_JUMP:u32 = 0b01000000;
-const CONTROL_ZOOM:u32 = 0b10000000;
-
-const FORWARD_DIR:glam::Vec3 = glam::Vec3::new(0.0,0.0,-1.0);
-const RIGHT_DIR:glam::Vec3 = glam::Vec3::new(1.0,0.0,0.0);
-const UP_DIR:glam::Vec3 = glam::Vec3::new(0.0,1.0,0.0);
-
-fn get_control_dir(controls: u32) -> glam::Vec3{
-	//don't get fancy just do it
-	let mut control_dir:glam::Vec3 = glam::Vec3::new(0.0,0.0,0.0);
-	if controls & CONTROL_MOVEFORWARD == CONTROL_MOVEFORWARD {
-		control_dir+=FORWARD_DIR;
-	}
-	if controls & CONTROL_MOVEBACK == CONTROL_MOVEBACK {
-		control_dir+=-FORWARD_DIR;
-	}
-	if controls & CONTROL_MOVELEFT == CONTROL_MOVELEFT {
-		control_dir+=-RIGHT_DIR;
-	}
-	if controls & CONTROL_MOVERIGHT == CONTROL_MOVERIGHT {
-		control_dir+=RIGHT_DIR;
-	}
-	if controls & CONTROL_MOVEUP == CONTROL_MOVEUP {
-		control_dir+=UP_DIR;
-	}
-	if controls & CONTROL_MOVEDOWN == CONTROL_MOVEDOWN {
-		control_dir+=-UP_DIR;
-	}
-	return control_dir
-}
-
-	#[inline]
-	fn perspective_rh(fov_y_slope: f32, aspect_ratio: f32, z_near: f32, z_far: f32) -> glam::Mat4 {
-		//glam_assert!(z_near > 0.0 && z_far > 0.0);
-		let r = z_far / (z_near - z_far);
-		glam::Mat4::from_cols(
-			glam::Vec4::new(1.0/(fov_y_slope * aspect_ratio), 0.0, 0.0, 0.0),
-			glam::Vec4::new(0.0, 1.0/fov_y_slope, 0.0, 0.0),
-			glam::Vec4::new(0.0, 0.0, r, -1.0),
-			glam::Vec4::new(0.0, 0.0, r * z_near, 0.0),
-		)
-	}
-
-impl Camera {
-	fn to_uniform_data(&self, pos: glam::Vec3) -> [f32; 16 * 3 + 4] {
-		let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
-		let fov = if self.controls&CONTROL_ZOOM==0 {
-			self.fov
-		}else{
-			self.fov/5.0
-		};
-		let proj = perspective_rh(fov, aspect, 0.5, 1000.0);
-		let proj_inv = proj.inverse();
-		let view = glam::Mat4::from_translation(pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.yaw, self.pitch, 0f32);
-		let view_inv = view.inverse();
-
-		let mut raw = [0f32; 16 * 3 + 4];
-		raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj)[..]);
-		raw[16..32].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj_inv)[..]);
-		raw[32..48].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&view_inv)[..]);
-		raw[48..52].copy_from_slice(AsRef::<[f32; 4]>::as_ref(&view.col(3)));
-		raw
-	}
-}
-
 pub struct GraphicsBindGroups {
 	camera: wgpu::BindGroup,
 	skybox_texture: wgpu::BindGroup,
@@ -124,7 +43,7 @@ pub struct GraphicsPipelines {
 
 pub struct GraphicsData {
 	start_time: std::time::Instant,
-	camera: Camera,
+	screen_size: (u32, u32),
 	physics: strafe_client::body::PhysicsState,
 	pipelines: GraphicsPipelines,
 	bind_groups: GraphicsBindGroups,
@@ -208,6 +127,32 @@ fn generate_modeldatas(data:obj::ObjData) -> Vec<ModelData>{
 		});
 	}
 	modeldatas
+}
+
+#[inline]
+fn perspective_rh(fov_x_slope: f32, fov_y_slope: f32 z_near: f32, z_far: f32) -> glam::Mat4 {
+	//glam_assert!(z_near > 0.0 && z_far > 0.0);
+	let r = z_far / (z_near - z_far);
+	glam::Mat4::from_cols(
+		glam::Vec4::new(1.0/fov_x_slope, 0.0, 0.0, 0.0),
+		glam::Vec4::new(0.0, 1.0/fov_y_slope, 0.0, 0.0),
+		glam::Vec4::new(0.0, 0.0, r, -1.0),
+		glam::Vec4::new(0.0, 0.0, r * z_near, 0.0),
+	)
+}
+
+fn to_uniform_data(camera: &Camera, pos: glam::Vec3) -> [f32; 16 * 3 + 4] {
+	let proj = perspective_rh(self.fov_x, self.fov_y, 0.5, 1000.0);
+	let proj_inv = proj.inverse();
+	let view = glam::Mat4::from_translation(pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.angles.y, self.angles.x, self.angles.z);
+	let view_inv = view.inverse();
+
+	let mut raw = [0f32; 16 * 3 + 4];
+	raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj)[..]);
+	raw[16..32].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj_inv)[..]);
+	raw[32..48].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&view_inv)[..]);
+	raw[48..52].copy_from_slice(AsRef::<[f32; 4]>::as_ref(&view.col(3)));
+	raw
 }
 
 impl strafe_client::framework::Example for GraphicsData {
@@ -352,14 +297,6 @@ impl strafe_client::framework::Example for GraphicsData {
 			source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
 		});
 
-		let camera = Camera {
-			screen_size: (config.width, config.height),
-			offset: glam::Vec3::new(0.0,4.5-2.5,0.0),
-			fov: 1.0, //fov_slope = tan(fov_y/2)
-			pitch: 0.0,
-			yaw: 0.0,
-			controls:0,
-		};
 		let physics = strafe_client::body::PhysicsState {
 			body: strafe_client::body::Body::with_pva(glam::vec3(0.0,50.0,0.0),glam::vec3(0.0,0.0,0.0),glam::vec3(0.0,-100.0,0.0)),
 			time: 0,
@@ -372,12 +309,14 @@ impl strafe_client::framework::Example for GraphicsData {
 			mv: 2.7,
 			grounded: false,
 			jump_trying: false,
-			temp_control_dir: glam::Vec3::ZERO,
 			walkspeed: 18.0,
 			contacts: std::collections::HashSet::new(),
     		models_cringe_clone: modeldatas.iter().map(|m|m.transforms.iter().map(|t|strafe_client::body::Model::new(*t))).flatten().collect(),
     		walk: strafe_client::body::WalkState::new(),
     		hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
+		    camera: Camera::from_offset(glam::vec3(0.0,4.5-2.5,0.0),(config.width as f32)/(config.height as f32)),
+		    mouse_interpolation: strafe_client::body::MouseInterpolationState::new(),
+		    controls: 0,
 		};
 
 		//load textures
@@ -653,7 +592,7 @@ impl strafe_client::framework::Example for GraphicsData {
 
 		GraphicsData {
 			start_time: Instant::now(),
-			camera,
+			screen_size,
 			physics,
 			pipelines:GraphicsPipelines{
 				skybox:sky_pipeline,
@@ -672,59 +611,64 @@ impl strafe_client::framework::Example for GraphicsData {
 
 	#[allow(clippy::single_match)]
 	fn update(&mut self, event: winit::event::WindowEvent) {
+		//nothing atm
+	}
+
+	fn device_event(&mut self, event: winit::event::DeviceEvent) {
+		//there's no way this is the best way get a timestamp.
+		let time=self.start_time.elapsed().as_nanos() as i64;
 		match event {
-			winit::event::WindowEvent::KeyboardInput {
+			winit::event::DeviceEvent::KeyboardInput {
 				input:
 					winit::event::KeyboardInput {
 						state,
-						virtual_keycode: Some(keycode),
+						scancode: keycode,
 						..
 					},
-				..
 			} => {
-				match (state,keycode) {
-					(k,winit::event::VirtualKeyCode::W) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEFORWARD,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEFORWARD,
-					}
-					(k,winit::event::VirtualKeyCode::A) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVELEFT,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVELEFT,
-					}
-					(k,winit::event::VirtualKeyCode::S) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEBACK,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEBACK,
-					}
-					(k,winit::event::VirtualKeyCode::D) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVERIGHT,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVERIGHT,
-					}
-					(k,winit::event::VirtualKeyCode::E) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEUP,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEUP,
-					}
-					(k,winit::event::VirtualKeyCode::Q) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_MOVEDOWN,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_MOVEDOWN,
-					}
-					(k,winit::event::VirtualKeyCode::Space) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_JUMP,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_JUMP,
-					}
-					(k,winit::event::VirtualKeyCode::Z) => match k {
-						winit::event::ElementState::Pressed => self.camera.controls|=CONTROL_ZOOM,
-						winit::event::ElementState::Released => self.camera.controls&=!CONTROL_ZOOM,
-					}
-					_ => (),
+				let s=match state {
+					winit::event::ElementState::Pressed => true,
+					winit::event::ElementState::Released => false,
+				};
+				if let Some(instruction)=match keycode {
+					119 => Some(InputInstruction::MoveForward(s)),//W
+					97 => Some(InputInstruction::MoveLeft(s)),//A
+					115 => Some(InputInstruction::MoveBack(s)),//S
+					100 => Some(InputInstruction::MoveRight(s)),//D
+					101 => Some(InputInstruction::MoveUp(s)),//E
+					113 => Some(InputInstruction::MoveDown(s)),//Q
+					32 => Some(InputInstruction::Jump(s)),//Space
+					122 => Some(InputInstruction::Zoom(s)),//Z
+					114 => if s{Some(InputInstruction::Reset)}else{None},//R
+					_ => None,
+				}
+				{
+					self.physics.queue_input_instruction(TimedInstruction{
+						time,
+						instruction,
+					})
+				}
+			},
+			winit::event::DeviceEvent::MouseMotion {
+			    delta,//these (f64,f64) are integers on my machine
+			} => {
+				self.physics.queue_input_instruction(TimedInstruction{
+					time,
+					instruction:InputInstruction::MoveMouse(glam::ivec2(delta.0 as i32,delta.1 as i32))
+				})
+			},
+			winit::event::DeviceEvent::MouseWheel {
+			    delta,//these (f64,f64) are integers on my machine
+			} => {
+				if self.physics.use_scroll{
+					self.physics.queue_input_instruction(TimedInstruction{
+						time,
+						instruction:InputInstruction::Jump(true)//activates the immediate jump path, but the style modifier prevents controls&CONTROL_JUMP bit from being set to auto jump
+					})
 				}
 			}
-			_ => {}
 		}
-	}
-
-	fn move_mouse(&mut self, delta: (f64,f64)) {
-		self.camera.pitch=(self.camera.pitch as f64+delta.1/-2048.) as f32;
-		self.camera.yaw=(self.camera.yaw as f64+delta.0/-2048.) as f32;
+		self.physics.queue_input_instruction()
 	}
 
 	fn resize(
@@ -734,7 +678,8 @@ impl strafe_client::framework::Example for GraphicsData {
 		_queue: &wgpu::Queue,
 	) {
 		self.depth_view = Self::create_depth_texture(config, device);
-		self.camera.screen_size = (config.width, config.height);
+		self.screen_size = (config.width, config.height);
+		self.physics.camera.fov_x=self.physics.camera.fov_y*(config.width as f32)/(config.height as f32);
 	}
 
 	fn render(
@@ -744,45 +689,15 @@ impl strafe_client::framework::Example for GraphicsData {
 		queue: &wgpu::Queue,
 		_spawner: &strafe_client::framework::Spawner,
 	) {
-		let camera_mat=glam::Mat3::from_rotation_y(self.camera.yaw);
-		let control_dir=camera_mat*get_control_dir(self.camera.controls&(CONTROL_MOVELEFT|CONTROL_MOVERIGHT|CONTROL_MOVEFORWARD|CONTROL_MOVEBACK)).normalize_or_zero();
-
 		let time=self.start_time.elapsed().as_nanos() as i64;
 
 		self.physics.run(time);
-
-		//ALL OF THIS IS TOTALLY WRONG!!!
-		let walk_target_velocity=self.physics.walkspeed*control_dir;
-		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
-		if self.physics.grounded&&walk_target_velocity!=self.physics.walk.target_velocity {
-			strafe_client::instruction::InstructionConsumer::process_instruction(&mut self.physics, strafe_client::instruction::TimedInstruction{
-				time,
-				instruction:strafe_client::body::PhysicsInstruction::SetWalkTargetVelocity(walk_target_velocity)
-			});
-		}
-
-		if control_dir!=self.physics.temp_control_dir {
-			strafe_client::instruction::InstructionConsumer::process_instruction(&mut self.physics, strafe_client::instruction::TimedInstruction{
-				time,
-				instruction:strafe_client::body::PhysicsInstruction::SetControlDir(control_dir)
-			});
-		}
-
-		self.physics.jump_trying=self.camera.controls&CONTROL_JUMP!=0;
-		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
-		if self.physics.grounded&&self.physics.jump_trying {
-			//scroll will be implemented with InputInstruction::Jump(true) but it blocks setting self.jump_trying=true
-			strafe_client::instruction::InstructionConsumer::process_instruction(&mut self.physics, strafe_client::instruction::TimedInstruction{
-				time,
-				instruction:strafe_client::body::PhysicsInstruction::Jump
-			});
-		}
 
 		let mut encoder =
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
 		// update rotation
-		let camera_uniforms = self.camera.to_uniform_data(self.physics.body.extrapolated_position(time));
+		let camera_uniforms = to_uniform_data(self.camera,self.physics.body.extrapolated_position(time));
 		self.staging_belt
 			.write_buffer(
 				&mut encoder,
