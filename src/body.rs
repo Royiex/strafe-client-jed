@@ -816,7 +816,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			PhysicsInstruction::RefreshWalkTarget => {
 				//calculate acceleration yada yada
 				if self.grounded{
-					let mut target_diff=self.walk.target_velocity-self.body.velocity;
+					let mut v=self.walk.target_velocity;
+					self.contact_constrain_velocity(&mut v);
+					let mut target_diff=v-self.body.velocity;
 					target_diff.y=0f32;
 					if target_diff==glam::Vec3::ZERO{
 						let mut a=glam::Vec3::ZERO;
