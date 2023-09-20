@@ -109,11 +109,11 @@ impl MouseInterpolationState {
 			mouse1:glam::IVec2::ZERO,
 		}
 	}
-	pub fn move_mouse(&mut self,time:TIME,pos:glam::IVec2){
+	pub fn move_mouse(&mut self,time:TIME,delta:glam::IVec2){
 		self.time0=self.time1;
 		self.mouse0=self.mouse1;
 		self.time1=time;
-		self.mouse1=pos;
+		self.mouse1=self.mouse1+delta;
 	}
 	pub fn interpolated_position(&self,time:TIME) -> glam::IVec2 {
 		match self.interpolation {
