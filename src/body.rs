@@ -6,7 +6,6 @@ pub enum PhysicsInstruction {
 	CollisionEnd(RelativeCollision),
 	StrafeTick,
 	Jump,
-	RefreshWalkTarget,//this could be a helper function instead of an instruction
 	ReachWalkTargetVelocity,
 	// Water,
 	// Spawn(
@@ -15,8 +14,20 @@ pub enum PhysicsInstruction {
 	// 	bool,//true = Force
 	// )
 	//Both of these conditionally activate RefreshWalkTarget (by doing what SetWalkTargetVelocity used to do and then flagging it)
+	Input(InputInstruction),
+}
+#[derive(Debug)]
+pub enum InputInstruction {
 	MoveMouse(glam::IVec2),
-	SetControls(u32,u32),//can activate Jump
+	MoveForward(bool),
+	MoveLeft(bool),
+	MoveBack(bool),
+	MoveRight(bool),
+	MoveUp(bool),
+	MoveDown(bool),
+	Jump(bool),
+	Zoom(bool),
+	Reset,
 }
 
 pub struct Body {
@@ -90,6 +101,15 @@ pub struct MouseInterpolationState {
 }
 
 impl MouseInterpolationState {
+	pub fn new() -> Self {
+		Self {
+			interpolation:MouseInterpolation::Lerp,
+			time0:0,
+			time1:1,//ONE NANOSECOND!!!! avoid divide by zero
+			mouse0:glam::IVec2::ZERO,
+			mouse1:glam::IVec2::ZERO,
+		}
+	}
 	pub fn move_mouse(&mut self,time:TIME,pos:glam::IVec2){
 		self.time0=self.time1;
 		self.mouse0=self.mouse1;
@@ -115,7 +135,6 @@ impl MouseInterpolationState {
 pub enum WalkEnum{
 	Reached,
 	Transient,
-	Invalid,
 }
 pub struct WalkState {
 	pub target_velocity: glam::Vec3,
@@ -127,7 +146,7 @@ impl WalkState {
 		Self{
 			target_velocity:glam::Vec3::ZERO,
 			target_time:0,
-			state:WalkEnum::Invalid,
+			state:WalkEnum::Reached,
 		}
 	}
 }
@@ -135,21 +154,62 @@ impl WalkState {
 // Note: we use the Y=up coordinate space in this example.
 pub struct Camera {
 	offset: glam::Vec3,
-	angles: glam::Vec3,
+	angles: glam::DVec2,//YAW AND THEN PITCH
 	//punch: glam::Vec3,
 	//punch_velocity: glam::Vec3,
 	fov: glam::Vec2,//slope
-	sensitivity: glam::Vec2,
+	sensitivity: glam::DVec2,
+	time: TIME,
 }
 
+#[inline]
+fn mat3_from_rotation_y_f64(angle: f64) -> glam::Mat3 {
+    let (sina, cosa) = angle.sin_cos();
+    glam::Mat3::from_cols(
+        glam::Vec3::new(cosa as f32, 0.0, -sina as f32),
+        glam::Vec3::Y,
+        glam::Vec3::new(sina as f32, 0.0, cosa as f32),
+    )
+}
+#[inline]
+fn perspective_rh(fov_x_slope: f32, fov_y_slope: f32, z_near: f32, z_far: f32) -> glam::Mat4 {
+	//glam_assert!(z_near > 0.0 && z_far > 0.0);
+	let r = z_far / (z_near - z_far);
+	glam::Mat4::from_cols(
+		glam::Vec4::new(1.0/fov_x_slope, 0.0, 0.0, 0.0),
+		glam::Vec4::new(0.0, 1.0/fov_y_slope, 0.0, 0.0),
+		glam::Vec4::new(0.0, 0.0, r, -1.0),
+		glam::Vec4::new(0.0, 0.0, r * z_near, 0.0),
+	)
+}
 impl Camera {
-	fn from_offset(offset:glam::Vec3,aspect:f32) -> Self {
+	pub fn from_offset(offset:glam::Vec3,aspect:f32) -> Self {
 		Self{
 		    offset,
-		    angles: glam::Vec3::ZERO,
+		    angles: glam::DVec2::ZERO,
 		    fov: glam::vec2(aspect,1.0),
-		    sensitivity: glam::vec2(1.0/2048.0,1.0/2048.0),
+		    sensitivity: glam::dvec2(1.0/2048.0,1.0/2048.0),
+    		time: 0,
 		}
+	}
+	fn simulate_move_angles(&self, delta: glam::IVec2) -> glam::DVec2 {
+		let mut a=self.angles-self.sensitivity*delta.as_dvec2();
+		a.y=a.y.clamp(-std::f64::consts::PI, std::f64::consts::PI);
+		return a
+	}
+	fn simulate_move_rotation_y(&self, delta_x: i32) -> glam::Mat3 {
+		mat3_from_rotation_y_f64(self.angles.x-self.sensitivity.x*(delta_x as f64))
+	}
+	pub fn proj(&self)->glam::Mat4{
+		perspective_rh(self.fov.x, self.fov.y, 0.5, 1000.0)
+	}
+	pub fn view(&self,pos:glam::Vec3)->glam::Mat4{
+		//f32 good enough for view matrix
+		glam::Mat4::from_translation(pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.angles.y as f32, self.angles.x as f32, 0f32)
+	}
+	pub fn set_fov_aspect(&mut self,fov:f32,aspect:f32){
+		self.fov.x=fov*aspect;
+		self.fov.y=fov;
 	}
 }
 
@@ -442,7 +502,6 @@ impl PhysicsState {
 			}
 		}
 	}
-
 	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		return Some(TimedInstruction{
 			time:(self.time*self.strafe_tick_num/self.strafe_tick_den+1)*self.strafe_tick_den/self.strafe_tick_num,
@@ -482,6 +541,31 @@ impl PhysicsState {
 	// 	});
 	// }
 
+	fn refresh_walk_target(&mut self){
+		//calculate acceleration yada yada
+		if self.grounded{
+			let mut v=self.walk.target_velocity;
+			self.contact_constrain_velocity(&mut v);
+			let mut target_diff=v-self.body.velocity;
+			target_diff.y=0f32;
+			if target_diff==glam::Vec3::ZERO{
+				let mut a=glam::Vec3::ZERO;
+				self.contact_constrain_acceleration(&mut a);
+				self.body.acceleration=a;
+				self.walk.state=WalkEnum::Reached;
+			}else{
+				let accel=self.walk_accel.min(self.gravity.length()*self.friction);
+				let time_delta=target_diff.length()/accel;
+				let mut a=target_diff/time_delta;
+				self.contact_constrain_acceleration(&mut a);
+				self.body.acceleration=a;
+				self.walk.target_time=self.body.time+((time_delta as f64)*1_000_000_000f64) as TIME;
+				self.walk.state=WalkEnum::Transient;
+			}
+		}else{
+			self.walk.state=WalkEnum::Reached;//there is no walk target while not grounded
+		}
+	}
 	fn next_walk_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//check if you have a valid walk state and create an instruction
 		if self.grounded{
@@ -489,10 +573,6 @@ impl PhysicsState {
 				WalkEnum::Transient=>Some(TimedInstruction{
 					time:self.walk.target_time,
 					instruction:PhysicsInstruction::ReachWalkTargetVelocity
-				}),
-				WalkEnum::Invalid=>Some(TimedInstruction{
-					time:self.time,
-					instruction:PhysicsInstruction::RefreshWalkTarget,
 				}),
 				WalkEnum::Reached=>None,
 			}
@@ -809,13 +889,12 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 	fn process_instruction(&mut self, ins:TimedInstruction<PhysicsInstruction>) {
 		match &ins.instruction {
 		    PhysicsInstruction::StrafeTick => (),
+		    PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),
 		    _=>println!("{:?}",ins),
 		}
 		//selectively update body
 		match &ins.instruction {
-		    PhysicsInstruction::SetWalkTargetVelocity(_)
-		    |PhysicsInstruction::SetControlDir(_) => self.time=ins.time,//TODO: queue instructions
-		    PhysicsInstruction::RefreshWalkTarget
+    		PhysicsInstruction::Input(_)
 		    |PhysicsInstruction::ReachWalkTargetVelocity
 		    |PhysicsInstruction::CollisionStart(_)
 		    |PhysicsInstruction::CollisionEnd(_)
@@ -837,14 +916,13 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				let mut v=self.body.velocity;
 				self.contact_constrain_velocity(&mut v);
 				self.body.velocity=v;
-				self.walk.state=WalkEnum::Invalid;
+				self.refresh_walk_target();
 			},
 			PhysicsInstruction::CollisionEnd(c) => {
 			    self.contacts.remove(&c);//remove contact before calling contact_constrain_acceleration
 				let mut a=self.gravity;
 				self.contact_constrain_acceleration(&mut a);
 				self.body.acceleration=a;
-				self.walk.state=WalkEnum::Invalid;
 				//check ground
 				match &c.face {
 			        AabbFace::Top => {
@@ -852,16 +930,14 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			        },
 			        _ => (),
 			    }
-			},
-			PhysicsInstruction::SetControlDir(control_dir)=>{
-				self.temp_control_dir=control_dir;
-				self.walk.state=WalkEnum::Invalid;
+				self.refresh_walk_target();
 			},
 			PhysicsInstruction::StrafeTick => {
-				//let control_dir=self.get_control_dir();//this should respect your mouse interpolation settings
-				let d=self.body.velocity.dot(self.temp_control_dir);
+				let camera_mat=self.camera.simulate_move_rotation_y(self.mouse_interpolation.interpolated_position(self.time).x-self.mouse_interpolation.mouse0.x);
+				let control_dir=camera_mat*get_control_dir(self.controls);
+				let d=self.body.velocity.dot(control_dir);
 				if d<self.mv {
-					let mut v=self.body.velocity+(self.mv-d)*self.temp_control_dir;
+					let mut v=self.body.velocity+(self.mv-d)*control_dir;
 					self.contact_constrain_velocity(&mut v);
 					self.body.velocity=v;
 				}
@@ -871,7 +947,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				let mut v=self.body.velocity+glam::Vec3::new(0.0,0.715588/2.0*100.0,0.0);
 				self.contact_constrain_velocity(&mut v);
 				self.body.velocity=v;
-				self.walk.state=WalkEnum::Invalid;
+				self.refresh_walk_target();
 			},
 			PhysicsInstruction::ReachWalkTargetVelocity => {
 				//precisely set velocity
@@ -883,32 +959,25 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				self.body.velocity=v;
 				self.walk.state=WalkEnum::Reached;
 			},
-			PhysicsInstruction::RefreshWalkTarget => {
-				//calculate acceleration yada yada
-				if self.grounded{
-					let mut v=self.walk.target_velocity;
-					self.contact_constrain_velocity(&mut v);
-					let mut target_diff=v-self.body.velocity;
-					target_diff.y=0f32;
-					if target_diff==glam::Vec3::ZERO{
-						let mut a=glam::Vec3::ZERO;
-						self.contact_constrain_acceleration(&mut a);
-						self.body.acceleration=a;
-						self.walk.state=WalkEnum::Reached;
-					}else{
-						let accel=self.walk_accel.min(self.gravity.length()*self.friction);
-						let time_delta=target_diff.length()/accel;
-						let mut a=target_diff/time_delta;
-						self.contact_constrain_acceleration(&mut a);
-						self.body.acceleration=a;
-						self.walk.target_time=self.body.time+((time_delta as f64)*1_000_000_000f64) as TIME;
-						self.walk.state=WalkEnum::Transient;
-					}
+			PhysicsInstruction::Input(input_instruction) => {
+				match input_instruction{
+					InputInstruction::MoveMouse(m) => self.mouse_interpolation.move_mouse(self.time,m),
+					InputInstruction::MoveForward(s) => self.controls=if s{self.controls|CONTROL_MOVEFORWARD}else{self.controls&!CONTROL_MOVEFORWARD},
+					InputInstruction::MoveLeft(s) => self.controls=if s{self.controls|CONTROL_MOVELEFT}else{self.controls&!CONTROL_MOVELEFT},
+					InputInstruction::MoveBack(s) => self.controls=if s{self.controls|CONTROL_MOVEBACK}else{self.controls&!CONTROL_MOVEBACK},
+					InputInstruction::MoveRight(s) => self.controls=if s{self.controls|CONTROL_MOVERIGHT}else{self.controls&!CONTROL_MOVERIGHT},
+					InputInstruction::MoveUp(s) => self.controls=if s{self.controls|CONTROL_MOVEUP}else{self.controls&!CONTROL_MOVEUP},
+					InputInstruction::MoveDown(s) => self.controls=if s{self.controls|CONTROL_MOVEDOWN}else{self.controls&!CONTROL_MOVEDOWN},
+					InputInstruction::Jump(s) => self.controls=if s{self.controls|CONTROL_JUMP}else{self.controls&!CONTROL_JUMP},
+					InputInstruction::Zoom(s) => self.controls=if s{self.controls|CONTROL_ZOOM}else{self.controls&!CONTROL_ZOOM},
+					InputInstruction::Reset => println!("reset"),
 				}
-			},
-			PhysicsInstruction::SetWalkTargetVelocity(v) => {
-				self.walk.target_velocity=v;
-				self.walk.state=WalkEnum::Invalid;
+				//calculate control dir
+				let camera_mat=self.camera.simulate_move_rotation_y(self.mouse_interpolation.interpolated_position(self.time).x-self.mouse_interpolation.mouse0.x);
+				let control_dir=camera_mat*get_control_dir(self.controls);
+				//calculate walk target velocity
+				self.walk.target_velocity=self.walkspeed*control_dir;
+				self.refresh_walk_target();
 			},
 		}
 	}
