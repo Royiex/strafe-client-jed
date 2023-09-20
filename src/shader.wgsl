@@ -45,20 +45,21 @@ struct EntityOutput {
 	@location(2) normal: vec3<f32>,
 	@location(3) view: vec3<f32>,
 };
-
+const MAX_ENTITY_INSTANCES=1024;
 @group(1)
 @binding(0)
-var<uniform> r_EntityTransform: mat4x4<f32>;
+var<uniform> r_EntityTransform: array<mat4x4<f32>,MAX_ENTITY_INSTANCES>;
 
 @vertex
 fn vs_entity(
+	@builtin(instance_index) instance: u32,
 	@location(0) pos: vec3<f32>,
 	@location(1) texture: vec2<f32>,
 	@location(2) normal: vec3<f32>,
 ) -> EntityOutput {
-	var position: vec4<f32> = r_EntityTransform * vec4<f32>(pos, 1.0);
+	var position: vec4<f32> = r_EntityTransform[instance] * vec4<f32>(pos, 1.0);
 	var result: EntityOutput;
-	result.normal = (r_EntityTransform * vec4<f32>(normal, 0.0)).xyz;
+	result.normal = (r_EntityTransform[instance] * vec4<f32>(normal, 0.0)).xyz;
 	result.texture=texture;
 	result.view = position.xyz - r_data.cam_pos.xyz;
 	result.position = r_data.proj * r_data.view * position;
