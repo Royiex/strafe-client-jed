@@ -227,7 +227,7 @@ impl strafe_client::framework::Example for Skybox {
 		let mut modeldatas = Vec::<ModelData>::new();
 		let ground=obj::ObjData{
 			position: vec![[-1.0,0.0,-1.0],[1.0,0.0,-1.0],[1.0,0.0,1.0],[-1.0,0.0,1.0]],
-			texture: vec![[-1.0,-1.0],[1.0,-1.0],[1.0,1.0],[-1.0,1.0]],
+			texture: vec![[-10.0,-10.0],[10.0,-10.0],[10.0,10.0],[-10.0,10.0]],
 			normal: vec![[0.0,1.0,0.0]],
 			objects: vec![obj::Object{
 				name: "Ground Object".to_owned(),
