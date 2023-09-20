@@ -229,7 +229,6 @@ impl strafe_client::framework::Example for Skybox {
 			walk_accel: 90.0,
 			mv: 2.7,
 			grounded: false,
-			jump_trying: false,
 			walkspeed: 18.0,
 			contacts: std::collections::HashSet::new(),
 			models_cringe_clone: modeldatas.iter().map(|m|strafe_client::body::Model::new(m.transform)).collect(),
