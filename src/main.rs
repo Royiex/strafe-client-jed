@@ -262,7 +262,7 @@ impl strafe_client::framework::Example for Skybox {
 			],
 		});
 		let model_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-			label: None,
+			label: Some("Model"),
 			entries: &[
 				wgpu::BindGroupLayoutEntry {
 					binding: 0,
