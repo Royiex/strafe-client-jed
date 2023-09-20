@@ -119,7 +119,6 @@ pub struct Skybox {
 	physics: strafe_client::body::PhysicsState,
 	sky_pipeline: wgpu::RenderPipeline,
 	entity_pipeline: wgpu::RenderPipeline,
-	ground_pipeline: wgpu::RenderPipeline,
 	main_bind_group: wgpu::BindGroup,
 	camera_buf: wgpu::Buffer,
 	models: Vec<ModelGraphics>,
@@ -159,8 +158,7 @@ fn get_transform_uniform_data(transform:&glam::Mat4) -> [f32; 4*4] {
 	raw
 }
 
-fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,source:&[u8]){
-	let data = obj::ObjData::load_buf(&source[..]).unwrap();
+fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,data:obj::ObjData){
 	let mut vertices = Vec::new();
 	let mut vertex_index = std::collections::HashMap::<obj::IndexTuple,u16>::new();
 	for object in data.objects {
@@ -223,12 +221,34 @@ impl strafe_client::framework::Example for Skybox {
 		queue: &wgpu::Queue,
 	) -> Self {
 		let mut modeldatas = Vec::<ModelData>::new();
-		add_obj(device,& mut modeldatas,include_bytes!("../models/teslacyberv3.0.obj"));
-		add_obj(device,& mut modeldatas,include_bytes!("../models/suzanne.obj"));
-		add_obj(device,& mut modeldatas,include_bytes!("../models/teapot.obj"));
+		let ground=obj::ObjData{
+			position: vec![[-1.0,0.0,-1.0],[1.0,0.0,-1.0],[1.0,0.0,1.0],[-1.0,0.0,1.0]],
+			texture: vec![[-1.0,-1.0],[1.0,-1.0],[1.0,1.0],[-1.0,1.0]],
+			normal: vec![[0.0,1.0,0.0]],
+			objects: vec![obj::Object{
+				name: "Ground Object".to_owned(),
+				groups: vec![obj::Group{
+					name: "Ground Group".to_owned(),
+					index: 0,
+					material: None,
+					polys: vec![obj::SimplePolygon(vec![
+						obj::IndexTuple(0,Some(0),Some(0)),
+						obj::IndexTuple(1,Some(1),Some(0)),
+						obj::IndexTuple(2,Some(2),Some(0)),
+						obj::IndexTuple(3,Some(3),Some(0)),
+					])]
+				}]
+			}],
+			material_libs: Vec::new(),
+		};
+		add_obj(device,& mut modeldatas,obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap());
+		add_obj(device,& mut modeldatas,obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap());
+		add_obj(device,& mut modeldatas,obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap());
+		add_obj(device,& mut modeldatas,ground);
 		println!("models.len = {:?}", modeldatas.len());
 		modeldatas[1].transform=glam::Mat4::from_translation(glam::vec3(10.,5.,10.));
 		modeldatas[2].transform=glam::Mat4::from_translation(glam::vec3(-10.,5.,10.));
+		modeldatas[3].transform=glam::Mat4::from_translation(glam::vec3(0.,-10.,0.))*glam::Mat4::from_scale(glam::vec3(160.0, 1.0, 160.0));
 
 		let main_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: None,
@@ -412,33 +432,6 @@ impl strafe_client::framework::Example for Skybox {
 			multisample: wgpu::MultisampleState::default(),
 			multiview: None,
 		});
-		let ground_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-			label: Some("Ground"),
-			layout: Some(&pipeline_layout),
-			vertex: wgpu::VertexState {
-				module: &shader,
-				entry_point: "vs_ground",
-				buffers: &[],
-			},
-			fragment: Some(wgpu::FragmentState {
-				module: &shader,
-				entry_point: "fs_ground",
-				targets: &[Some(config.view_formats[0].into())],
-			}),
-			primitive: wgpu::PrimitiveState {
-				front_face: wgpu::FrontFace::Cw,
-				..Default::default()
-			},
-			depth_stencil: Some(wgpu::DepthStencilState {
-				format: Self::DEPTH_FORMAT,
-				depth_write_enabled: true,
-				depth_compare: wgpu::CompareFunction::LessEqual,
-				stencil: wgpu::StencilState::default(),
-				bias: wgpu::DepthBiasState::default(),
-			}),
-			multisample: wgpu::MultisampleState::default(),
-			multiview: None,
-		});
 
 		let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
 			label: None,
@@ -550,7 +543,6 @@ impl strafe_client::framework::Example for Skybox {
 			physics,
 			sky_pipeline,
 			entity_pipeline,
-			ground_pipeline,
 			main_bind_group,
 			camera_buf,
 			models,
@@ -734,11 +726,6 @@ impl strafe_client::framework::Example for Skybox {
 					rpass.draw_indexed(0..entity.index_count, 0, 0..1);
 				}
 			}
-
-			rpass.set_pipeline(&self.ground_pipeline);
-			//rpass.set_index_buffer(&[0u16,1,2,1,2,3][..] as wgpu::BufferSlice, wgpu::IndexFormat::Uint16);
-			//rpass.draw_indexed(0..4, 0, 0..1);
-			rpass.draw(0..6, 0..1);
 
 			rpass.set_pipeline(&self.sky_pipeline);
 			rpass.draw(0..3, 0..1);
