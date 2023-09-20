@@ -122,9 +122,9 @@ impl MouseInterpolationState {
 				let m0=self.mouse0.as_i64vec2();
 				let m1=self.mouse1.as_i64vec2();
 				//these are deltas
-				let t1t=(self.time1-time) as i64;
-				let tt0=(time-self.time0) as i64;
 				let dt=(self.time1-self.time0) as i64;
+				let t1t=(self.time1-time).clamp(0,dt) as i64;
+				let tt0=(time-self.time0).clamp(0,dt) as i64;
 				((m0*t1t+m1*tt0)/dt).as_ivec2()
 			}
 		}
