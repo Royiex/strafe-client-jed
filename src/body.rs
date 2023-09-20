@@ -4,11 +4,9 @@ use crate::{instruction::{InstructionEmitter, InstructionConsumer, TimedInstruct
 pub enum PhysicsInstruction {
 	CollisionStart(RelativeCollision),
 	CollisionEnd(RelativeCollision),
-	SetControlDir(glam::Vec3),
 	StrafeTick,
 	Jump,
-	SetWalkTargetVelocity(glam::Vec3),
-	RefreshWalkTarget,
+	RefreshWalkTarget,//this could be a helper function instead of an instruction
 	ReachWalkTargetVelocity,
 	// Water,
 	// Spawn(
@@ -16,6 +14,9 @@ pub enum PhysicsInstruction {
 	// 	bool,//true = Trigger; false = teleport
 	// 	bool,//true = Force
 	// )
+	//Both of these conditionally activate RefreshWalkTarget (by doing what SetWalkTargetVelocity used to do and then flagging it)
+	MoveMouse(glam::IVec2),
+	SetControls(u32,u32),//can activate Jump
 }
 
 pub struct Body {
@@ -51,34 +52,35 @@ pub enum MoveRestriction {
 	Ladder,//multiple ladders how
 }
 
-enum MouseInterpolation {
-	First,//just checks the last value
-	Lerp,//lerps between
-}
-
+/*
 enum InputInstruction {
-	MoveMouse(glam::IVec2),
-	Jump(bool),
 }
-
 struct InputState {
-	controls: u32,
-	mouse_interpolation: MouseInterpolation,
-	time: TIME,
 }
-
 impl InputState {
 	pub fn get_control(&self,control:u32) -> bool {
 		self.controls&control!=0
 	}
-	pub fn process_instruction(&mut self,ins:InputInstruction){
-		match ins {
-			InputInstruction::MoveMouse(m) => todo!("set mouse_interpolation"),
-			InputInstruction::Jump(b) => todo!("how does info about style modifiers get here"),
-		}
+}
+impl crate::instruction::InstructionEmitter<InputInstruction> for InputState{
+	fn next_instruction(&self, time_limit:crate::body::TIME) -> Option<TimedInstruction<InputInstruction>> {
+	    //this is polled by PhysicsState for actions like Jump
+	    //no, it has to be the other way around. physics is run up until the jump instruction, and then the jump instruction is pushed.
+	    self.queue.get(0)
 	}
 }
+impl crate::instruction::InstructionConsumer<InputInstruction> for InputState{
+	fn process_instruction(&mut self,ins:TimedInstruction<InputInstruction>){
+		//add to queue
+		self.queue.push(ins);
+	}
+}
+*/
 
+enum MouseInterpolation {
+	First,//just checks the last value
+	Lerp,//lerps between
+}
 pub struct MouseInterpolationState {
 	interpolation: MouseInterpolation,
 	time0: TIME,
@@ -130,6 +132,64 @@ impl WalkState {
 	}
 }
 
+// Note: we use the Y=up coordinate space in this example.
+pub struct Camera {
+	offset: glam::Vec3,
+	angles: glam::Vec3,
+	//punch: glam::Vec3,
+	//punch_velocity: glam::Vec3,
+	fov: glam::Vec2,//slope
+	sensitivity: glam::Vec2,
+}
+
+impl Camera {
+	fn from_offset(offset:glam::Vec3,aspect:f32) -> Self {
+		Self{
+		    offset,
+		    angles: glam::Vec3::ZERO,
+		    fov: glam::vec2(aspect,1.0),
+		    sensitivity: glam::vec2(1.0/2048.0,1.0/2048.0),
+		}
+	}
+}
+
+const CONTROL_MOVEFORWARD:u32 = 0b00000001;
+const CONTROL_MOVEBACK:u32 = 0b00000010;
+const CONTROL_MOVERIGHT:u32 = 0b00000100;
+const CONTROL_MOVELEFT:u32 = 0b00001000;
+const CONTROL_MOVEUP:u32 = 0b00010000;
+const CONTROL_MOVEDOWN:u32 = 0b00100000;
+const CONTROL_JUMP:u32 = 0b01000000;
+const CONTROL_ZOOM:u32 = 0b10000000;
+
+const FORWARD_DIR:glam::Vec3 = glam::Vec3::new(0.0,0.0,-1.0);
+const RIGHT_DIR:glam::Vec3 = glam::Vec3::new(1.0,0.0,0.0);
+const UP_DIR:glam::Vec3 = glam::Vec3::new(0.0,1.0,0.0);
+
+fn get_control_dir(controls: u32) -> glam::Vec3{
+	//don't get fancy just do it
+	let mut control_dir:glam::Vec3 = glam::Vec3::new(0.0,0.0,0.0);
+	if controls & CONTROL_MOVEFORWARD == CONTROL_MOVEFORWARD {
+		control_dir+=FORWARD_DIR;
+	}
+	if controls & CONTROL_MOVEBACK == CONTROL_MOVEBACK {
+		control_dir+=-FORWARD_DIR;
+	}
+	if controls & CONTROL_MOVELEFT == CONTROL_MOVELEFT {
+		control_dir+=-RIGHT_DIR;
+	}
+	if controls & CONTROL_MOVERIGHT == CONTROL_MOVERIGHT {
+		control_dir+=RIGHT_DIR;
+	}
+	if controls & CONTROL_MOVEUP == CONTROL_MOVEUP {
+		control_dir+=UP_DIR;
+	}
+	if controls & CONTROL_MOVEDOWN == CONTROL_MOVEDOWN {
+		control_dir+=-UP_DIR;
+	}
+	return control_dir
+}
+
 pub struct PhysicsState {
 	pub body: Body,
 	pub hitbox_halfsize: glam::Vec3,
@@ -137,10 +197,10 @@ pub struct PhysicsState {
 	//pub intersections: Vec<ModelId>,
 	//temp
 	pub models_cringe_clone: Vec<Model>,
-	pub temp_control_dir: glam::Vec3,
 	//camera must exist in state because wormholes modify the camera, also camera punch
-	//pub camera: Camera,
-	//pub mouse_interpolation: MouseInterpolationState,
+	pub camera: Camera,
+	pub mouse_interpolation: MouseInterpolationState,
+	pub controls: u32,
 	pub time: TIME,
 	pub strafe_tick_num: TIME,
 	pub strafe_tick_den: TIME,
@@ -353,8 +413,6 @@ impl PhysicsState {
 	pub fn run(&mut self, time_limit:TIME){
 		//prepare is ommitted - everything is done via instructions.
 		while let Some(instruction) = self.next_instruction(time_limit) {//collect
-			//advance
-			//self.advance_time(instruction.time);
 			//process
 			self.process_instruction(instruction);
 			//write hash lol
