@@ -605,7 +605,6 @@ impl strafe_client::framework::Example for GraphicsData {
 	fn device_event(&mut self, event: winit::event::DeviceEvent) {
 		//there's no way this is the best way get a timestamp.
 		let time=self.start_time.elapsed().as_nanos() as i64;
-		self.physics.run(time);//call it a day
 		match event {
 			winit::event::DeviceEvent::Key(winit::event::KeyboardInput {
 				state,
@@ -629,6 +628,7 @@ impl strafe_client::framework::Example for GraphicsData {
 					_ => None,
 				}
 				{
+					self.physics.run(time);
 					self.physics.process_instruction(TimedInstruction{
 						time,
 						instruction:PhysicsInstruction::Input(input_instruction),
@@ -638,6 +638,9 @@ impl strafe_client::framework::Example for GraphicsData {
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine
 			} => {
+				//do not step the physics because the mouse polling rate is higher than the physics can run.
+				//essentially the previous input will be overwritten until a true step runs
+				//which is fine because they run all the time.
 				self.physics.process_instruction(TimedInstruction{
 					time,
 					instruction:PhysicsInstruction::Input(InputInstruction::MoveMouse(glam::ivec2(delta.0 as i32,delta.1 as i32))),
@@ -648,6 +651,7 @@ impl strafe_client::framework::Example for GraphicsData {
 			} => {
 				println!("mousewheel{:?}",delta);
 				if true{//self.physics.use_scroll
+					self.physics.run(time);
 					self.physics.process_instruction(TimedInstruction{
 						time,
 						instruction:PhysicsInstruction::Input(InputInstruction::Jump(true)),//activates the immediate jump path, but the style modifier prevents controls&CONTROL_JUMP bit from being set to auto jump
