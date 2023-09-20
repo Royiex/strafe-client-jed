@@ -1,12 +1,10 @@
 use std::future::Future;
 #[cfg(target_arch = "wasm32")]
 use std::str::FromStr;
-#[cfg(not(target_arch = "wasm32"))]
-use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
 use winit::{
-	event::{self, WindowEvent},
+	event::{self, WindowEvent, DeviceEvent},
 	event_loop::{ControlFlow, EventLoop},
 };
 
@@ -54,7 +52,7 @@ pub trait Example: 'static + Sized {
 		queue: &wgpu::Queue,
 	);
 	fn update(&mut self, device: &wgpu::Device, event: WindowEvent);
-	fn move_mouse(&mut self, delta: (f64,f64));
+	fn device_event(&mut self, event: DeviceEvent);
 	fn render(
 		&mut self,
 		view: &wgpu::TextureView,
@@ -350,13 +348,10 @@ fn start<E: Example>(
 				}
 			},
 			event::Event::DeviceEvent {
-				event:
-					winit::event::DeviceEvent::MouseMotion {
-						delta,
-					},
+				event,
 				..
 			} => {
-				example.move_mouse(delta);
+				example.device_event(event);
 			},
 			event::Event::RedrawRequested(_) => {
 
