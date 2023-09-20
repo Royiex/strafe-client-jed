@@ -472,6 +472,7 @@ impl PhysicsState {
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Left);
+						break;
 					}
 				}
 				for t in zeroes2(mesh0.min.x-mesh1.max.x,v.x,0.5*a.x) {
@@ -484,6 +485,7 @@ impl PhysicsState {
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Right);
+						break;
 					}
 				}
 			},
@@ -515,6 +517,7 @@ impl PhysicsState {
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Bottom);
+						break;
 					}
 				}
 				for t in zeroes2(mesh0.min.y-mesh1.max.y,v.y,0.5*a.y) {
@@ -527,6 +530,7 @@ impl PhysicsState {
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Top);
+						break;
 					}
 				}
 			},
@@ -558,6 +562,7 @@ impl PhysicsState {
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Front);
+						break;
 					}
 				}
 				for t in zeroes2(mesh0.min.z-mesh1.max.z,v.z,0.5*a.z) {
@@ -570,6 +575,7 @@ impl PhysicsState {
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Back);
+						break;
 					}
 				}
 			},
@@ -617,6 +623,7 @@ impl PhysicsState {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Left);
+					break;
 				}
 			}
 		}
@@ -632,6 +639,7 @@ impl PhysicsState {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Right);
+					break;
 				}
 			}
 		}
@@ -648,6 +656,7 @@ impl PhysicsState {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Bottom);
+					break;
 				}
 			}
 		}
@@ -663,6 +672,7 @@ impl PhysicsState {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Top);
+					break;
 				}
 			}
 		}
@@ -679,6 +689,7 @@ impl PhysicsState {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Front);
+					break;
 				}
 			}
 		}
@@ -694,6 +705,7 @@ impl PhysicsState {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Back);
+					break;
 				}
 			}
 		}
