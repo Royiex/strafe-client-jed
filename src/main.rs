@@ -111,6 +111,13 @@ impl Camera {
 		raw
 	}
 }
+pub struct GraphicsSamplers{
+	repeat: wgpu::Sampler,
+}
+
+pub struct GraphicsBindGroupLayouts{
+	model: wgpu::BindGroupLayout,
+}
 
 pub struct GraphicsBindGroups {
 	camera: wgpu::BindGroup,
@@ -128,6 +135,9 @@ pub struct GraphicsData {
 	physics: strafe_client::body::PhysicsState,
 	pipelines: GraphicsPipelines,
 	bind_groups: GraphicsBindGroups,
+	bind_group_layouts: GraphicsBindGroupLayouts,
+	samplers: GraphicsSamplers,
+	temp_squid_texture_view: wgpu::TextureView,
 	camera_buf: wgpu::Buffer,
 	models: Vec<ModelGraphics>,
 	depth_view: wgpu::TextureView,
@@ -158,6 +168,100 @@ impl GraphicsData {
 		});
 
 		depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
+	}
+
+	fn generate_modeldatas_roblox<R: std::io::Read>(&self,input:R) -> Vec<ModelData>{
+		let mut modeldatas=generate_modeldatas(self.handy_unit_cube.clone());
+		match strafe_client::load_roblox::get_objects(input, "BasePart") {
+			Ok(objects)=>{
+				for object in objects.iter() {
+					if let (
+							Some(rbx_dom_weak::types::Variant::CFrame(cf)),
+							Some(rbx_dom_weak::types::Variant::Vector3(size)),
+							Some(rbx_dom_weak::types::Variant::Float32(transparency)),
+						) = (
+							object.properties.get("CFrame"),
+							object.properties.get("Size"),
+							object.properties.get("Transparency"),
+						)
+					{
+						if *transparency==1.0 {
+							continue;
+						}
+						modeldatas[0].transforms.push(
+							glam::Mat4::from_translation(
+								glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
+							)
+							* glam::Mat4::from_mat3(
+								glam::Mat3::from_cols(
+									glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
+									glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
+									glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
+								),
+							)
+							* glam::Mat4::from_scale(
+								glam::Vec3::new(size.x,size.y,size.z)/2.0
+							)
+						)
+					}
+				}
+			},
+			Err(e) => println!("lmao err {:?}", e),
+		}
+		modeldatas
+	}
+	fn generate_model_graphics(&mut self,device:&wgpu::Device,mut modeldatas:Vec<ModelData>){
+		//drain the modeldata vec so entities can be /moved/ to models.entities
+		self.models.reserve(modeldatas.len());
+		for (i,modeldata) in modeldatas.drain(..).enumerate() {
+			let model_uniforms = get_transform_uniform_data(&modeldata.transforms);
+			let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+				label: Some(format!("ModelGraphics{}",i).as_str()),
+				contents: bytemuck::cast_slice(&model_uniforms),
+				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+			});
+			let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+				layout: &self.bind_group_layouts.model,
+				entries: &[
+					wgpu::BindGroupEntry {
+						binding: 0,
+						resource: model_buf.as_entire_binding(),
+					},
+					wgpu::BindGroupEntry {
+						binding: 1,
+						resource: wgpu::BindingResource::TextureView(&self.temp_squid_texture_view),
+					},
+					wgpu::BindGroupEntry {
+						binding: 2,
+						resource: wgpu::BindingResource::Sampler(&self.samplers.repeat),
+					},
+				],
+				label: Some(format!("ModelGraphics{}",i).as_str()),
+			});
+			let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+				label: Some("Vertex"),
+				contents: bytemuck::cast_slice(&modeldata.vertices),
+				usage: wgpu::BufferUsages::VERTEX,
+			});
+			//all of these are being moved here
+			self.models.push(ModelGraphics{
+				transforms:modeldata.transforms,
+				vertex_buf,
+				entities: modeldata.entities.iter().map(|indices|{
+					let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+						label: Some("Index"),
+						contents: bytemuck::cast_slice(&indices),
+						usage: wgpu::BufferUsages::INDEX,
+					});
+					Entity {
+						index_buf,
+						index_count: indices.len() as u32,
+					}
+				}).collect(),
+				bind_group: model_bind_group,
+				model_buf,
+			})
+		}
 	}
 }
 
@@ -551,58 +655,6 @@ impl strafe_client::framework::Example for GraphicsData {
 			})
 		};
 
-		//drain the modeldata vec so entities can be /moved/ to models.entities
-		let mut models = Vec::<ModelGraphics>::with_capacity(modeldatas.len());
-		for (i,modeldata) in modeldatas.drain(..).enumerate() {
-			let model_uniforms = get_transform_uniform_data(&modeldata.transforms);
-			let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some(format!("ModelGraphics{}",i).as_str()),
-				contents: bytemuck::cast_slice(&model_uniforms),
-				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-			});
-			let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-				layout: &model_bind_group_layout,
-				entries: &[
-					wgpu::BindGroupEntry {
-						binding: 0,
-						resource: model_buf.as_entire_binding(),
-					},
-					wgpu::BindGroupEntry {
-						binding: 1,
-						resource: wgpu::BindingResource::TextureView(&squid_texture_view),
-					},
-					wgpu::BindGroupEntry {
-						binding: 2,
-						resource: wgpu::BindingResource::Sampler(&repeat_sampler),
-					},
-				],
-				label: Some(format!("ModelGraphics{}",i).as_str()),
-			});
-			let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some("Vertex"),
-				contents: bytemuck::cast_slice(&modeldata.vertices),
-				usage: wgpu::BufferUsages::VERTEX,
-			});
-			//all of these are being moved here
-			models.push(ModelGraphics{
-				transforms:modeldata.transforms,
-				vertex_buf,
-				entities: modeldata.entities.iter().map(|indices|{
-					let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-						label: Some("Index"),
-						contents: bytemuck::cast_slice(&indices),
-						usage: wgpu::BufferUsages::INDEX,
-					});
-					Entity {
-						index_buf,
-						index_count: indices.len() as u32,
-					}
-				}).collect(),
-				bind_group: model_bind_group,
-				model_buf,
-			})
-		}
-
 		let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 			label: None,
 			bind_group_layouts: &[
@@ -706,7 +758,7 @@ impl strafe_client::framework::Example for GraphicsData {
 
 		let depth_view = Self::create_depth_texture(config, device);
 
-		GraphicsData {
+		let mut graphics=GraphicsData {
 			handy_unit_cube:unit_cube,
 			start_time: Instant::now(),
 			camera,
@@ -720,15 +772,35 @@ impl strafe_client::framework::Example for GraphicsData {
 				skybox_texture:skybox_texture_bind_group,
 			},
 			camera_buf,
-			models,
+			models: Vec::new(),
 			depth_view,
 			staging_belt: wgpu::util::StagingBelt::new(0x100),
-		}
+			bind_group_layouts: GraphicsBindGroupLayouts { model: model_bind_group_layout },
+			samplers: GraphicsSamplers { repeat: repeat_sampler },
+			temp_squid_texture_view: squid_texture_view,
+		};
+
+		graphics.generate_model_graphics(&device,modeldatas);
+
+		return graphics;
 	}
 
 	#[allow(clippy::single_match)]
-	fn update(&mut self, event: winit::event::WindowEvent) {
+	fn update(&mut self, device: &wgpu::Device, event: winit::event::WindowEvent) {
+		//nothing atm
 		match event {
+			winit::event::WindowEvent::DroppedFile(path) => {
+				println!("opening file: {:?}", &path);
+				//oh boy! let's load the map!
+				if let Ok(file)=std::fs::File::open(path){
+					let input = std::io::BufReader::new(file);
+					let modeldatas=self.generate_modeldatas_roblox(input);
+					self.generate_model_graphics(device,modeldatas);
+					//also physics
+				}else{
+					println!("Could not open file");
+				}
+			},
 			winit::event::WindowEvent::KeyboardInput {
 				input:
 					winit::event::KeyboardInput {
