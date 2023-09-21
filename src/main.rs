@@ -78,6 +78,50 @@ impl GraphicsData {
 
 		depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
 	}
+
+	fn generate_modeldatas_roblox<R: std::io::Read>(&self,input:R) -> Vec<ModelData>{
+		let mut modeldatas=generate_modeldatas(self.handy_unit_cube.clone());
+		match strafe_client::load_roblox::get_objects(input, "BasePart") {
+			Ok(objects)=>{
+				for object in objects.iter() {
+					if let (
+							Some(rbx_dom_weak::types::Variant::CFrame(cf)),
+							Some(rbx_dom_weak::types::Variant::Vector3(size)),
+							Some(rbx_dom_weak::types::Variant::Float32(transparency)),
+						) = (
+							object.properties.get("CFrame"),
+							object.properties.get("Size"),
+							object.properties.get("Transparency"),
+						)
+					{
+						if *transparency==1.0 {
+							continue;
+						}
+						modeldatas[0].transforms.push(
+							glam::Mat4::from_translation(
+								glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
+							)
+							* glam::Mat4::from_mat3(
+								glam::Mat3::from_cols(
+									glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
+									glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
+									glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
+								),
+							)
+							* glam::Mat4::from_scale(
+								glam::Vec3::new(size.x,size.y,size.z)/2.0
+							)
+						)
+					}
+				}
+			},
+			Err(e) => println!("lmao err {:?}", e),
+		}
+		modeldatas
+	}
+	fn generate_model_graphics(&mut self,modeldatas:Vec<ModelData>){
+		//
+	}
 }
 
 fn get_transform_uniform_data(transforms:&Vec<glam::Mat4>) -> Vec<f32> {
@@ -656,6 +700,20 @@ impl strafe_client::framework::Example for GraphicsData {
 	#[allow(clippy::single_match)]
 	fn update(&mut self, event: winit::event::WindowEvent) {
 		//nothing atm
+		match event {
+			winit::event::WindowEvent::DroppedFile(path) => {
+				//oh boy! let's load the map!
+				if let Ok(file)=std::fs::File::open(path){
+					let input = std::io::BufReader::new(file);
+					let modeldatas=self.generate_modeldatas_roblox(input);
+					self.generate_model_graphics(modeldatas);
+					//also physics
+				}else{
+					println!("Could not open file");
+				}
+			},
+			_=>(),
+		}
 	}
 
 	fn device_event(&mut self, event: winit::event::DeviceEvent) {
