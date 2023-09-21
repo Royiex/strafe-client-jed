@@ -18,11 +18,10 @@ struct Entity {
 	index_buf: wgpu::Buffer,
 }
 
-//temp?
 struct ModelData {
 	transforms: Vec<glam::Mat4>,
-	vertex_buf: wgpu::Buffer,
-	entities: Vec<Entity>,
+	vertices: Vec<Vertex>,
+	entities: Vec<Vec<u16>>,
 }
 
 struct ModelGraphics {
@@ -52,6 +51,7 @@ pub struct GraphicsData {
 	models: Vec<ModelGraphics>,
 	depth_view: wgpu::TextureView,
 	staging_belt: wgpu::util::StagingBelt,
+	handy_unit_cube: obj::ObjData,
 }
 
 impl GraphicsData {
@@ -78,6 +78,52 @@ impl GraphicsData {
 
 		depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
 	}
+
+	fn generate_modeldatas_roblox(&self,input:std::io::BufReader<&[u8]>) -> Vec<ModelData>{
+		let mut modeldata=generate_modeldatas(self.handy_unit_cube.clone())[0];
+		match strafe_client::load_roblox::get_objects(input, "BasePart") {
+			Ok(objects)=>{
+				for object in objects.iter() {
+					if let (
+							Some(rbx_dom_weak::types::Variant::CFrame(cf)),
+							Some(rbx_dom_weak::types::Variant::Vector3(size)),
+							Some(rbx_dom_weak::types::Variant::Float32(transparency)),
+							Some(rbx_dom_weak::types::Variant::Color3(color3)),
+						) = (
+							object.properties.get("CFrame"),
+							object.properties.get("Size"),
+							object.properties.get("Transparency"),
+							object.properties.get("Color"),
+						)
+					{
+						if *transparency==1.0 {
+							continue;
+						}
+						modeldata.transforms.push(
+							glam::Mat4::from_translation(
+								glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
+							)
+							* glam::Mat4::from_mat3(
+								glam::Mat3::from_cols(
+									glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
+									glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
+									glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
+								),
+							)
+							* glam::Mat4::from_scale(
+								glam::Vec3::new(size.x,size.y,size.z)/2.0
+							)
+						)
+					}
+				}
+			},
+			Err(e) => println!("lmao err {:?}", e),
+		}
+		vec![modeldata]
+	}
+	fn generate_model_graphics(&mut self,modeldatas:Vec<ModelData>){
+		//
+	}
 }
 
 fn get_transform_uniform_data(transforms:&Vec<glam::Mat4>) -> Vec<f32> {
@@ -90,11 +136,12 @@ fn get_transform_uniform_data(transforms:&Vec<glam::Mat4>) -> Vec<f32> {
 	raw
 }
 
-fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,data:obj::ObjData){
+fn generate_modeldatas<'a>(data:obj::ObjData) -> &'a mut Vec<ModelData>{
+	let mut modeldatas=Vec::new();
 	let mut vertices = Vec::new();
 	let mut vertex_index = std::collections::HashMap::<obj::IndexTuple,u16>::new();
 	for object in data.objects {
-		let mut entities = Vec::<Entity>::new();
+		let mut entities = Vec::new();
 		for group in object.groups {
 			let mut indices = Vec::new();
 			for poly in group.polys {
@@ -116,27 +163,15 @@ fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,data:obj::ObjDat
 					}
 				}
 			}
-			let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some("Index"),
-				contents: bytemuck::cast_slice(&indices),
-				usage: wgpu::BufferUsages::INDEX,
-			});
-			entities.push(Entity {
-				index_buf,
-				index_count: indices.len() as u32,
-			});
+			entities.push(indices);
 		}
-		let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-			label: Some("Vertex"),
-			contents: bytemuck::cast_slice(&vertices),
-			usage: wgpu::BufferUsages::VERTEX,
-		});
 		modeldatas.push(ModelData {
-			transforms: vec![glam::Mat4::default()],
-			vertex_buf,
+			transforms: vec![],
+			vertices,
 			entities,
-		})
+		});
 	}
+	&mut modeldatas
 }
 
 
@@ -167,7 +202,6 @@ impl strafe_client::framework::Example for GraphicsData {
 		device: &wgpu::Device,
 		queue: &wgpu::Queue,
 	) -> Self {
-		let mut modeldatas = Vec::<ModelData>::new();
 		let unit_cube=obj::ObjData{
 			position: vec![
 				[-1.,-1., 1.],//left bottom back
@@ -242,10 +276,11 @@ impl strafe_client::framework::Example for GraphicsData {
 			}],
 			material_libs: Vec::new(),
 		};
-		add_obj(device,& mut modeldatas,obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap());
-		add_obj(device,& mut modeldatas,obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap());
-		add_obj(device,& mut modeldatas,obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap());
-		add_obj(device,& mut modeldatas,unit_cube);
+		let mut modeldatas = Vec::<ModelData>::new();
+		modeldatas.append(generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap()));
+		modeldatas.append(generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap()));
+		modeldatas.append(generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap()));
+		modeldatas.append(generate_modeldatas(unit_cube.clone()));
 		println!("models.len = {:?}", modeldatas.len());
 		modeldatas[0].transforms[0]=glam::Mat4::from_translation(glam::vec3(10.,0.,-10.));
 		//quad monkeys
@@ -257,44 +292,6 @@ impl strafe_client::framework::Example for GraphicsData {
 		modeldatas[2].transforms[0]=glam::Mat4::from_translation(glam::vec3(-10.,5.,10.));
 		//ground
 		modeldatas[3].transforms[0]=glam::Mat4::from_translation(glam::vec3(0.,0.,0.))*glam::Mat4::from_scale(glam::vec3(160.0, 1.0, 160.0));
-
-		let input = std::io::BufReader::new(&include_bytes!("../maps/bhop_easyhop.rbxm")[..]);
-		match strafe_client::load_roblox::get_objects(input, "BasePart") {
-			Ok(objects)=>{
-				for object in objects.iter() {
-					if let (
-							Some(rbx_dom_weak::types::Variant::CFrame(cf)),
-							Some(rbx_dom_weak::types::Variant::Vector3(size)),
-							Some(rbx_dom_weak::types::Variant::Float32(transparency)),
-						) = (
-							object.properties.get("CFrame"),
-							object.properties.get("Size"),
-							object.properties.get("Transparency"),
-						)
-					{
-						if *transparency==1.0 {
-							continue;
-						}
-						modeldatas[3].transforms.push(
-							glam::Mat4::from_translation(
-								glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
-							)
-							* glam::Mat4::from_mat3(
-								glam::Mat3::from_cols(
-									glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
-									glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
-									glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
-								),
-							)
-							* glam::Mat4::from_scale(
-								glam::Vec3::new(size.x,size.y,size.z)/2.0
-							)
-						)
-					}
-				}
-			},
-			Err(e) => println!("lmao err {:?}", e),
-		}
 
 		let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: None,
@@ -555,11 +552,26 @@ impl strafe_client::framework::Example for GraphicsData {
 				],
 				label: Some(format!("ModelGraphics{}",i).as_str()),
 			});
+			let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+				label: Some("Vertex"),
+				contents: bytemuck::cast_slice(&modeldata.vertices),
+				usage: wgpu::BufferUsages::VERTEX,
+			});
 			//all of these are being moved here
 			models.push(ModelGraphics{
-				transforms: modeldata.transforms,
-				vertex_buf:modeldata.vertex_buf,
-				entities: modeldata.entities,
+				transforms:modeldata.transforms,
+				vertex_buf,
+				entities: modeldata.entities.iter().map(|indices|{
+					let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+						label: Some("Index"),
+						contents: bytemuck::cast_slice(&indices),
+						usage: wgpu::BufferUsages::INDEX,
+					});
+					Entity {
+						index_buf,
+						index_count: indices.len() as u32,
+					}
+				}).collect(),
 				bind_group: model_bind_group,
 				model_buf,
 			})
@@ -669,6 +681,7 @@ impl strafe_client::framework::Example for GraphicsData {
 		let depth_view = Self::create_depth_texture(config, device);
 
 		GraphicsData {
+			handy_unit_cube:unit_cube,
 			start_time: Instant::now(),
 			screen_size: (config.width,config.height),
 			physics,
@@ -690,6 +703,17 @@ impl strafe_client::framework::Example for GraphicsData {
 	#[allow(clippy::single_match)]
 	fn update(&mut self, event: winit::event::WindowEvent) {
 		//nothing atm
+		match event {
+			winit::event::WindowEvent::DroppedFile(path) => {
+				//oh boy! let's load the map!
+				let file=std::fs::File::open(path);
+				let input = std::io::BufReader::new(file);
+				let modeldatas=self.generate_modeldatas_roblox(input);
+				self.generate_model_graphics(modeldatas);
+				//also physics
+			},
+			_=>(),
+		}
 	}
 
 	fn device_event(&mut self, event: winit::event::DeviceEvent) {
