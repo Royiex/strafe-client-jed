@@ -119,8 +119,58 @@ impl GraphicsData {
 		}
 		modeldatas
 	}
-	fn generate_model_graphics(&mut self,modeldatas:Vec<ModelData>){
-		//
+	fn generate_model_graphics(&mut self,modeldatas:Vec<ModelData>)->Vec<ModelGraphics>{
+		let mut models=Vec::<ModelGraphics>::with_capacity(modeldatas.len());
+		for (i,modeldata) in modeldatas.drain(..).enumerate() {
+			let model_uniforms = get_transform_uniform_data(&modeldata.transforms);
+			let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+				label: Some(format!("ModelGraphics{}",i).as_str()),
+				contents: bytemuck::cast_slice(&model_uniforms),
+				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+			});
+			let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+				layout: &model_bind_group_layout,
+				entries: &[
+					wgpu::BindGroupEntry {
+						binding: 0,
+						resource: model_buf.as_entire_binding(),
+					},
+					wgpu::BindGroupEntry {
+						binding: 1,
+						resource: wgpu::BindingResource::TextureView(&squid_texture_view),
+					},
+					wgpu::BindGroupEntry {
+						binding: 2,
+						resource: wgpu::BindingResource::Sampler(&repeat_sampler),
+					},
+				],
+				label: Some(format!("ModelGraphics{}",i).as_str()),
+			});
+			let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+				label: Some("Vertex"),
+				contents: bytemuck::cast_slice(&modeldata.vertices),
+				usage: wgpu::BufferUsages::VERTEX,
+			});
+			//all of these are being moved here
+			models.push(ModelGraphics{
+				transforms:modeldata.transforms,
+				vertex_buf,
+				entities: modeldata.entities.iter().map(|indices|{
+					let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+						label: Some("Index"),
+						contents: bytemuck::cast_slice(&indices),
+						usage: wgpu::BufferUsages::INDEX,
+					});
+					Entity {
+						index_buf,
+						index_count: indices.len() as u32,
+					}
+				}).collect(),
+				bind_group: model_bind_group,
+				model_buf,
+			})
+		}
+		models
 	}
 }
 
@@ -526,56 +576,7 @@ impl strafe_client::framework::Example for GraphicsData {
 		};
 
 		//drain the modeldata vec so entities can be /moved/ to models.entities
-		let mut models = Vec::<ModelGraphics>::with_capacity(modeldatas.len());
-		for (i,modeldata) in modeldatas.drain(..).enumerate() {
-			let model_uniforms = get_transform_uniform_data(&modeldata.transforms);
-			let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some(format!("ModelGraphics{}",i).as_str()),
-				contents: bytemuck::cast_slice(&model_uniforms),
-				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-			});
-			let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-				layout: &model_bind_group_layout,
-				entries: &[
-					wgpu::BindGroupEntry {
-						binding: 0,
-						resource: model_buf.as_entire_binding(),
-					},
-					wgpu::BindGroupEntry {
-						binding: 1,
-						resource: wgpu::BindingResource::TextureView(&squid_texture_view),
-					},
-					wgpu::BindGroupEntry {
-						binding: 2,
-						resource: wgpu::BindingResource::Sampler(&repeat_sampler),
-					},
-				],
-				label: Some(format!("ModelGraphics{}",i).as_str()),
-			});
-			let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some("Vertex"),
-				contents: bytemuck::cast_slice(&modeldata.vertices),
-				usage: wgpu::BufferUsages::VERTEX,
-			});
-			//all of these are being moved here
-			models.push(ModelGraphics{
-				transforms:modeldata.transforms,
-				vertex_buf,
-				entities: modeldata.entities.iter().map(|indices|{
-					let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-						label: Some("Index"),
-						contents: bytemuck::cast_slice(&indices),
-						usage: wgpu::BufferUsages::INDEX,
-					});
-					Entity {
-						index_buf,
-						index_count: indices.len() as u32,
-					}
-				}).collect(),
-				bind_group: model_bind_group,
-				model_buf,
-			})
-		}
+		let mut models = self.generate_model_graphics(modeldatas);
 
 		let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 			label: None,
@@ -705,6 +706,7 @@ impl strafe_client::framework::Example for GraphicsData {
 		//nothing atm
 		match event {
 			winit::event::WindowEvent::DroppedFile(path) => {
+				println!("opening file: {:?}", &path);
 				//oh boy! let's load the map!
 				if let Ok(file)=std::fs::File::open(path){
 					let input = std::io::BufReader::new(file);
