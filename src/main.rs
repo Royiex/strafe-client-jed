@@ -10,6 +10,7 @@ struct Vertex {
 	pos: [f32; 3],
 	texture: [f32; 2],
 	normal: [f32; 3],
+	color: [f32; 4],
 }
 
 struct Entity {
@@ -17,14 +18,24 @@ struct Entity {
 	index_buf: wgpu::Buffer,
 }
 
+struct ModelInstance {
+	transform: glam::Mat4,
+	color: glam::Vec4,
+}
+
 struct ModelData {
-	transforms: Vec<glam::Mat4>,
+	instances: Vec<ModelInstance>,
 	vertices: Vec<Vertex>,
 	entities: Vec<Vec<u16>>,
 }
 
+impl ModelData {
+	const COLOR_FLOATS_WHITE: [f32;4] = [1.0,1.0,1.0,1.0];
+	const COLOR_VEC4_WHITE: glam::Vec4 = glam::vec4(1.0,1.0,1.0,1.0);
+}
+
 struct ModelGraphics {
-	transforms: Vec<glam::Mat4>,
+	instances: Vec<ModelInstance>,
 	vertex_buf: wgpu::Buffer,
 	entities: Vec<Entity>,
 	bind_group: wgpu::BindGroup,
@@ -171,7 +182,7 @@ impl GraphicsData {
 	}
 
 	fn generate_modeldatas_roblox<R: std::io::Read>(&self,input:R) -> Vec<ModelData>{
-		let mut modeldatas=generate_modeldatas(self.handy_unit_cube.clone());
+		let mut modeldatas=generate_modeldatas(self.handy_unit_cube.clone(),ModelData::COLOR_FLOATS_WHITE);
 		match strafe_client::load_roblox::get_objects(input, "BasePart") {
 			Ok(objects)=>{
 				for object in objects.iter() {
@@ -179,30 +190,33 @@ impl GraphicsData {
 							Some(rbx_dom_weak::types::Variant::CFrame(cf)),
 							Some(rbx_dom_weak::types::Variant::Vector3(size)),
 							Some(rbx_dom_weak::types::Variant::Float32(transparency)),
+							Some(rbx_dom_weak::types::Variant::Color3uint8(color3)),
 						) = (
 							object.properties.get("CFrame"),
 							object.properties.get("Size"),
 							object.properties.get("Transparency"),
+							object.properties.get("Color"),
 						)
 					{
 						if *transparency==1.0 {
 							continue;
 						}
-						modeldatas[0].transforms.push(
-							glam::Mat4::from_translation(
-								glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
-							)
-							* glam::Mat4::from_mat3(
-								glam::Mat3::from_cols(
-									glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
-									glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
-									glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
+						modeldatas[0].instances.push(ModelInstance {
+							transform:glam::Mat4::from_translation(
+									glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
+								)
+								* glam::Mat4::from_mat3(
+									glam::Mat3::from_cols(
+										glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
+										glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
+										glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
+									),
+								)
+								* glam::Mat4::from_scale(
+									glam::Vec3::new(size.x,size.y,size.z)/2.0
 								),
-							)
-							* glam::Mat4::from_scale(
-								glam::Vec3::new(size.x,size.y,size.z)/2.0
-							)
-						)
+							color: glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
+						})
 					}
 				}
 			},
@@ -214,7 +228,7 @@ impl GraphicsData {
 		//drain the modeldata vec so entities can be /moved/ to models.entities
 		self.models.reserve(modeldatas.len());
 		for (i,modeldata) in modeldatas.drain(..).enumerate() {
-			let model_uniforms = get_transform_uniform_data(&modeldata.transforms);
+			let model_uniforms = get_instances_buffer_data(&modeldata.instances);
 			let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 				label: Some(format!("ModelGraphics{}",i).as_str()),
 				contents: bytemuck::cast_slice(&model_uniforms),
@@ -245,7 +259,7 @@ impl GraphicsData {
 			});
 			//all of these are being moved here
 			self.models.push(ModelGraphics{
-				transforms:modeldata.transforms,
+				instances:modeldata.instances,
 				vertex_buf,
 				entities: modeldata.entities.iter().map(|indices|{
 					let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -265,17 +279,19 @@ impl GraphicsData {
 	}
 }
 
-fn get_transform_uniform_data(transforms:&Vec<glam::Mat4>) -> Vec<f32> {
-	let mut raw = Vec::with_capacity(4*4*transforms.len());
-	for (i,t) in transforms.iter().enumerate(){
-    	let mut v = raw.split_off(4*4*i);
-    	raw.extend_from_slice(&AsRef::<[f32; 4*4]>::as_ref(t)[..]);
+fn get_instances_buffer_data(instances:&Vec<ModelInstance>) -> Vec<f32> {
+	const SIZE: usize=4*4+4;//let size=std::mem::size_of::<ModelInstance>();
+	let mut raw = Vec::with_capacity(SIZE*instances.len());
+	for (i,mi) in instances.iter().enumerate(){
+    	let mut v = raw.split_off(SIZE*i);
+    	raw.extend_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&mi.transform)[..]);
+    	raw.extend_from_slice(AsRef::<[f32; 4]>::as_ref(&mi.color));
     	raw.append(&mut v);
 	}
 	raw
 }
 
-fn generate_modeldatas(data:obj::ObjData) -> Vec<ModelData>{
+fn generate_modeldatas(data:obj::ObjData,color:[f32;4]) -> Vec<ModelData>{
 	let mut modeldatas=Vec::new();
 	let mut vertices = Vec::new();
 	let mut vertex_index = std::collections::HashMap::<obj::IndexTuple,u16>::new();
@@ -297,6 +313,7 @@ fn generate_modeldatas(data:obj::ObjData) -> Vec<ModelData>{
 								pos: data.position[vert.0],
 								texture: data.texture[vert.1.unwrap()],
 								normal: data.normal[vert.2.unwrap()],
+								color,
 							});
 							vertex_index.insert(vert,i);
 							indices.push(i);
@@ -307,7 +324,7 @@ fn generate_modeldatas(data:obj::ObjData) -> Vec<ModelData>{
 			entities.push(indices);
 		}
 		modeldatas.push(ModelData {
-			transforms: vec![],
+			instances: Vec::new(),
 			vertices:vertices.clone(),
 			entities,
 		});
@@ -408,21 +425,42 @@ impl strafe_client::framework::Example for GraphicsData {
 			material_libs: Vec::new(),
 		};
 		let mut modeldatas = Vec::<ModelData>::new();
-		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap()));
-		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap()));
-		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap()));
-		modeldatas.append(&mut generate_modeldatas(unit_cube.clone()));
+		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
+		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
+		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
+		modeldatas.append(&mut generate_modeldatas(unit_cube.clone(),ModelData::COLOR_FLOATS_WHITE));
 		println!("models.len = {:?}", modeldatas.len());
-		modeldatas[0].transforms.push(glam::Mat4::from_translation(glam::vec3(10.,0.,-10.)));
+		modeldatas[0].instances.push(ModelInstance{
+			transform:glam::Mat4::from_translation(glam::vec3(10.,0.,-10.)),
+			color:ModelData::COLOR_VEC4_WHITE,
+		});
 		//quad monkeys
-		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(10.,5.,10.)));
-		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(20.,5.,10.)));
-		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(10.,5.,20.)));
-		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(20.,5.,20.)));
+		modeldatas[1].instances.push(ModelInstance{
+			transform:glam::Mat4::from_translation(glam::vec3(10.,5.,10.)),
+			color:ModelData::COLOR_VEC4_WHITE,
+		});
+		modeldatas[1].instances.push(ModelInstance{
+			transform:glam::Mat4::from_translation(glam::vec3(20.,5.,10.)),
+			color:glam::vec4(1.0,0.0,0.0,1.0),
+		});
+		modeldatas[1].instances.push(ModelInstance{
+			transform:glam::Mat4::from_translation(glam::vec3(10.,5.,20.)),
+			color:glam::vec4(0.0,1.0,0.0,1.0),
+		});
+		modeldatas[1].instances.push(ModelInstance{
+			transform:glam::Mat4::from_translation(glam::vec3(20.,5.,20.)),
+			color:glam::vec4(0.0,0.0,1.0,1.0),
+		});
 		//teapot
-		modeldatas[2].transforms.push(glam::Mat4::from_translation(glam::vec3(-10.,5.,10.)));
+		modeldatas[2].instances.push(ModelInstance{
+			transform:glam::Mat4::from_translation(glam::vec3(-10.,5.,10.)),
+			color:ModelData::COLOR_VEC4_WHITE,
+		});
 		//ground
-		modeldatas[3].transforms.push(glam::Mat4::from_translation(glam::vec3(0.,0.,0.))*glam::Mat4::from_scale(glam::vec3(160.0, 1.0, 160.0)));
+		modeldatas[3].instances.push(ModelInstance{
+			transform:glam::Mat4::from_translation(glam::vec3(0.,0.,0.))*glam::Mat4::from_scale(glam::vec3(160.0, 1.0, 160.0)),
+			color:ModelData::COLOR_VEC4_WHITE,
+		});
 
 		let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: None,
@@ -545,8 +583,8 @@ impl strafe_client::framework::Example for GraphicsData {
     		models: modeldatas.iter().map(|m|
     			//make aabb and run vertices to get realistic bounds
     			//this needs to be a function generate_model_physics
-    			m.transforms.iter().map(|t|
-    				strafe_client::body::ModelPhysics::new(*t)
+    			m.instances.iter().map(|t|
+    				strafe_client::body::ModelPhysics::new(t.transform)
 				)
 			).flatten().collect(),
     		walk: strafe_client::body::WalkState::new(),
@@ -716,7 +754,7 @@ impl strafe_client::framework::Example for GraphicsData {
 				buffers: &[wgpu::VertexBufferLayout {
 					array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
 					step_mode: wgpu::VertexStepMode::Vertex,
-					attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Float32x3],
+					attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Float32x3, 3 => Float32x4],
 				}],
 			},
 			fragment: Some(wgpu::FragmentState {
@@ -936,7 +974,7 @@ impl strafe_client::framework::Example for GraphicsData {
 			.copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
 		//This code only needs to run when the uniforms change
 		for model in self.models.iter() {
-			let model_uniforms = get_transform_uniform_data(&model.transforms);
+			let model_uniforms = get_instances_buffer_data(&model.instances);
 			self.staging_belt
 				.write_buffer(
 					&mut encoder,
@@ -985,7 +1023,7 @@ impl strafe_client::framework::Example for GraphicsData {
 
 				for entity in model.entities.iter() {
 					rpass.set_index_buffer(entity.index_buf.slice(..), wgpu::IndexFormat::Uint16);
-					rpass.draw_indexed(0..entity.index_count, 0, 0..model.transforms.len() as u32);
+					rpass.draw_indexed(0..entity.index_count, 0, 0..model.instances.len() as u32);
 				}
 			}
 

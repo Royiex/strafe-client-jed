@@ -41,14 +41,17 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
 	return result;
 }
 
+struct ModelInstance{
+	transform:mat4x4<f32>,
+	//texture_transform:mat3x3<f32>,
+	color:vec4<f32>,
+}
+//my fancy idea is to create a megatexture for each model that includes all the textures each intance will need
+//the texture transform then maps the texture coordinates to the location of the specific texture
 //group 1 is the model
 @group(1)
 @binding(0)
-var<storage> entity_transforms: array<mat4x4<f32>>;
-//entity_texture_transforms: mat3x3<f32>;
-//my fancy idea is to create a megatexture for each model that includes all the textures each intance will need
-//the texture transform then maps the texture coordinates to the location of the specific texture
-//how to do no texture?
+var<storage> model_instances: array<ModelInstance>;
 @group(1)
 @binding(1)
 var model_texture: texture_2d<f32>;
@@ -61,6 +64,7 @@ struct EntityOutputTexture {
 	@location(1) texture: vec2<f32>,
 	@location(2) normal: vec3<f32>,
 	@location(3) view: vec3<f32>,
+	@location(4) color: vec4<f32>,
 };
 @vertex
 fn vs_entity_texture(
@@ -68,11 +72,13 @@ fn vs_entity_texture(
 	@location(0) pos: vec3<f32>,
 	@location(1) texture: vec2<f32>,
 	@location(2) normal: vec3<f32>,
+	@location(3) color: vec4<f32>,
 ) -> EntityOutputTexture {
-	var position: vec4<f32> = entity_transforms[instance] * vec4<f32>(pos, 1.0);
+	var position: vec4<f32> = model_instances[instance].transform * vec4<f32>(pos, 1.0);
 	var result: EntityOutputTexture;
-	result.normal = (entity_transforms[instance] * vec4<f32>(normal, 0.0)).xyz;
-	result.texture=texture;//(entity_texture_transforms[instance] * vec3<f32>(texture, 1.0)).xy;
+	result.normal = (model_instances[instance].transform * vec4<f32>(normal, 0.0)).xyz;
+	result.texture=texture;//(model_instances[instance].texture_transform * vec3<f32>(texture, 1.0)).xy;
+	result.color=model_instances[instance].color * color;
 	result.view = position.xyz - camera.cam_pos.xyz;
 	result.position = camera.proj * camera.view * position;
 	return result;
@@ -98,7 +104,7 @@ fn fs_entity_texture(vertex: EntityOutputTexture) -> @location(0) vec4<f32> {
 	let d = dot(normal, incident);
 	let reflected = incident - 2.0 * d * normal;
 
-	let fragment_color = textureSample(model_texture, model_sampler, vertex.texture).rgb;
+	let fragment_color = textureSample(model_texture, model_sampler, vertex.texture)*vertex.color;
 	let reflected_color = textureSample(cube_texture, cube_sampler, reflected).rgb;
-	return vec4<f32>(mix(vec3<f32>(0.1) + 0.5 * reflected_color,fragment_color,1.0-pow(1.0-abs(d),2.0)), 1.0);
+	return mix(vec4<f32>(vec3<f32>(0.1) + 0.5 * reflected_color,1.0),fragment_color,1.0-pow(1.0-abs(d),2.0));
 }
