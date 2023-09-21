@@ -390,6 +390,7 @@ impl strafe_client::framework::Example for GraphicsData {
     		hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
 		};
 
+		//load textures
 		let device_features = device.features();
 
 		let skybox_format = if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC) {
@@ -462,6 +463,46 @@ impl strafe_client::framework::Example for GraphicsData {
 			dimension: Some(wgpu::TextureViewDimension::Cube),
 			..wgpu::TextureViewDescriptor::default()
 		});
+
+		//squid
+		let squid_texture_view={
+			let size = wgpu::Extent3d {
+				width: 1076,
+				height: 1076,
+				depth_or_array_layers: 1,
+			};
+
+			let layer_size = wgpu::Extent3d {
+				depth_or_array_layers: 1,
+				..size
+			};
+			let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
+
+			let bytes = &include_bytes!("../images/squid.dds")[..];
+
+			let image = ddsfile::Dds::read(&mut std::io::Cursor::new(&bytes)).unwrap();
+
+			let texture = device.create_texture_with_data(
+				queue,
+				&wgpu::TextureDescriptor {
+					size,
+					mip_level_count: max_mips,
+					sample_count: 1,
+					dimension: wgpu::TextureDimension::D2,
+					format: wgpu::TextureFormat::Bc7RgbaUnorm,
+					usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+					label: Some("Squid Texture"),
+					view_formats: &[],
+				},
+				&image.data,
+			);
+
+			texture.create_view(&wgpu::TextureViewDescriptor {
+				label: Some("Squid Texture View"),
+				dimension: Some(wgpu::TextureViewDimension::D2),
+				..wgpu::TextureViewDescriptor::default()
+			})
+		};
 
 		//drain the modeldata vec so entities can be /moved/ to models.entities
 		let mut models = Vec::<ModelGraphics>::with_capacity(modeldatas.len());
