@@ -132,6 +132,7 @@ pub struct GraphicsData {
 	models: Vec<ModelGraphics>,
 	depth_view: wgpu::TextureView,
 	staging_belt: wgpu::util::StagingBelt,
+	handy_unit_cube: obj::ObjData,
 }
 
 impl GraphicsData {
@@ -223,22 +224,76 @@ impl strafe_client::framework::Example for GraphicsData {
 		device: &wgpu::Device,
 		queue: &wgpu::Queue,
 	) -> Self {
-		let ground=obj::ObjData{
-			position: vec![[-1.0,0.0,-1.0],[1.0,0.0,-1.0],[1.0,0.0,1.0],[-1.0,0.0,1.0]],
-			texture: vec![[-10.0,-10.0],[10.0,-10.0],[10.0,10.0],[-10.0,10.0]],
-			normal: vec![[0.0,1.0,0.0]],
+		let unit_cube=obj::ObjData{
+			position: vec![
+				[-1.,-1., 1.],//left bottom back
+				[ 1.,-1., 1.],//right bottom back
+				[ 1., 1., 1.],//right top back
+				[-1., 1., 1.],//left top back
+				[-1., 1.,-1.],//left top front
+				[ 1., 1.,-1.],//right top front
+				[ 1.,-1.,-1.],//right bottom front
+				[-1.,-1.,-1.],//left bottom front
+			],
+			texture: vec![[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0]],
+			normal: vec![
+				[1.,0.,0.],//AabbFace::Right
+				[0.,1.,0.],//AabbFace::Top
+				[0.,0.,1.],//AabbFace::Back
+				[-1.,0.,0.],//AabbFace::Left
+				[0.,-1.,0.],//AabbFace::Bottom
+				[0.,0.,-1.],//AabbFace::Front
+			],
 			objects: vec![obj::Object{
-				name: "Ground Object".to_owned(),
+				name: "Unit Cube".to_owned(),
 				groups: vec![obj::Group{
-					name: "Ground Group".to_owned(),
+					name: "Cube Vertices".to_owned(),
 					index: 0,
 					material: None,
-					polys: vec![obj::SimplePolygon(vec![
-						obj::IndexTuple(0,Some(0),Some(0)),
-						obj::IndexTuple(1,Some(1),Some(0)),
-						obj::IndexTuple(2,Some(2),Some(0)),
-						obj::IndexTuple(3,Some(3),Some(0)),
-					])]
+					polys: vec![
+						// back (0, 0, 1)
+						obj::SimplePolygon(vec![
+							obj::IndexTuple(0,Some(0),Some(2)),
+							obj::IndexTuple(1,Some(1),Some(2)),
+							obj::IndexTuple(2,Some(2),Some(2)),
+							obj::IndexTuple(3,Some(3),Some(2)),
+						]),
+						// front (0, 0,-1)
+						obj::SimplePolygon(vec![
+							obj::IndexTuple(4,Some(0),Some(5)),
+							obj::IndexTuple(5,Some(1),Some(5)),
+							obj::IndexTuple(6,Some(2),Some(5)),
+							obj::IndexTuple(7,Some(3),Some(5)),
+						]),
+						// right (1, 0, 0)
+						obj::SimplePolygon(vec![
+							obj::IndexTuple(6,Some(0),Some(0)),
+							obj::IndexTuple(5,Some(1),Some(0)),
+							obj::IndexTuple(2,Some(2),Some(0)),
+							obj::IndexTuple(1,Some(3),Some(0)),
+						]),
+						// left (-1, 0, 0)
+						obj::SimplePolygon(vec![
+							obj::IndexTuple(0,Some(0),Some(3)),
+							obj::IndexTuple(3,Some(1),Some(3)),
+							obj::IndexTuple(4,Some(2),Some(3)),
+							obj::IndexTuple(7,Some(3),Some(3)),
+						]),
+						// top (0, 1, 0)
+						obj::SimplePolygon(vec![
+							obj::IndexTuple(5,Some(1),Some(1)),
+							obj::IndexTuple(4,Some(0),Some(1)),
+							obj::IndexTuple(3,Some(3),Some(1)),
+							obj::IndexTuple(2,Some(2),Some(1)),
+						]),
+						// bottom (0,-1, 0)
+						obj::SimplePolygon(vec![
+							obj::IndexTuple(1,Some(1),Some(4)),
+							obj::IndexTuple(0,Some(0),Some(4)),
+							obj::IndexTuple(7,Some(3),Some(4)),
+							obj::IndexTuple(6,Some(2),Some(4)),
+						]),
+					],
 				}]
 			}],
 			material_libs: Vec::new(),
@@ -247,7 +302,7 @@ impl strafe_client::framework::Example for GraphicsData {
 		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap()));
 		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap()));
 		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap()));
-		modeldatas.append(&mut generate_modeldatas(ground));
+		modeldatas.append(&mut generate_modeldatas(unit_cube.clone()));
 		println!("models.len = {:?}", modeldatas.len());
 		modeldatas[0].transforms.push(glam::Mat4::from_translation(glam::vec3(10.,0.,-10.)));
 		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(10.,5.,10.)));
@@ -652,6 +707,7 @@ impl strafe_client::framework::Example for GraphicsData {
 		let depth_view = Self::create_depth_texture(config, device);
 
 		GraphicsData {
+			handy_unit_cube:unit_cube,
 			start_time: Instant::now(),
 			camera,
 			physics,
