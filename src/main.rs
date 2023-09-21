@@ -201,6 +201,99 @@ impl strafe_client::framework::Example for GraphicsData {
 		modeldatas[2].transforms[0]=glam::Mat4::from_translation(glam::vec3(-10.,5.,10.));
 		modeldatas[3].transforms[0]=glam::Mat4::from_translation(glam::vec3(0.,0.,0.))*glam::Mat4::from_scale(glam::vec3(160.0, 1.0, 160.0));
 
+		//simply draw a box
+		{
+			let face_data = [
+				[0.0f32, 0., 1.],
+				[0.0f32, 0., -1.],
+				[1.0f32, 0., 0.],
+				[-1.0f32, 0., 0.],
+				[0.0f32, 1., 0.],
+				[0.0f32, -1., 0.],
+			];
+			let texture_data = [
+				[1.0f32, 0.],
+				[0.0f32, 0.],
+				[0.0f32, 1.],
+				[1.0f32, 1.],
+			];
+			let vertex_data = [
+				// top (0, 0, 1)
+				[-1.0f32, -1., 1.],
+				[1.0f32, -1., 1.],
+				[1.0f32, 1., 1.],
+				[-1.0f32, 1., 1.],
+				// bottom (0, 0, -1)
+				[-1.0f32, 1., -1.],
+				[1.0f32, 1., -1.],
+				[1.0f32, -1., -1.],
+				[-1.0f32, -1., -1.],
+				// right (1, 0, 0)
+				[1.0f32, -1., -1.],
+				[1.0f32, 1., -1.],
+				[1.0f32, 1., 1.],
+				[1.0f32, -1., 1.],
+				// left (-1, 0, 0)
+				[-1.0f32, -1., 1.],
+				[-1.0f32, 1., 1.],
+				[-1.0f32, 1., -1.],
+				[-1.0f32, -1., -1.],
+				// front (0, 1, 0)
+				[1.0f32, 1., -1.],
+				[-1.0f32, 1., -1.],
+				[-1.0f32, 1., 1.],
+				[1.0f32, 1., 1.],
+				// back (0, -1, 0)
+				[1.0f32, -1., 1.],
+				[-1.0f32, -1., 1.],
+				[-1.0f32, -1., -1.],
+				[1.0f32, -1., -1.],
+			];
+			let mut indices = Vec::new();
+			let mut vertices = Vec::new();
+			let mut vertex_index = std::collections::HashMap::<usize,u16>::new();
+			for face in 0..6 {
+				for end_index in 2..4 {
+					for &index in &[0, end_index - 1, end_index] {
+						let vert = face*4+index;
+						let unique_id=(vert * 1<<0) + (index * 1<<8) + (face * 1<<16);
+						if let Some(&i)=vertex_index.get(&unique_id){
+							indices.push(i);
+						}else{
+							let i=vertices.len() as u16;
+							vertices.push(Vertex {
+								pos: vertex_data[vert],
+								texture: texture_data[index],
+								normal: face_data[face],
+							});
+							vertex_index.insert(unique_id,i);
+							indices.push(i);
+						}
+					}
+				}
+			}
+			let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+				label: Some("Index"),
+				contents: bytemuck::cast_slice(&indices),
+				usage: wgpu::BufferUsages::INDEX,
+			});
+			let mut entities = Vec::<Entity>::new();
+			entities.push(Entity {
+				index_buf,
+				index_count: indices.len() as u32,
+			});
+			let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+				label: Some("Vertex"),
+				contents: bytemuck::cast_slice(&vertices),
+				usage: wgpu::BufferUsages::VERTEX,
+			});
+			modeldatas.push(ModelData {
+				transforms: Vec::new(),
+				vertex_buf,
+				entities,
+			});
+		}
+
 		let input = std::io::BufReader::new(&include_bytes!("../maps/bhop_easyhop.rbxm")[..]);
 		match strafe_client::load_roblox::get_objects(input, "BasePart") {
 			Ok(objects)=>{
@@ -218,93 +311,8 @@ impl strafe_client::framework::Example for GraphicsData {
 						if *transparency==1.0 {
 							continue;
 						}
-						//simply draw a box
-						let face_data = [
-							[0.0f32, 0., 1.],
-							[0.0f32, 0., -1.],
-							[1.0f32, 0., 0.],
-							[-1.0f32, 0., 0.],
-							[0.0f32, 1., 0.],
-							[0.0f32, -1., 0.],
-						];
-						let texture_data = [
-							[1.0f32, 0.],
-							[0.0f32, 0.],
-							[0.0f32, 1.],
-							[1.0f32, 1.],
-						];
-						let vertex_data = [
-							// top (0, 0, 1)
-							[-1.0f32, -1., 1.],
-							[1.0f32, -1., 1.],
-							[1.0f32, 1., 1.],
-							[-1.0f32, 1., 1.],
-							// bottom (0, 0, -1)
-							[-1.0f32, 1., -1.],
-							[1.0f32, 1., -1.],
-							[1.0f32, -1., -1.],
-							[-1.0f32, -1., -1.],
-							// right (1, 0, 0)
-							[1.0f32, -1., -1.],
-							[1.0f32, 1., -1.],
-							[1.0f32, 1., 1.],
-							[1.0f32, -1., 1.],
-							// left (-1, 0, 0)
-							[-1.0f32, -1., 1.],
-							[-1.0f32, 1., 1.],
-							[-1.0f32, 1., -1.],
-							[-1.0f32, -1., -1.],
-							// front (0, 1, 0)
-							[1.0f32, 1., -1.],
-							[-1.0f32, 1., -1.],
-							[-1.0f32, 1., 1.],
-							[1.0f32, 1., 1.],
-							// back (0, -1, 0)
-							[1.0f32, -1., 1.],
-							[-1.0f32, -1., 1.],
-							[-1.0f32, -1., -1.],
-							[1.0f32, -1., -1.],
-						];
-						let mut indices = Vec::new();
-						let mut vertices = Vec::new();
-						let mut vertex_index = std::collections::HashMap::<usize,u16>::new();
-						for face in 0..6 {
-							for end_index in 2..4 {
-								for &index in &[0, end_index - 1, end_index] {
-									let vert = face*4+index;
-									let unique_id=(vert * 1<<0) + (index * 1<<8) + (face * 1<<16);
-									if let Some(&i)=vertex_index.get(&unique_id){
-										indices.push(i);
-									}else{
-										let i=vertices.len() as u16;
-										vertices.push(Vertex {
-											pos: vertex_data[vert],
-											texture: texture_data[index],
-											normal: face_data[face],
-										});
-										vertex_index.insert(unique_id,i);
-										indices.push(i);
-									}
-								}
-							}
-						}
-						let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-							label: Some("Index"),
-							contents: bytemuck::cast_slice(&indices),
-							usage: wgpu::BufferUsages::INDEX,
-						});
-						let mut entities = Vec::<Entity>::new();
-						entities.push(Entity {
-							index_buf,
-							index_count: indices.len() as u32,
-						});
-						let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-							label: Some("Vertex"),
-							contents: bytemuck::cast_slice(&vertices),
-							usage: wgpu::BufferUsages::VERTEX,
-						});
-						modeldatas.push(ModelData {
-							transform: glam::Mat4::from_translation(
+						modeldatas[4].transforms.push(
+							glam::Mat4::from_translation(
 								glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
 							)
 							* glam::Mat4::from_mat3(
@@ -316,16 +324,13 @@ impl strafe_client::framework::Example for GraphicsData {
 							)
 							* glam::Mat4::from_scale(
 								glam::Vec3::new(size.x,size.y,size.z)/2.0
-							),
-							vertex_buf,
-							entities,
-						});
+							)
+						)
 					}
 				}
 			},
 			Err(e) => println!("lmao err {:?}", e),
 		}
-
 
 		let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: None,
