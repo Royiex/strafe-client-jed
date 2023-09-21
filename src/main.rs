@@ -168,22 +168,76 @@ impl strafe_client::framework::Example for GraphicsData {
 		queue: &wgpu::Queue,
 	) -> Self {
 		let mut modeldatas = Vec::<ModelData>::new();
-		let ground=obj::ObjData{
-			position: vec![[-1.0,0.0,-1.0],[1.0,0.0,-1.0],[1.0,0.0,1.0],[-1.0,0.0,1.0]],
-			texture: vec![[-10.0,-10.0],[10.0,-10.0],[10.0,10.0],[-10.0,10.0]],
-			normal: vec![[0.0,1.0,0.0]],
+		let unit_cube=obj::ObjData{
+			position: vec![
+				[-1.,-1., 1.],//left bottom back
+				[ 1.,-1., 1.],//right bottom back
+				[ 1., 1., 1.],//right top back
+				[-1., 1., 1.],//left top back
+				[-1., 1.,-1.],//left top front
+				[ 1., 1.,-1.],//right top front
+				[ 1.,-1.,-1.],//right bottom front
+				[-1.,-1.,-1.],//left bottom front
+			],
+			texture: vec![[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0]],
+			normal: vec![
+				[1.,0.,0.],//AabbFace::Right
+				[0.,1.,0.],//AabbFace::Top
+				[0.,0.,1.],//AabbFace::Back
+				[-1.,0.,0.],//AabbFace::Left
+				[0.,-1.,0.],//AabbFace::Bottom
+				[0.,0.,-1.],//AabbFace::Front
+			],
 			objects: vec![obj::Object{
-				name: "Ground Object".to_owned(),
+				name: "Unit Cube".to_owned(),
 				groups: vec![obj::Group{
-					name: "Ground Group".to_owned(),
+					name: "Cube Vertices".to_owned(),
 					index: 0,
 					material: None,
-					polys: vec![obj::SimplePolygon(vec![
-						obj::IndexTuple(0,Some(0),Some(0)),
-						obj::IndexTuple(1,Some(1),Some(0)),
-						obj::IndexTuple(2,Some(2),Some(0)),
-						obj::IndexTuple(3,Some(3),Some(0)),
-					])]
+					polys: vec![
+						// back (0, 0, 1)
+						obj::SimplePolygon(vec![
+							obj::IndexTuple(0,Some(0),Some(2)),
+							obj::IndexTuple(1,Some(1),Some(2)),
+							obj::IndexTuple(2,Some(2),Some(2)),
+							obj::IndexTuple(3,Some(3),Some(2)),
+						]),
+						// front (0, 0,-1)
+						obj::SimplePolygon(vec![
+							obj::IndexTuple(4,Some(0),Some(5)),
+							obj::IndexTuple(5,Some(1),Some(5)),
+							obj::IndexTuple(6,Some(2),Some(5)),
+							obj::IndexTuple(7,Some(3),Some(5)),
+						]),
+						// right (1, 0, 0)
+						obj::SimplePolygon(vec![
+							obj::IndexTuple(6,Some(0),Some(0)),
+							obj::IndexTuple(5,Some(1),Some(0)),
+							obj::IndexTuple(2,Some(2),Some(0)),
+							obj::IndexTuple(1,Some(3),Some(0)),
+						]),
+						// left (-1, 0, 0)
+						obj::SimplePolygon(vec![
+							obj::IndexTuple(0,Some(0),Some(3)),
+							obj::IndexTuple(3,Some(1),Some(3)),
+							obj::IndexTuple(4,Some(2),Some(3)),
+							obj::IndexTuple(7,Some(3),Some(3)),
+						]),
+						// top (0, 1, 0)
+						obj::SimplePolygon(vec![
+							obj::IndexTuple(5,Some(1),Some(1)),
+							obj::IndexTuple(4,Some(0),Some(1)),
+							obj::IndexTuple(3,Some(3),Some(1)),
+							obj::IndexTuple(2,Some(2),Some(1)),
+						]),
+						// bottom (0,-1, 0)
+						obj::SimplePolygon(vec![
+							obj::IndexTuple(1,Some(1),Some(4)),
+							obj::IndexTuple(0,Some(0),Some(4)),
+							obj::IndexTuple(7,Some(3),Some(4)),
+							obj::IndexTuple(6,Some(2),Some(4)),
+						]),
+					],
 				}]
 			}],
 			material_libs: Vec::new(),
@@ -191,108 +245,18 @@ impl strafe_client::framework::Example for GraphicsData {
 		add_obj(device,& mut modeldatas,obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap());
 		add_obj(device,& mut modeldatas,obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap());
 		add_obj(device,& mut modeldatas,obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap());
-		add_obj(device,& mut modeldatas,ground);
+		add_obj(device,& mut modeldatas,unit_cube);
 		println!("models.len = {:?}", modeldatas.len());
 		modeldatas[0].transforms[0]=glam::Mat4::from_translation(glam::vec3(10.,0.,-10.));
+		//quad monkeys
 		modeldatas[1].transforms[0]=glam::Mat4::from_translation(glam::vec3(10.,5.,10.));
 		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(20.,5.,10.)));
 		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(10.,5.,20.)));
 		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(20.,5.,20.)));
+		//teapot
 		modeldatas[2].transforms[0]=glam::Mat4::from_translation(glam::vec3(-10.,5.,10.));
+		//ground
 		modeldatas[3].transforms[0]=glam::Mat4::from_translation(glam::vec3(0.,0.,0.))*glam::Mat4::from_scale(glam::vec3(160.0, 1.0, 160.0));
-
-		//simply draw a box
-		{
-			let face_data = [
-				[0.0f32, 0., 1.],
-				[0.0f32, 0., -1.],
-				[1.0f32, 0., 0.],
-				[-1.0f32, 0., 0.],
-				[0.0f32, 1., 0.],
-				[0.0f32, -1., 0.],
-			];
-			let texture_data = [
-				[1.0f32, 0.],
-				[0.0f32, 0.],
-				[0.0f32, 1.],
-				[1.0f32, 1.],
-			];
-			let vertex_data = [
-				// top (0, 0, 1)
-				[-1.0f32, -1., 1.],
-				[1.0f32, -1., 1.],
-				[1.0f32, 1., 1.],
-				[-1.0f32, 1., 1.],
-				// bottom (0, 0, -1)
-				[-1.0f32, 1., -1.],
-				[1.0f32, 1., -1.],
-				[1.0f32, -1., -1.],
-				[-1.0f32, -1., -1.],
-				// right (1, 0, 0)
-				[1.0f32, -1., -1.],
-				[1.0f32, 1., -1.],
-				[1.0f32, 1., 1.],
-				[1.0f32, -1., 1.],
-				// left (-1, 0, 0)
-				[-1.0f32, -1., 1.],
-				[-1.0f32, 1., 1.],
-				[-1.0f32, 1., -1.],
-				[-1.0f32, -1., -1.],
-				// front (0, 1, 0)
-				[1.0f32, 1., -1.],
-				[-1.0f32, 1., -1.],
-				[-1.0f32, 1., 1.],
-				[1.0f32, 1., 1.],
-				// back (0, -1, 0)
-				[1.0f32, -1., 1.],
-				[-1.0f32, -1., 1.],
-				[-1.0f32, -1., -1.],
-				[1.0f32, -1., -1.],
-			];
-			let mut indices = Vec::new();
-			let mut vertices = Vec::new();
-			let mut vertex_index = std::collections::HashMap::<usize,u16>::new();
-			for face in 0..6 {
-				for end_index in 2..4 {
-					for &index in &[0, end_index - 1, end_index] {
-						let vert = face*4+index;
-						let unique_id=(vert * 1<<0) + (index * 1<<8) + (face * 1<<16);
-						if let Some(&i)=vertex_index.get(&unique_id){
-							indices.push(i);
-						}else{
-							let i=vertices.len() as u16;
-							vertices.push(Vertex {
-								pos: vertex_data[vert],
-								texture: texture_data[index],
-								normal: face_data[face],
-							});
-							vertex_index.insert(unique_id,i);
-							indices.push(i);
-						}
-					}
-				}
-			}
-			let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some("Index"),
-				contents: bytemuck::cast_slice(&indices),
-				usage: wgpu::BufferUsages::INDEX,
-			});
-			let mut entities = Vec::<Entity>::new();
-			entities.push(Entity {
-				index_buf,
-				index_count: indices.len() as u32,
-			});
-			let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some("Vertex"),
-				contents: bytemuck::cast_slice(&vertices),
-				usage: wgpu::BufferUsages::VERTEX,
-			});
-			modeldatas.push(ModelData {
-				transforms: Vec::new(),
-				vertex_buf,
-				entities,
-			});
-		}
 
 		let input = std::io::BufReader::new(&include_bytes!("../maps/bhop_easyhop.rbxm")[..]);
 		match strafe_client::load_roblox::get_objects(input, "BasePart") {
@@ -311,7 +275,7 @@ impl strafe_client::framework::Example for GraphicsData {
 						if *transparency==1.0 {
 							continue;
 						}
-						modeldatas[4].transforms.push(
+						modeldatas[3].transforms.push(
 							glam::Mat4::from_translation(
 								glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
 							)
