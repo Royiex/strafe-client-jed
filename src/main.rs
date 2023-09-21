@@ -191,14 +191,16 @@ impl GraphicsData {
 							Some(rbx_dom_weak::types::Variant::Vector3(size)),
 							Some(rbx_dom_weak::types::Variant::Float32(transparency)),
 							Some(rbx_dom_weak::types::Variant::Color3uint8(color3)),
+							Some(rbx_dom_weak::types::Variant::Enum(shape)),
 						) = (
 							object.properties.get("CFrame"),
 							object.properties.get("Size"),
 							object.properties.get("Transparency"),
 							object.properties.get("Color"),
+							object.properties.get("Shape"),//this will also skip unions
 						)
 					{
-						if *transparency==1.0 {
+						if *transparency==1.0||shape.to_u32()!=1 {
 							continue;
 						}
 						modeldatas[0].instances.push(ModelInstance {
