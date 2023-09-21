@@ -116,6 +116,7 @@ impl Camera {
 
 pub struct SamplerBindGroups {
 	clamp: wgpu::BindGroup,
+	repeat: wgpu::BindGroup,
 }
 
 pub struct GraphicsBindGroups {
@@ -481,6 +482,16 @@ impl strafe_client::framework::Example for GraphicsData {
 			mipmap_filter: wgpu::FilterMode::Linear,
 			..Default::default()
 		});
+		let repeat_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+			label: Some("Repeat Sampler"),
+			address_mode_u: wgpu::AddressMode::Repeat,
+			address_mode_v: wgpu::AddressMode::Repeat,
+			address_mode_w: wgpu::AddressMode::Repeat,
+			mag_filter: wgpu::FilterMode::Linear,
+			min_filter: wgpu::FilterMode::Linear,
+			mipmap_filter: wgpu::FilterMode::Linear,
+			..Default::default()
+		});
 
 		let device_features = device.features();
 
@@ -586,6 +597,16 @@ impl strafe_client::framework::Example for GraphicsData {
 			],
 			label: Some("Clamp Sampler Bind Group"),
 		});
+		let repeat_sampler_texture_filter_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+			layout: &texture_filter_bind_group_layout,
+			entries: &[
+				wgpu::BindGroupEntry {
+					binding: 0,
+					resource: wgpu::BindingResource::Sampler(&repeat_sampler),
+				},
+			],
+			label: Some("Repeat Sampler Bind Group"),
+		});
 
 		let depth_view = Self::create_depth_texture(config, device);
 
@@ -602,6 +623,7 @@ impl strafe_client::framework::Example for GraphicsData {
 				skybox_texture:skybox_texture_bind_group,
 				sampler:SamplerBindGroups{
 					clamp:clamp_sampler_texture_filter_bind_group,
+					repeat:repeat_sampler_texture_filter_bind_group,
 				}
 			},
 			camera_buf,
