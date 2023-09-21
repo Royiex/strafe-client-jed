@@ -626,9 +626,13 @@ impl strafe_client::framework::Example for GraphicsData {
 
 		//squid
 		let squid_texture_view={
+			let bytes = &include_bytes!("../images/squid.dds")[..];
+
+			let image = ddsfile::Dds::read(&mut std::io::Cursor::new(&bytes)).unwrap();
+
 			let size = wgpu::Extent3d {
-				width: 1076,
-				height: 1076,
+				width: image.get_width(),
+				height: image.get_height(),
 				depth_or_array_layers: 1,
 			};
 
@@ -637,10 +641,6 @@ impl strafe_client::framework::Example for GraphicsData {
 				..size
 			};
 			let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
-
-			let bytes = &include_bytes!("../images/squid.dds")[..];
-
-			let image = ddsfile::Dds::read(&mut std::io::Cursor::new(&bytes)).unwrap();
 
 			let texture = device.create_texture_with_data(
 				queue,
