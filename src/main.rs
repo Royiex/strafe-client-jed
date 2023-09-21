@@ -17,11 +17,10 @@ struct Entity {
 	index_buf: wgpu::Buffer,
 }
 
-//temp?
 struct ModelData {
 	transforms: Vec<glam::Mat4>,
-	vertex_buf: wgpu::Buffer,
-	entities: Vec<Entity>,
+	vertices: Vec<Vertex>,
+	entities: Vec<Vec<u16>>,
 }
 
 struct ModelGraphics {
@@ -171,11 +170,14 @@ fn get_transform_uniform_data(transforms:&Vec<glam::Mat4>) -> Vec<f32> {
 	raw
 }
 
-fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,data:obj::ObjData){
+fn generate_modeldatas(data:obj::ObjData) -> Vec<ModelData>{
+	let mut modeldatas=Vec::new();
 	let mut vertices = Vec::new();
 	let mut vertex_index = std::collections::HashMap::<obj::IndexTuple,u16>::new();
 	for object in data.objects {
-		let mut entities = Vec::<Entity>::new();
+		vertices.clear();
+		vertex_index.clear();
+		let mut entities = Vec::new();
 		for group in object.groups {
 			let mut indices = Vec::new();
 			for poly in group.polys {
@@ -197,27 +199,15 @@ fn add_obj(device:&wgpu::Device,modeldatas:& mut Vec<ModelData>,data:obj::ObjDat
 					}
 				}
 			}
-			let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some("Index"),
-				contents: bytemuck::cast_slice(&indices),
-				usage: wgpu::BufferUsages::INDEX,
-			});
-			entities.push(Entity {
-				index_buf,
-				index_count: indices.len() as u32,
-			});
+			entities.push(indices);
 		}
-		let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-			label: Some("Vertex"),
-			contents: bytemuck::cast_slice(&vertices),
-			usage: wgpu::BufferUsages::VERTEX,
-		});
 		modeldatas.push(ModelData {
 			transforms: vec![glam::Mat4::default()],
-			vertex_buf,
+			vertices:vertices.clone(),
 			entities,
-		})
+		});
 	}
+	modeldatas
 }
 
 impl strafe_client::framework::Example for GraphicsData {
@@ -233,7 +223,6 @@ impl strafe_client::framework::Example for GraphicsData {
 		device: &wgpu::Device,
 		queue: &wgpu::Queue,
 	) -> Self {
-		let mut modeldatas = Vec::<ModelData>::new();
 		let ground=obj::ObjData{
 			position: vec![[-1.0,0.0,-1.0],[1.0,0.0,-1.0],[1.0,0.0,1.0],[-1.0,0.0,1.0]],
 			texture: vec![[-10.0,-10.0],[10.0,-10.0],[10.0,10.0],[-10.0,10.0]],
@@ -254,10 +243,11 @@ impl strafe_client::framework::Example for GraphicsData {
 			}],
 			material_libs: Vec::new(),
 		};
-		add_obj(device,& mut modeldatas,obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap());
-		add_obj(device,& mut modeldatas,obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap());
-		add_obj(device,& mut modeldatas,obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap());
-		add_obj(device,& mut modeldatas,ground);
+		let mut modeldatas = Vec::<ModelData>::new();
+		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap()));
+		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap()));
+		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap()));
+		modeldatas.append(&mut generate_modeldatas(ground));
 		println!("models.len = {:?}", modeldatas.len());
 		modeldatas[0].transforms[0]=glam::Mat4::from_translation(glam::vec3(10.,0.,-10.));
 		modeldatas[1].transforms[0]=glam::Mat4::from_translation(glam::vec3(10.,5.,10.));
@@ -533,11 +523,26 @@ impl strafe_client::framework::Example for GraphicsData {
 				],
 				label: Some(format!("ModelGraphics{}",i).as_str()),
 			});
+			let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+				label: Some("Vertex"),
+				contents: bytemuck::cast_slice(&modeldata.vertices),
+				usage: wgpu::BufferUsages::VERTEX,
+			});
 			//all of these are being moved here
 			models.push(ModelGraphics{
-				transforms: modeldata.transforms,
-				vertex_buf:modeldata.vertex_buf,
-				entities: modeldata.entities,
+				transforms:modeldata.transforms,
+				vertex_buf,
+				entities: modeldata.entities.iter().map(|indices|{
+					let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+						label: Some("Index"),
+						contents: bytemuck::cast_slice(&indices),
+						usage: wgpu::BufferUsages::INDEX,
+					});
+					Entity {
+						index_buf,
+						index_count: indices.len() as u32,
+					}
+				}).collect(),
 				bind_group: model_bind_group,
 				model_buf,
 			})
