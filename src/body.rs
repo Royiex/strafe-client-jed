@@ -12,6 +12,8 @@ pub enum PhysicsInstruction {
 	// 	bool,//true = Trigger; false = teleport
 	// 	bool,//true = Force
 	// )
+	//temp
+	SetPosition(glam::Vec3),
 	//Both of these conditionally activate RefreshWalkTarget (by doing what SetWalkTargetVelocity used to do and then flagging it)
 	Input(InputInstruction),
 }
@@ -902,6 +904,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		//selectively update body
 		match &ins.instruction {
 		    PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),//dodge time for mouse movement
+		    PhysicsInstruction::SetPosition(_) => self.time=ins.time,//TODO: queue instructions
     		PhysicsInstruction::Input(_)
 		    |PhysicsInstruction::ReachWalkTargetVelocity
 		    |PhysicsInstruction::CollisionStart(_)
@@ -909,6 +912,15 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		    |PhysicsInstruction::StrafeTick => self.advance_time(ins.time),
 		}
 		match ins.instruction {
+			PhysicsInstruction::SetPosition(position)=>{
+				//temp
+				self.body.position=position;
+				//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
+				self.contacts.clear();
+				self.body.acceleration=self.gravity;
+				self.walk.state=WalkEnum::Reached;
+				self.grounded=false;
+			}
 			PhysicsInstruction::CollisionStart(c) => {
 				//check ground
 				match &c.face {

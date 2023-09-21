@@ -102,7 +102,8 @@ impl GraphicsData {
 		depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
 	}
 
-	fn generate_modeldatas_roblox<R: std::io::Read>(&self,input:R) -> Vec<ModelData>{
+	fn generate_modeldatas_roblox<R: std::io::Read>(&self,input:R) -> (Vec<ModelData>,glam::Vec3){
+		let mut spawn_point=glam::Vec3::ZERO;
 		let mut modeldatas=generate_modeldatas(self.handy_unit_cube.clone(),ModelData::COLOR_FLOATS_WHITE);
 		match strafe_client::load_roblox::get_objects(input, "BasePart") {
 			Ok(objects)=>{
@@ -121,23 +122,28 @@ impl GraphicsData {
 							object.properties.get("Shape"),//this will also skip unions
 						)
 					{
+						let transform=glam::Mat4::from_translation(
+							glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
+						)
+						* glam::Mat4::from_mat3(
+							glam::Mat3::from_cols(
+								glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
+								glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
+								glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
+							),
+						)
+						* glam::Mat4::from_scale(
+							glam::Vec3::new(size.x,size.y,size.z)/2.0
+						);
+						if object.name=="MapStart"{
+							spawn_point=glam::Vec4Swizzles::xyz(transform*glam::Vec3::Y.extend(1.0))+glam::vec3(0.0,2.5,0.0);
+							println!("Found MapStart{:?}",spawn_point);
+						}
 						if *transparency==1.0||shape.to_u32()!=1 {
 							continue;
 						}
 						modeldatas[0].instances.push(ModelInstance {
-							transform:glam::Mat4::from_translation(
-									glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
-								)
-								* glam::Mat4::from_mat3(
-									glam::Mat3::from_cols(
-										glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
-										glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
-										glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
-									),
-								)
-								* glam::Mat4::from_scale(
-									glam::Vec3::new(size.x,size.y,size.z)/2.0
-								),
+							transform,
 							color: glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
 						})
 					}
@@ -145,7 +151,7 @@ impl GraphicsData {
 			},
 			Err(e) => println!("lmao err {:?}", e),
 		}
-		modeldatas
+		(modeldatas,spawn_point)
 	}
 	fn generate_model_physics(&mut self,modeldatas:&Vec<ModelData>){
 		self.physics.models.append(&mut modeldatas.iter().map(|m|
@@ -777,12 +783,18 @@ impl strafe_client::framework::Example for GraphicsData {
 				//oh boy! let's load the map!
 				if let Ok(file)=std::fs::File::open(path){
 					let input = std::io::BufReader::new(file);
-					let modeldatas=self.generate_modeldatas_roblox(input);
+					let (modeldatas,spawn_point)=self.generate_modeldatas_roblox(input);
 					//if generate_modeldatas succeeds, clear the previous ones
 					self.models.clear();
 					self.physics.models.clear();
 					self.generate_model_physics(&modeldatas);
 					self.generate_model_graphics(device,modeldatas);
+					//manual reset
+					let time=self.physics.time;
+					strafe_client::instruction::InstructionConsumer::process_instruction(&mut self.physics, strafe_client::instruction::TimedInstruction{
+						time,
+						instruction: strafe_client::body::PhysicsInstruction::SetPosition(spawn_point),
+					})
 				}else{
 					println!("Could not open file");
 				}
