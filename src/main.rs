@@ -224,6 +224,12 @@ impl GraphicsData {
 		}
 		modeldatas
 	}
+	fn generate_model_physics(&mut self,modeldatas:&Vec<ModelData>){
+		self.physics.models.append(&mut modeldatas.iter().map(|m|
+			//make aabb and run vertices to get realistic bounds
+			m.instances.iter().map(|t|strafe_client::body::ModelPhysics::new(t.transform))
+		).flatten().collect());
+	}
 	fn generate_model_graphics(&mut self,device:&wgpu::Device,mut modeldatas:Vec<ModelData>){
 		//drain the modeldata vec so entities can be /moved/ to models.entities
 		self.models.reserve(modeldatas.len());
@@ -580,13 +586,7 @@ impl strafe_client::framework::Example for GraphicsData {
 			temp_control_dir: glam::Vec3::ZERO,
 			walkspeed: 18.0,
 			contacts: std::collections::HashSet::new(),
-    		models: modeldatas.iter().map(|m|
-    			//make aabb and run vertices to get realistic bounds
-    			//this needs to be a function generate_model_physics
-    			m.instances.iter().map(|t|
-    				strafe_client::body::ModelPhysics::new(t.transform)
-				)
-			).flatten().collect(),
+    		models: Vec::new(),
     		walk: strafe_client::body::WalkState::new(),
     		hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
 		};
@@ -832,6 +832,7 @@ impl strafe_client::framework::Example for GraphicsData {
 			temp_squid_texture_view: squid_texture_view,
 		};
 
+		graphics.generate_model_physics(&modeldatas);
 		graphics.generate_model_graphics(&device,modeldatas);
 
 		return graphics;
@@ -847,8 +848,8 @@ impl strafe_client::framework::Example for GraphicsData {
 				if let Ok(file)=std::fs::File::open(path){
 					let input = std::io::BufReader::new(file);
 					let modeldatas=self.generate_modeldatas_roblox(input);
+					self.generate_model_physics(&modeldatas);
 					self.generate_model_graphics(device,modeldatas);
-					//also physics
 				}else{
 					println!("Could not open file");
 				}
