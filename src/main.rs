@@ -31,6 +31,15 @@ struct ModelGraphics {
 	bind_group: wgpu::BindGroup,
 	model_buf: wgpu::Buffer,
 }
+
+pub struct GraphicsSamplers{
+	repeat: wgpu::Sampler,
+}
+
+pub struct GraphicsBindGroupLayouts{
+	model: wgpu::BindGroupLayout,
+}
+
 pub struct GraphicsBindGroups {
 	camera: wgpu::BindGroup,
 	skybox_texture: wgpu::BindGroup,
@@ -47,6 +56,9 @@ pub struct GraphicsData {
 	physics: strafe_client::body::PhysicsState,
 	pipelines: GraphicsPipelines,
 	bind_groups: GraphicsBindGroups,
+	bind_group_layouts: GraphicsBindGroupLayouts,
+	samplers: GraphicsSamplers,
+	temp_squid_texture_view: wgpu::TextureView,
 	camera_buf: wgpu::Buffer,
 	models: Vec<ModelGraphics>,
 	depth_view: wgpu::TextureView,
@@ -119,8 +131,9 @@ impl GraphicsData {
 		}
 		modeldatas
 	}
-	fn generate_model_graphics(&mut self,modeldatas:Vec<ModelData>)->Vec<ModelGraphics>{
-		let mut models=Vec::<ModelGraphics>::with_capacity(modeldatas.len());
+	fn generate_model_graphics(&mut self,device:&wgpu::Device,mut modeldatas:Vec<ModelData>){
+		//drain the modeldata vec so entities can be /moved/ to models.entities
+		self.models.reserve(modeldatas.len());
 		for (i,modeldata) in modeldatas.drain(..).enumerate() {
 			let model_uniforms = get_transform_uniform_data(&modeldata.transforms);
 			let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -129,7 +142,7 @@ impl GraphicsData {
 				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 			});
 			let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-				layout: &model_bind_group_layout,
+				layout: &self.bind_group_layouts.model,
 				entries: &[
 					wgpu::BindGroupEntry {
 						binding: 0,
@@ -137,11 +150,11 @@ impl GraphicsData {
 					},
 					wgpu::BindGroupEntry {
 						binding: 1,
-						resource: wgpu::BindingResource::TextureView(&squid_texture_view),
+						resource: wgpu::BindingResource::TextureView(&self.temp_squid_texture_view),
 					},
 					wgpu::BindGroupEntry {
 						binding: 2,
-						resource: wgpu::BindingResource::Sampler(&repeat_sampler),
+						resource: wgpu::BindingResource::Sampler(&self.samplers.repeat),
 					},
 				],
 				label: Some(format!("ModelGraphics{}",i).as_str()),
@@ -152,7 +165,7 @@ impl GraphicsData {
 				usage: wgpu::BufferUsages::VERTEX,
 			});
 			//all of these are being moved here
-			models.push(ModelGraphics{
+			self.models.push(ModelGraphics{
 				transforms:modeldata.transforms,
 				vertex_buf,
 				entities: modeldata.entities.iter().map(|indices|{
@@ -170,7 +183,6 @@ impl GraphicsData {
 				model_buf,
 			})
 		}
-		models
 	}
 }
 
@@ -575,9 +587,6 @@ impl strafe_client::framework::Example for GraphicsData {
 			})
 		};
 
-		//drain the modeldata vec so entities can be /moved/ to models.entities
-		let mut models = self.generate_model_graphics(modeldatas);
-
 		let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 			label: None,
 			bind_group_layouts: &[
@@ -681,7 +690,7 @@ impl strafe_client::framework::Example for GraphicsData {
 
 		let depth_view = Self::create_depth_texture(config, device);
 
-		GraphicsData {
+		let mut graphics=GraphicsData {
 			handy_unit_cube:unit_cube,
 			start_time: Instant::now(),
 			screen_size: (config.width,config.height),
@@ -695,14 +704,21 @@ impl strafe_client::framework::Example for GraphicsData {
 				skybox_texture:skybox_texture_bind_group,
 			},
 			camera_buf,
-			models,
+			models: Vec::new(),
 			depth_view,
 			staging_belt: wgpu::util::StagingBelt::new(0x100),
-		}
+			bind_group_layouts: GraphicsBindGroupLayouts { model: model_bind_group_layout },
+			samplers: GraphicsSamplers { repeat: repeat_sampler },
+			temp_squid_texture_view: squid_texture_view,
+		};
+
+		graphics.generate_model_graphics(&device,modeldatas);
+
+		return graphics;
 	}
 
 	#[allow(clippy::single_match)]
-	fn update(&mut self, event: winit::event::WindowEvent) {
+	fn update(&mut self, device: &wgpu::Device, event: winit::event::WindowEvent) {
 		//nothing atm
 		match event {
 			winit::event::WindowEvent::DroppedFile(path) => {
@@ -711,7 +727,7 @@ impl strafe_client::framework::Example for GraphicsData {
 				if let Ok(file)=std::fs::File::open(path){
 					let input = std::io::BufReader::new(file);
 					let modeldatas=self.generate_modeldatas_roblox(input);
-					self.generate_model_graphics(modeldatas);
+					self.generate_model_graphics(device,modeldatas);
 					//also physics
 				}else{
 					println!("Could not open file");
