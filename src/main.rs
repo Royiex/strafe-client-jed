@@ -760,6 +760,12 @@ impl framework::Example for GraphicsData {
 					//self.physics.models.clear();
 					//self.generate_model_physics(&modeldatas);
 					//self.generate_model_graphics(device,queue,modeldatas,textures);
+					//manual reset
+					//let time=self.physics.time;
+					//instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
+					//	time,
+					//	instruction: body::PhysicsInstruction::SetPosition(spawn_point),
+					//})
 				}else{
 					println!("Could not open file");
 				}

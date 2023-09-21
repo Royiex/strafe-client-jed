@@ -16,6 +16,8 @@ pub enum PhysicsInstruction {
 	// 	bool,//true = Trigger; false = teleport
 	// 	bool,//true = Force
 	// )
+	//temp
+	SetPosition(glam::Vec3),
 }
 
 pub struct Body {
@@ -756,6 +758,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		//selectively update body
 		match &ins.instruction {
 		    PhysicsInstruction::SetWalkTargetVelocity(_)
+		    |PhysicsInstruction::SetPosition(_)
 		    |PhysicsInstruction::SetControlDir(_) => self.time=ins.time,//TODO: queue instructions
 		    PhysicsInstruction::RefreshWalkTarget
 		    |PhysicsInstruction::ReachWalkTargetVelocity
@@ -765,6 +768,15 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		    |PhysicsInstruction::Jump => self.advance_time(ins.time),
 		}
 		match ins.instruction {
+			PhysicsInstruction::SetPosition(position)=>{
+				//temp
+				self.body.position=position;
+				//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
+				self.contacts.clear();
+				self.body.acceleration=self.gravity;
+				self.walk.state=WalkEnum::Reached;
+				self.grounded=false;
+			}
 			PhysicsInstruction::CollisionStart(c) => {
 				//check ground
 				match &c.face {

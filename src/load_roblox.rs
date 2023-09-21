@@ -53,6 +53,7 @@ impl std::str::FromStr for RobloxAssetId {
 }
 pub fn generate_modeldatas_roblox(dom:&rbx_dom_weak::WeakDom) -> Result<(Vec<ModelData>,Vec<std::fs::File>), Box<dyn std::error::Error>>{
 	//ModelData includes texture dds
+	let mut spawn_point=glam::Vec3::ZERO;
 
 	//TODO: generate unit Block, Wedge, etc. after based on part shape lists
 	let mut modeldatas=crate::model::generate_modeldatas(primitives::the_unit_cube_lol(),ModelData::COLOR_FLOATS_WHITE);
@@ -80,6 +81,26 @@ pub fn generate_modeldatas_roblox(dom:&rbx_dom_weak::WeakDom) -> Result<(Vec<Mod
 					object.properties.get("Shape"),//this will also skip unions
 				)
 			{
+				let model_instance=ModelInstance {
+						transform:glam::Mat4::from_translation(
+								glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
+							)
+							* glam::Mat4::from_mat3(
+								glam::Mat3::from_cols(
+									glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
+									glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
+									glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
+								),
+							)
+							* glam::Mat4::from_scale(
+								glam::Vec3::new(size.x,size.y,size.z)/2.0
+							),
+						color: glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
+					};
+				if object.name=="MapStart"{
+					spawn_point=glam::Vec4Swizzles::xyz(model_instance.transform*glam::Vec3::Y.extend(1.0))+glam::vec3(0.0,2.5,0.0);
+					println!("Found MapStart{:?}",spawn_point);
+				}
 				if *transparency==1.0||shape.to_u32()!=1 {
 					continue;
 				}
@@ -106,22 +127,6 @@ pub fn generate_modeldatas_roblox(dom:&rbx_dom_weak::WeakDom) -> Result<(Vec<Mod
 						}
 					}
 				}
-				let model_instance=ModelInstance {
-						transform:glam::Mat4::from_translation(
-								glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
-							)
-							* glam::Mat4::from_mat3(
-								glam::Mat3::from_cols(
-									glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
-									glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
-									glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
-								),
-							)
-							* glam::Mat4::from_scale(
-								glam::Vec3::new(size.x,size.y,size.z)/2.0
-							),
-						color: glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
-					};
 				match i_can_only_load_one_texture_per_model{
 					//push to existing texture model
 					Some(texture_id)=>modeldatas[(texture_id+1) as usize].instances.push(model_instance),
@@ -134,5 +139,5 @@ pub fn generate_modeldatas_roblox(dom:&rbx_dom_weak::WeakDom) -> Result<(Vec<Mod
 	let texture_files:Result<Vec<std::fs::File>,_>=asset_id_from_texture_id.iter().map(|asset_id|{
 		std::fs::File::open(std::path::Path::new(&format!("textures/{}.dds",asset_id)))
 	}).collect();
-	Ok((modeldatas,texture_files?))
+	Ok((modeldatas,texture_files?,spawn_point))
 }
