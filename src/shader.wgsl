@@ -8,6 +8,8 @@ struct Camera {
 	// camera position
 	cam_pos: vec4<f32>,
 };
+
+//group 0 is the camera
 @group(0)
 @binding(0)
 var<uniform> camera: Camera;
@@ -39,13 +41,8 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
 	return result;
 }
 
-struct EntityOutputTexture {
-	@builtin(position) position: vec4<f32>,
-	@location(1) texture: vec2<f32>,
-	@location(2) normal: vec3<f32>,
-	@location(3) view: vec3<f32>,
-};
 const MAX_ENTITY_INSTANCES=1024;
+//group 1 is the model
 @group(1)
 @binding(0)
 var<uniform> entity_transforms: array<mat4x4<f32>,MAX_ENTITY_INSTANCES>;
@@ -53,7 +50,19 @@ var<uniform> entity_transforms: array<mat4x4<f32>,MAX_ENTITY_INSTANCES>;
 //my fancy idea is to create a megatexture for each model that includes all the textures each intance will need
 //the texture transform then maps the texture coordinates to the location of the specific texture
 //how to do no texture?
+@group(1)
+@binding(1)
+var model_texture: texture_2d<f32>;
+@group(1)
+@binding(2)
+var model_sampler: sampler;
 
+struct EntityOutputTexture {
+	@builtin(position) position: vec4<f32>,
+	@location(1) texture: vec2<f32>,
+	@location(2) normal: vec3<f32>,
+	@location(3) view: vec3<f32>,
+};
 @vertex
 fn vs_entity_texture(
 	@builtin(instance_index) instance: u32,
@@ -70,19 +79,17 @@ fn vs_entity_texture(
 	return result;
 }
 
-//group 2 is texture bindings
+//group 2 is the skybox texture
 @group(2)
 @binding(0)
 var cube_texture: texture_cube<f32>;
-
-//group 3 is texture sampler
-@group(3)
-@binding(0)
-var texture_sampler: sampler;
+@group(2)
+@binding(1)
+var cube_sampler: sampler;
 
 @fragment
 fn fs_sky(vertex: SkyOutput) -> @location(0) vec4<f32> {
-	return textureSample(cube_texture, texture_sampler, vertex.sampledir);
+	return textureSample(cube_texture, model_sampler, vertex.sampledir);
 }
 
 @fragment
@@ -92,8 +99,7 @@ fn fs_entity_texture(vertex: EntityOutputTexture) -> @location(0) vec4<f32> {
 	let d = dot(normal, incident);
 	let reflected = incident - 2.0 * d * normal;
 
-	let dir = vec3<f32>(-1.0)+2.0*vec3<f32>(vertex.texture.x,0.0,vertex.texture.y);
-	let fragment_color = textureSample(cube_texture, texture_sampler, dir).rgb;
-	let reflected_color = textureSample(cube_texture, texture_sampler, reflected).rgb;
+	let fragment_color = textureSample(model_texture, model_sampler, vertex.texture).rgb;
+	let reflected_color = textureSample(cube_texture, cube_sampler, reflected).rgb;
 	return vec4<f32>(mix(vec3<f32>(0.1) + 0.5 * reflected_color,fragment_color,1.0-pow(1.0-abs(d),2.0)), 1.0);
 }

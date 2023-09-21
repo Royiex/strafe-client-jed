@@ -113,21 +113,14 @@ impl Camera {
 	}
 }
 
-
-pub struct SamplerBindGroups {
-	clamp: wgpu::BindGroup,
-	repeat: wgpu::BindGroup,
-}
-
 pub struct GraphicsBindGroups {
 	camera: wgpu::BindGroup,
 	skybox_texture: wgpu::BindGroup,
-	sampler: SamplerBindGroups,
 }
 
 pub struct GraphicsPipelines {
 	skybox: wgpu::RenderPipeline,
-	entity: wgpu::RenderPipeline,
+	model: wgpu::RenderPipeline,
 }
 
 pub struct GraphicsData {
@@ -290,7 +283,7 @@ impl strafe_client::framework::Example for GraphicsData {
 			],
 		});
 		let skybox_texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-			label: None,
+			label: Some("Skybox Texture Bind Group Layout"),
 			entries: &[
 				wgpu::BindGroupLayoutEntry {
 					binding: 0,
@@ -302,13 +295,8 @@ impl strafe_client::framework::Example for GraphicsData {
 					},
 					count: None,
 				},
-			],
-		});
-		let texture_filter_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-			label: None,
-			entries: &[
 				wgpu::BindGroupLayoutEntry {
-					binding: 0,
+					binding: 1,
 					visibility: wgpu::ShaderStages::FRAGMENT,
 					ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
 					count: None,
@@ -316,7 +304,7 @@ impl strafe_client::framework::Example for GraphicsData {
 			],
 		});
 		let model_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-			label: Some("Model"),
+			label: Some("Model Bind Group Layout"),
 			entries: &[
 				wgpu::BindGroupLayoutEntry {
 					binding: 0,
@@ -328,7 +316,44 @@ impl strafe_client::framework::Example for GraphicsData {
 					},
 					count: None,
 				},
+				wgpu::BindGroupLayoutEntry {
+					binding: 1,
+					visibility: wgpu::ShaderStages::FRAGMENT,
+					ty: wgpu::BindingType::Texture {
+						sample_type: wgpu::TextureSampleType::Float { filterable: true },
+						multisampled: false,
+						view_dimension: wgpu::TextureViewDimension::D2,
+					},
+					count: None,
+				},
+				wgpu::BindGroupLayoutEntry {
+					binding: 2,
+					visibility: wgpu::ShaderStages::FRAGMENT,
+					ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+					count: None,
+				},
 			],
+		});
+
+		let clamp_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+			label: Some("Clamp Sampler"),
+			address_mode_u: wgpu::AddressMode::ClampToEdge,
+			address_mode_v: wgpu::AddressMode::ClampToEdge,
+			address_mode_w: wgpu::AddressMode::ClampToEdge,
+			mag_filter: wgpu::FilterMode::Linear,
+			min_filter: wgpu::FilterMode::Linear,
+			mipmap_filter: wgpu::FilterMode::Linear,
+			..Default::default()
+		});
+		let repeat_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+			label: Some("Repeat Sampler"),
+			address_mode_u: wgpu::AddressMode::Repeat,
+			address_mode_v: wgpu::AddressMode::Repeat,
+			address_mode_w: wgpu::AddressMode::Repeat,
+			mag_filter: wgpu::FilterMode::Linear,
+			min_filter: wgpu::FilterMode::Linear,
+			mipmap_filter: wgpu::FilterMode::Linear,
+			..Default::default()
 		});
 
 		// Create the render pipeline
@@ -388,6 +413,14 @@ impl strafe_client::framework::Example for GraphicsData {
 						binding: 0,
 						resource: model_buf.as_entire_binding(),
 					},
+					wgpu::BindGroupEntry {
+						binding: 1,
+						resource: wgpu::BindingResource::TextureView(&squid_texture_view),
+					},
+					wgpu::BindGroupEntry {
+						binding: 2,
+						resource: wgpu::BindingResource::Sampler(&repeat_sampler),
+					},
 				],
 				label: Some(format!("ModelGraphics{}",i).as_str()),
 			});
@@ -407,14 +440,13 @@ impl strafe_client::framework::Example for GraphicsData {
 				&camera_bind_group_layout,
 				&model_bind_group_layout,
 				&skybox_texture_bind_group_layout,
-				&texture_filter_bind_group_layout,
 			],
 			push_constant_ranges: &[],
 		});
 
 		// Create the render pipelines
 		let sky_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-			label: Some("Sky"),
+			label: Some("Sky Pipeline"),
 			layout: Some(&pipeline_layout),
 			vertex: wgpu::VertexState {
 				module: &shader,
@@ -440,8 +472,8 @@ impl strafe_client::framework::Example for GraphicsData {
 			multisample: wgpu::MultisampleState::default(),
 			multiview: None,
 		});
-		let entity_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-			label: Some("Entity"),
+		let model_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+			label: Some("Model Pipeline"),
 			layout: Some(&pipeline_layout),
 			vertex: wgpu::VertexState {
 				module: &shader,
@@ -470,27 +502,6 @@ impl strafe_client::framework::Example for GraphicsData {
 			}),
 			multisample: wgpu::MultisampleState::default(),
 			multiview: None,
-		});
-
-		let clamp_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-			label: Some("Clamp Sampler"),
-			address_mode_u: wgpu::AddressMode::ClampToEdge,
-			address_mode_v: wgpu::AddressMode::ClampToEdge,
-			address_mode_w: wgpu::AddressMode::ClampToEdge,
-			mag_filter: wgpu::FilterMode::Linear,
-			min_filter: wgpu::FilterMode::Linear,
-			mipmap_filter: wgpu::FilterMode::Linear,
-			..Default::default()
-		});
-		let repeat_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-			label: Some("Repeat Sampler"),
-			address_mode_u: wgpu::AddressMode::Repeat,
-			address_mode_v: wgpu::AddressMode::Repeat,
-			address_mode_w: wgpu::AddressMode::Repeat,
-			mag_filter: wgpu::FilterMode::Linear,
-			min_filter: wgpu::FilterMode::Linear,
-			mipmap_filter: wgpu::FilterMode::Linear,
-			..Default::default()
 		});
 
 		let device_features = device.features();
@@ -583,29 +594,12 @@ impl strafe_client::framework::Example for GraphicsData {
 					binding: 0,
 					resource: wgpu::BindingResource::TextureView(&skybox_texture_view),
 				},
-			],
-			label: Some("Sky Texture"),
-		});
-
-		let clamp_sampler_texture_filter_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-			layout: &texture_filter_bind_group_layout,
-			entries: &[
 				wgpu::BindGroupEntry {
-					binding: 0,
+					binding: 1,
 					resource: wgpu::BindingResource::Sampler(&clamp_sampler),
 				},
 			],
-			label: Some("Clamp Sampler Bind Group"),
-		});
-		let repeat_sampler_texture_filter_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-			layout: &texture_filter_bind_group_layout,
-			entries: &[
-				wgpu::BindGroupEntry {
-					binding: 0,
-					resource: wgpu::BindingResource::Sampler(&repeat_sampler),
-				},
-			],
-			label: Some("Repeat Sampler Bind Group"),
+			label: Some("Sky Texture"),
 		});
 
 		let depth_view = Self::create_depth_texture(config, device);
@@ -616,15 +610,11 @@ impl strafe_client::framework::Example for GraphicsData {
 			physics,
 			pipelines:GraphicsPipelines{
 				skybox:sky_pipeline,
-				entity:entity_pipeline
+				model:model_pipeline
 			},
 			bind_groups:GraphicsBindGroups{
 				camera:camera_bind_group,
 				skybox_texture:skybox_texture_bind_group,
-				sampler:SamplerBindGroups{
-					clamp:clamp_sampler_texture_filter_bind_group,
-					repeat:repeat_sampler_texture_filter_bind_group,
-				}
 			},
 			camera_buf,
 			models,
@@ -798,9 +788,8 @@ impl strafe_client::framework::Example for GraphicsData {
 
 			rpass.set_bind_group(0, &self.bind_groups.camera, &[]);
 			rpass.set_bind_group(2, &self.bind_groups.skybox_texture, &[]);
-			rpass.set_bind_group(3, &self.bind_groups.sampler.repeat, &[]);
 
-			rpass.set_pipeline(&self.pipelines.entity);
+			rpass.set_pipeline(&self.pipelines.model);
 			for model in self.models.iter() {
 				rpass.set_bind_group(1, &model.bind_group, &[]);
 				rpass.set_vertex_buffer(0, model.vertex_buf.slice(..));
@@ -812,8 +801,6 @@ impl strafe_client::framework::Example for GraphicsData {
 			}
 
 			rpass.set_pipeline(&self.pipelines.skybox);
-			rpass.set_bind_group(2, &self.bind_groups.skybox_texture, &[]);
-			rpass.set_bind_group(3, &self.bind_groups.sampler.clamp, &[]);
 			rpass.draw(0..3, 0..1);
 		}
 
