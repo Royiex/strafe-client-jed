@@ -135,8 +135,8 @@ pub struct PhysicsState {
 	pub hitbox_halfsize: glam::Vec3,
 	pub contacts: std::collections::HashSet::<RelativeCollision>,
 	//pub intersections: Vec<ModelId>,
+	pub models: Vec<ModelPhysics>,
 	//temp
-	pub models_cringe_clone: Vec<Model>,
 	pub temp_control_dir: glam::Vec3,
 	//camera must exist in state because wormholes modify the camera, also camera punch
 	//pub camera: Camera,
@@ -264,13 +264,13 @@ impl Aabb {
 type TreyMeshFace = AabbFace;
 type TreyMesh = Aabb;
 
-pub struct Model {
+pub struct ModelPhysics {
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
 	transform: glam::Mat4,
 }
 
-impl Model {
+impl ModelPhysics {
 	pub fn new(transform:glam::Mat4) -> Self {
 		Self{transform}
 	}
@@ -314,10 +314,10 @@ pub struct RelativeCollision {
 }
 
 impl RelativeCollision {
-	pub fn mesh(&self,models:&Vec<Model>) -> TreyMesh {
+	pub fn mesh(&self,models:&Vec<ModelPhysics>) -> TreyMesh {
 		return models.get(self.model as usize).unwrap().face_mesh(self.face)
 	}
-	pub fn normal(&self,models:&Vec<Model>) -> glam::Vec3 {
+	pub fn normal(&self,models:&Vec<ModelPhysics>) -> glam::Vec3 {
 		return models.get(self.model as usize).unwrap().face_normal(self.face)
 	}
 }
@@ -368,7 +368,7 @@ impl PhysicsState {
 
 	fn contact_constrain_velocity(&self,velocity:&mut glam::Vec3){
 		for contact in self.contacts.iter() {
-			let n=contact.normal(&self.models_cringe_clone);
+			let n=contact.normal(&self.models);
 			let d=velocity.dot(n);
 			if d<0f32{
 				(*velocity)-=d/n.length_squared()*n;
@@ -377,7 +377,7 @@ impl PhysicsState {
 	}
 	fn contact_constrain_acceleration(&self,acceleration:&mut glam::Vec3){
 		for contact in self.contacts.iter() {
-			let n=contact.normal(&self.models_cringe_clone);
+			let n=contact.normal(&self.models);
 			let d=acceleration.dot(n);
 			if d<0f32{
 				(*acceleration)-=d/n.length_squared()*n;
@@ -457,7 +457,7 @@ impl PhysicsState {
 		let mut best_time=time_limit;
 		let mut exit_face:Option<TreyMeshFace>=None;
 		let mesh0=self.mesh();
-		let mesh1=self.models_cringe_clone.get(collision_data.model as usize).unwrap().mesh();
+		let mesh1=self.models.get(collision_data.model as usize).unwrap().mesh();
 		let (v,a)=(-self.body.velocity,self.body.acceleration);
 		//collect x
 		match collision_data.face {
@@ -608,7 +608,7 @@ impl PhysicsState {
 		let mut best_time=time_limit;
 		let mut best_face:Option<TreyMeshFace>=None;
 		let mesh0=self.mesh();
-		let mesh1=self.models_cringe_clone.get(model_id as usize).unwrap().mesh();
+		let mesh1=self.models.get(model_id as usize).unwrap().mesh();
 		let (p,v,a)=(self.body.position,self.body.velocity,self.body.acceleration);
 		//collect x
 		for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,0.5*a.x) {
@@ -733,7 +733,7 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 			collector.collect(self.predict_collision_end(self.time,time_limit,collision_data));
 		}
 		//check for collision start instructions (against every part in the game with no optimization!!)
-		for i in 0..self.models_cringe_clone.len() {
+		for i in 0..self.models.len() {
 			collector.collect(self.predict_collision_start(self.time,time_limit,i as u32));
 		}
 		if self.grounded {

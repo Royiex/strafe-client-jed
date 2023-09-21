@@ -537,7 +537,13 @@ impl strafe_client::framework::Example for GraphicsData {
 			temp_control_dir: glam::Vec3::ZERO,
 			walkspeed: 18.0,
 			contacts: std::collections::HashSet::new(),
-    		models_cringe_clone: modeldatas.iter().map(|m|m.transforms.iter().map(|t|strafe_client::body::Model::new(*t))).flatten().collect(),
+    		models: modeldatas.iter().map(|m|
+    			//make aabb and run vertices to get realistic bounds
+    			//this needs to be a function generate_model_physics
+    			m.transforms.iter().map(|t|
+    				strafe_client::body::ModelPhysics::new(*t)
+				)
+			).flatten().collect(),
     		walk: strafe_client::body::WalkState::new(),
     		hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
 		};
