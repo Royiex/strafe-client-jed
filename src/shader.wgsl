@@ -41,12 +41,11 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
 	return result;
 }
 
-const MAX_ENTITY_INSTANCES=1024;
 //group 1 is the model
 @group(1)
 @binding(0)
-var<uniform> entity_transforms: array<mat4x4<f32>,MAX_ENTITY_INSTANCES>;
-//var<uniform> entity_texture_transforms: array<mat3x3<f32>,MAX_ENTITY_INSTANCES>;
+var<storage> entity_transforms: array<mat4x4<f32>>;
+//entity_texture_transforms: mat3x3<f32>;
 //my fancy idea is to create a megatexture for each model that includes all the textures each intance will need
 //the texture transform then maps the texture coordinates to the location of the specific texture
 //how to do no texture?
