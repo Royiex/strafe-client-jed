@@ -202,7 +202,7 @@ fn generate_modeldatas(data:obj::ObjData) -> Vec<ModelData>{
 			entities.push(indices);
 		}
 		modeldatas.push(ModelData {
-			transforms: vec![glam::Mat4::default()],
+			transforms: vec![],
 			vertices:vertices.clone(),
 			entities,
 		});
@@ -249,13 +249,13 @@ impl strafe_client::framework::Example for GraphicsData {
 		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap()));
 		modeldatas.append(&mut generate_modeldatas(ground));
 		println!("models.len = {:?}", modeldatas.len());
-		modeldatas[0].transforms[0]=glam::Mat4::from_translation(glam::vec3(10.,0.,-10.));
-		modeldatas[1].transforms[0]=glam::Mat4::from_translation(glam::vec3(10.,5.,10.));
+		modeldatas[0].transforms.push(glam::Mat4::from_translation(glam::vec3(10.,0.,-10.)));
+		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(10.,5.,10.)));
 		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(20.,5.,10.)));
 		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(10.,5.,20.)));
 		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(20.,5.,20.)));
-		modeldatas[2].transforms[0]=glam::Mat4::from_translation(glam::vec3(-10.,5.,10.));
-		modeldatas[3].transforms[0]=glam::Mat4::from_translation(glam::vec3(0.,0.,0.))*glam::Mat4::from_scale(glam::vec3(160.0, 1.0, 160.0));
+		modeldatas[2].transforms.push(glam::Mat4::from_translation(glam::vec3(-10.,5.,10.)));
+		modeldatas[3].transforms.push(glam::Mat4::from_translation(glam::vec3(0.,0.,0.))*glam::Mat4::from_scale(glam::vec3(160.0, 1.0, 160.0)));
 
 		let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: None,
