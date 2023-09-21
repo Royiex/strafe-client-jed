@@ -409,11 +409,14 @@ impl strafe_client::framework::Example for GraphicsData {
 		modeldatas.append(&mut generate_modeldatas(unit_cube.clone()));
 		println!("models.len = {:?}", modeldatas.len());
 		modeldatas[0].transforms.push(glam::Mat4::from_translation(glam::vec3(10.,0.,-10.)));
+		//quad monkeys
 		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(10.,5.,10.)));
 		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(20.,5.,10.)));
 		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(10.,5.,20.)));
 		modeldatas[1].transforms.push(glam::Mat4::from_translation(glam::vec3(20.,5.,20.)));
+		//teapot
 		modeldatas[2].transforms.push(glam::Mat4::from_translation(glam::vec3(-10.,5.,10.)));
+		//ground
 		modeldatas[3].transforms.push(glam::Mat4::from_translation(glam::vec3(0.,0.,0.))*glam::Mat4::from_scale(glam::vec3(160.0, 1.0, 160.0)));
 
 		let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
