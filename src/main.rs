@@ -393,76 +393,78 @@ impl strafe_client::framework::Example for GraphicsData {
 		//load textures
 		let device_features = device.features();
 
-		let skybox_format = if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC) {
-			log::info!("Using ASTC");
-			wgpu::TextureFormat::Astc {
-				block: AstcBlock::B4x4,
-				channel: AstcChannel::UnormSrgb,
-			}
-		} else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2) {
-			log::info!("Using ETC2");
-			wgpu::TextureFormat::Etc2Rgb8UnormSrgb
-		} else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
-			log::info!("Using BC");
-			wgpu::TextureFormat::Bc1RgbaUnormSrgb
-		} else {
-			log::info!("Using plain");
-			wgpu::TextureFormat::Bgra8UnormSrgb
+		let skybox_texture_view={
+			let skybox_format = if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC) {
+				log::info!("Using ASTC");
+				wgpu::TextureFormat::Astc {
+					block: AstcBlock::B4x4,
+					channel: AstcChannel::UnormSrgb,
+				}
+			} else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2) {
+				log::info!("Using ETC2");
+				wgpu::TextureFormat::Etc2Rgb8UnormSrgb
+			} else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
+				log::info!("Using BC");
+				wgpu::TextureFormat::Bc1RgbaUnormSrgb
+			} else {
+				log::info!("Using plain");
+				wgpu::TextureFormat::Bgra8UnormSrgb
+			};
+
+			let size = wgpu::Extent3d {
+				width: IMAGE_SIZE,
+				height: IMAGE_SIZE,
+				depth_or_array_layers: 6,
+			};
+
+			let layer_size = wgpu::Extent3d {
+				depth_or_array_layers: 1,
+				..size
+			};
+			let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
+
+			log::debug!(
+				"Copying {:?} skybox images of size {}, {}, 6 with {} mips to gpu",
+				skybox_format,
+				IMAGE_SIZE,
+				IMAGE_SIZE,
+				max_mips,
+			);
+
+			let bytes = match skybox_format {
+				wgpu::TextureFormat::Astc {
+					block: AstcBlock::B4x4,
+					channel: AstcChannel::UnormSrgb,
+				} => &include_bytes!("../images/astc.dds")[..],
+				wgpu::TextureFormat::Etc2Rgb8UnormSrgb => &include_bytes!("../images/etc2.dds")[..],
+				wgpu::TextureFormat::Bc1RgbaUnormSrgb => &include_bytes!("../images/bc1.dds")[..],
+				wgpu::TextureFormat::Bgra8UnormSrgb => &include_bytes!("../images/bgra.dds")[..],
+				_ => unreachable!(),
+			};
+
+			let skybox_image = ddsfile::Dds::read(&mut std::io::Cursor::new(&bytes)).unwrap();
+
+			let skybox_texture = device.create_texture_with_data(
+				queue,
+				&wgpu::TextureDescriptor {
+					size,
+					mip_level_count: max_mips,
+					sample_count: 1,
+					dimension: wgpu::TextureDimension::D2,
+					format: skybox_format,
+					usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+					label: Some("Skybox Texture"),
+					view_formats: &[],
+				},
+				&skybox_image.data,
+			);
+
+			skybox_texture.create_view(&wgpu::TextureViewDescriptor {
+				label: Some("Skybox Texture View"),
+				dimension: Some(wgpu::TextureViewDimension::Cube),
+				..wgpu::TextureViewDescriptor::default()
+			})
 		};
-
-		let size = wgpu::Extent3d {
-			width: IMAGE_SIZE,
-			height: IMAGE_SIZE,
-			depth_or_array_layers: 6,
-		};
-
-		let layer_size = wgpu::Extent3d {
-			depth_or_array_layers: 1,
-			..size
-		};
-		let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
-
-		log::debug!(
-			"Copying {:?} skybox images of size {}, {}, 6 with {} mips to gpu",
-			skybox_format,
-			IMAGE_SIZE,
-			IMAGE_SIZE,
-			max_mips,
-		);
-
-		let bytes = match skybox_format {
-			wgpu::TextureFormat::Astc {
-				block: AstcBlock::B4x4,
-				channel: AstcChannel::UnormSrgb,
-			} => &include_bytes!("../images/astc.dds")[..],
-			wgpu::TextureFormat::Etc2Rgb8UnormSrgb => &include_bytes!("../images/etc2.dds")[..],
-			wgpu::TextureFormat::Bc1RgbaUnormSrgb => &include_bytes!("../images/bc1.dds")[..],
-			wgpu::TextureFormat::Bgra8UnormSrgb => &include_bytes!("../images/bgra.dds")[..],
-			_ => unreachable!(),
-		};
-
-		let skybox_image = ddsfile::Dds::read(&mut std::io::Cursor::new(&bytes)).unwrap();
-
-		let skybox_texture = device.create_texture_with_data(
-			queue,
-			&wgpu::TextureDescriptor {
-				size,
-				mip_level_count: max_mips,
-				sample_count: 1,
-				dimension: wgpu::TextureDimension::D2,
-				format: skybox_format,
-				usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-				label: Some("Skybox Texture"),
-				view_formats: &[],
-			},
-			&skybox_image.data,
-		);
-
-		let skybox_texture_view = skybox_texture.create_view(&wgpu::TextureViewDescriptor {
-			label: Some("Skybox Texture View"),
-			dimension: Some(wgpu::TextureViewDimension::Cube),
-			..wgpu::TextureViewDescriptor::default()
-		});
 
 		//squid
 		let squid_texture_view={
