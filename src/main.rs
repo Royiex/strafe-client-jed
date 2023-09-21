@@ -850,6 +850,9 @@ impl strafe_client::framework::Example for GraphicsData {
 				if let Ok(file)=std::fs::File::open(path){
 					let input = std::io::BufReader::new(file);
 					let modeldatas=self.generate_modeldatas_roblox(input);
+					//if generate_modeldatas succeeds, clear the previous ones
+					self.models.clear();
+					self.physics.models.clear();
 					self.generate_model_physics(&modeldatas);
 					self.generate_model_graphics(device,modeldatas);
 				}else{
