@@ -645,7 +645,7 @@ impl strafe_client::framework::Example for GraphicsData {
 				_ => unreachable!(),
 			};
 
-			let skybox_image = ddsfile::Dds::read(&mut std::io::Cursor::new(&bytes)).unwrap();
+			let skybox_image = ddsfile::Dds::read(&mut std::io::Cursor::new(bytes)).unwrap();
 
 			let skybox_texture = device.create_texture_with_data(
 				queue,
@@ -671,9 +671,9 @@ impl strafe_client::framework::Example for GraphicsData {
 
 		//squid
 		let squid_texture_view={
-			let bytes = &include_bytes!("../images/squid.dds")[..];
+			let bytes = include_bytes!("../images/squid.dds");
 
-			let image = ddsfile::Dds::read(&mut std::io::Cursor::new(&bytes)).unwrap();
+			let image = ddsfile::Dds::read(&mut std::io::Cursor::new(bytes)).unwrap();
 
 			let size = wgpu::Extent3d {
 				width: image.get_width(),
