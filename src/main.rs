@@ -231,9 +231,11 @@ impl GraphicsData {
 			//make aabb and run vertices to get realistic bounds
 			m.instances.iter().map(|t|strafe_client::body::ModelPhysics::new(t.transform))
 		).flatten().collect());
+		println!("Physics Objects: {}",self.physics.models.len());
 	}
 	fn generate_model_graphics(&mut self,device:&wgpu::Device,mut modeldatas:Vec<ModelData>){
 		//drain the modeldata vec so entities can be /moved/ to models.entities
+		let mut instance_count=0;
 		self.models.reserve(modeldatas.len());
 		for (i,modeldata) in modeldatas.drain(..).enumerate() {
 			let model_uniforms = get_instances_buffer_data(&modeldata.instances);
@@ -266,6 +268,7 @@ impl GraphicsData {
 				usage: wgpu::BufferUsages::VERTEX,
 			});
 			//all of these are being moved here
+			instance_count+=modeldata.instances.len();
 			self.models.push(ModelGraphics{
 				instances:modeldata.instances,
 				vertex_buf,
@@ -284,6 +287,8 @@ impl GraphicsData {
 				model_buf,
 			})
 		}
+		println!("Graphics Objects: {}",self.models.len());
+		println!("Graphics Instances: {}",instance_count);
 	}
 }
 
