@@ -12,6 +12,11 @@ struct Vertex {
 	normal: [f32; 3],
 	color: [f32; 4],
 }
+mod body;
+mod zeroes;
+mod framework;
+mod instruction;
+mod load_roblox;
 
 struct Entity {
 	index_count: u32,
@@ -143,7 +148,7 @@ pub struct GraphicsPipelines {
 pub struct GraphicsData {
 	start_time: std::time::Instant,
 	camera: Camera,
-	physics: strafe_client::body::PhysicsState,
+	physics: body::PhysicsState,
 	pipelines: GraphicsPipelines,
 	bind_groups: GraphicsBindGroups,
 	bind_group_layouts: GraphicsBindGroupLayouts,
@@ -183,7 +188,7 @@ impl GraphicsData {
 
 	fn generate_modeldatas_roblox<R: std::io::Read>(&self,input:R) -> Vec<ModelData>{
 		let mut modeldatas=generate_modeldatas(self.handy_unit_cube.clone(),ModelData::COLOR_FLOATS_WHITE);
-		match strafe_client::load_roblox::get_objects(input, "BasePart") {
+		match load_roblox::get_objects(input, "BasePart") {
 			Ok(objects)=>{
 				for object in objects.iter() {
 					if let (
@@ -229,7 +234,7 @@ impl GraphicsData {
 	fn generate_model_physics(&mut self,modeldatas:&Vec<ModelData>){
 		self.physics.models.append(&mut modeldatas.iter().map(|m|
 			//make aabb and run vertices to get realistic bounds
-			m.instances.iter().map(|t|strafe_client::body::ModelPhysics::new(t.transform))
+			m.instances.iter().map(|t|body::ModelPhysics::new(t.transform))
 		).flatten().collect());
 		println!("Physics Objects: {}",self.physics.models.len());
 	}
@@ -345,7 +350,7 @@ fn generate_modeldatas(data:obj::ObjData,color:[f32;4]) -> Vec<ModelData>{
 	modeldatas
 }
 
-impl strafe_client::framework::Example for GraphicsData {
+impl framework::Example for GraphicsData {
 	fn optional_features() -> wgpu::Features {
 		wgpu::Features::TEXTURE_COMPRESSION_ASTC
 			| wgpu::Features::TEXTURE_COMPRESSION_ETC2
@@ -578,8 +583,8 @@ impl strafe_client::framework::Example for GraphicsData {
 			yaw: 0.0,
 			controls:0,
 		};
-		let physics = strafe_client::body::PhysicsState {
-			body: strafe_client::body::Body::with_pva(glam::vec3(0.0,50.0,0.0),glam::vec3(0.0,0.0,0.0),glam::vec3(0.0,-100.0,0.0)),
+		let physics = body::PhysicsState {
+			body: body::Body::with_pva(glam::vec3(0.0,50.0,0.0),glam::vec3(0.0,0.0,0.0),glam::vec3(0.0,-100.0,0.0)),
 			time: 0,
 			tick: 0,
 			strafe_tick_num: 100,//100t
@@ -594,7 +599,7 @@ impl strafe_client::framework::Example for GraphicsData {
 			walkspeed: 18.0,
 			contacts: std::collections::HashSet::new(),
     		models: Vec::new(),
-    		walk: strafe_client::body::WalkState::new(),
+    		walk: body::WalkState::new(),
     		hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
 		};
 
@@ -933,7 +938,7 @@ impl strafe_client::framework::Example for GraphicsData {
 		view: &wgpu::TextureView,
 		device: &wgpu::Device,
 		queue: &wgpu::Queue,
-		_spawner: &strafe_client::framework::Spawner,
+		_spawner: &framework::Spawner,
 	) {
 		let camera_mat=glam::Mat3::from_rotation_y(self.camera.yaw);
 		let control_dir=camera_mat*get_control_dir(self.camera.controls&(CONTROL_MOVELEFT|CONTROL_MOVERIGHT|CONTROL_MOVEFORWARD|CONTROL_MOVEBACK)).normalize_or_zero();
@@ -946,16 +951,16 @@ impl strafe_client::framework::Example for GraphicsData {
 		let walk_target_velocity=self.physics.walkspeed*control_dir;
 		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
 		if self.physics.grounded&&walk_target_velocity!=self.physics.walk.target_velocity {
-			strafe_client::instruction::InstructionConsumer::process_instruction(&mut self.physics, strafe_client::instruction::TimedInstruction{
+			instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
 				time,
-				instruction:strafe_client::body::PhysicsInstruction::SetWalkTargetVelocity(walk_target_velocity)
+				instruction:body::PhysicsInstruction::SetWalkTargetVelocity(walk_target_velocity)
 			});
 		}
 
 		if control_dir!=self.physics.temp_control_dir {
-			strafe_client::instruction::InstructionConsumer::process_instruction(&mut self.physics, strafe_client::instruction::TimedInstruction{
+			instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
 				time,
-				instruction:strafe_client::body::PhysicsInstruction::SetControlDir(control_dir)
+				instruction:body::PhysicsInstruction::SetControlDir(control_dir)
 			});
 		}
 
@@ -963,9 +968,9 @@ impl strafe_client::framework::Example for GraphicsData {
 		//autohop (already pressing spacebar; the signal to begin trying to jump is different)
 		if self.physics.grounded&&self.physics.jump_trying {
 			//scroll will be implemented with InputInstruction::Jump(true) but it blocks setting self.jump_trying=true
-			strafe_client::instruction::InstructionConsumer::process_instruction(&mut self.physics, strafe_client::instruction::TimedInstruction{
+			instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
 				time,
-				instruction:strafe_client::body::PhysicsInstruction::Jump
+				instruction:body::PhysicsInstruction::Jump
 			});
 		}
 
@@ -1049,7 +1054,7 @@ impl strafe_client::framework::Example for GraphicsData {
 }
 
 fn main() {
-	strafe_client::framework::run::<GraphicsData>(
+	framework::run::<GraphicsData>(
 		format!("Strafe Client v{}",
 			env!("CARGO_PKG_VERSION")
 		).as_str()
