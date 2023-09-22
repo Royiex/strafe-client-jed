@@ -1,4 +1,5 @@
 //find roots of polynomials
+#[inline]
 pub fn zeroes2(a0:f32,a1:f32,a2:f32) -> Vec<f32>{
 	if a2==0f32{
 		return zeroes1(a0, a1);
