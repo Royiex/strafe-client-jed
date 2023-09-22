@@ -1,16 +1,9 @@
-use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, time::Instant};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
+use model::{Vertex,ModelData,ModelInstance};
 
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-struct Vertex {
-	pos: [f32; 3],
-	texture: [f32; 2],
-	normal: [f32; 3],
-	color: [f32; 4],
-}
 mod body;
+mod model;
 mod zeroes;
 mod framework;
 mod instruction;
@@ -19,22 +12,6 @@ mod load_roblox;
 struct Entity {
 	index_count: u32,
 	index_buf: wgpu::Buffer,
-}
-
-struct ModelInstance {
-	transform: glam::Mat4,
-	color: glam::Vec4,
-}
-
-struct ModelData {
-	instances: Vec<ModelInstance>,
-	vertices: Vec<Vertex>,
-	entities: Vec<Vec<u16>>,
-}
-
-impl ModelData {
-	const COLOR_FLOATS_WHITE: [f32;4] = [1.0,1.0,1.0,1.0];
-	const COLOR_VEC4_WHITE: glam::Vec4 = glam::vec4(1.0,1.0,1.0,1.0);
 }
 
 struct ModelGraphics {
