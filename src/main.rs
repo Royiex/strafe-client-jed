@@ -2,8 +2,6 @@ use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, time::Instant};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 
-const IMAGE_SIZE: u32 = 128;
-
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 struct Vertex {
@@ -624,26 +622,6 @@ impl framework::Example for GraphicsData {
 				wgpu::TextureFormat::Bgra8UnormSrgb
 			};
 
-			let size = wgpu::Extent3d {
-				width: IMAGE_SIZE,
-				height: IMAGE_SIZE,
-				depth_or_array_layers: 6,
-			};
-
-			let layer_size = wgpu::Extent3d {
-				depth_or_array_layers: 1,
-				..size
-			};
-			let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
-
-			log::debug!(
-				"Copying {:?} skybox images of size {}, {}, 6 with {} mips to gpu",
-				skybox_format,
-				IMAGE_SIZE,
-				IMAGE_SIZE,
-				max_mips,
-			);
-
 			let bytes = match skybox_format {
 				wgpu::TextureFormat::Astc {
 					block: AstcBlock::B4x4,
@@ -656,6 +634,26 @@ impl framework::Example for GraphicsData {
 			};
 
 			let skybox_image = ddsfile::Dds::read(&mut std::io::Cursor::new(bytes)).unwrap();
+
+			let size = wgpu::Extent3d {
+				width: skybox_image.get_width(),
+				height: skybox_image.get_height(),
+				depth_or_array_layers: 6,
+			};
+
+			let layer_size = wgpu::Extent3d {
+				depth_or_array_layers: 1,
+				..size
+			};
+			let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
+
+			log::debug!(
+				"Copying {:?} skybox images of size {}, {}, 6 with {} mips to gpu",
+				skybox_format,
+				size.width,
+				size.height,
+				max_mips,
+			);
 
 			let skybox_texture = device.create_texture_with_data(
 				queue,
