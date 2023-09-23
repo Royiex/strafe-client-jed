@@ -6,6 +6,7 @@ mod body;
 mod model;
 mod zeroes;
 mod framework;
+mod primitives;
 mod instruction;
 mod load_roblox;
 
@@ -133,7 +134,6 @@ pub struct GraphicsData {
 	models: Vec<ModelGraphics>,
 	depth_view: wgpu::TextureView,
 	staging_belt: wgpu::util::StagingBelt,
-	handy_unit_cube: obj::ObjData,
 }
 
 impl GraphicsData {
@@ -161,51 +161,6 @@ impl GraphicsData {
 		depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
 	}
 
-	fn generate_modeldatas_roblox(&self,dom:rbx_dom_weak::WeakDom) -> Vec<ModelData>{
-		let mut modeldatas=generate_modeldatas(self.handy_unit_cube.clone(),ModelData::COLOR_FLOATS_WHITE);
-		match load_roblox::get_objects(dom, "BasePart") {
-			Ok(objects)=>{
-				for object in objects.iter() {
-					if let (
-							Some(rbx_dom_weak::types::Variant::CFrame(cf)),
-							Some(rbx_dom_weak::types::Variant::Vector3(size)),
-							Some(rbx_dom_weak::types::Variant::Float32(transparency)),
-							Some(rbx_dom_weak::types::Variant::Color3uint8(color3)),
-							Some(rbx_dom_weak::types::Variant::Enum(shape)),
-						) = (
-							object.properties.get("CFrame"),
-							object.properties.get("Size"),
-							object.properties.get("Transparency"),
-							object.properties.get("Color"),
-							object.properties.get("Shape"),//this will also skip unions
-						)
-					{
-						if *transparency==1.0||shape.to_u32()!=1 {
-							continue;
-						}
-						modeldatas[0].instances.push(ModelInstance {
-							transform:glam::Mat4::from_translation(
-									glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
-								)
-								* glam::Mat4::from_mat3(
-									glam::Mat3::from_cols(
-										glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
-										glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
-										glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
-									),
-								)
-								* glam::Mat4::from_scale(
-									glam::Vec3::new(size.x,size.y,size.z)/2.0
-								),
-							color: glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
-						})
-					}
-				}
-			},
-			Err(e) => println!("lmao err {:?}", e),
-		}
-		modeldatas
-	}
 	fn generate_model_physics(&mut self,modeldatas:&Vec<ModelData>){
 		self.physics.models.append(&mut modeldatas.iter().map(|m|
 			//make aabb and run vertices to get realistic bounds
@@ -213,59 +168,117 @@ impl GraphicsData {
 		).flatten().collect());
 		println!("Physics Objects: {}",self.physics.models.len());
 	}
-	fn generate_model_graphics(&mut self,device:&wgpu::Device,mut modeldatas:Vec<ModelData>){
+	fn generate_model_graphics(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,mut modeldatas:Vec<ModelData>,textures:Vec<String>){
+		//generate texture view per texture
+
+		//idk how to do this gooder lol
+		let mut double_map=std::collections::HashMap::<u32,u32>::new();
+		let mut texture_views:Vec<wgpu::TextureView>=Vec::with_capacity(textures.len());
+		for (i,t) in textures.iter().enumerate(){
+			if let Ok(mut file) = std::fs::File::open(std::path::Path::new(&format!("textures/{}.dds",t))){
+				let image = ddsfile::Dds::read(&mut file).unwrap();
+
+				let size = wgpu::Extent3d {
+					width: image.get_width()/4*4,//floor(w,4), should be ceil(w,4)
+					height: image.get_height()/4*4,
+					depth_or_array_layers: 1,
+				};
+
+				let layer_size = wgpu::Extent3d {
+					depth_or_array_layers: 1,
+					..size
+				};
+				let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
+
+				let texture = device.create_texture_with_data(
+					queue,
+					&wgpu::TextureDescriptor {
+						size,
+						mip_level_count: max_mips,
+						sample_count: 1,
+						dimension: wgpu::TextureDimension::D2,
+						format: wgpu::TextureFormat::Bc7RgbaUnorm,
+						usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+						label: Some(format!("Texture{}",i).as_str()),
+						view_formats: &[],
+					},
+					&image.data,
+				);
+
+				double_map.insert(i as u32, texture_views.len() as u32);
+				texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
+					label: Some(format!("Texture{} View",i).as_str()),
+					dimension: Some(wgpu::TextureViewDimension::D2),
+					..wgpu::TextureViewDescriptor::default()
+				}));
+			}
+		}
 		//drain the modeldata vec so entities can be /moved/ to models.entities
 		let mut instance_count=0;
 		self.models.reserve(modeldatas.len());
 		for (i,modeldata) in modeldatas.drain(..).enumerate() {
-			let model_uniforms = get_instances_buffer_data(&modeldata.instances);
-			let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some(format!("ModelGraphics{}",i).as_str()),
-				contents: bytemuck::cast_slice(&model_uniforms),
-				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-			});
-			let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-				layout: &self.bind_group_layouts.model,
-				entries: &[
-					wgpu::BindGroupEntry {
-						binding: 0,
-						resource: model_buf.as_entire_binding(),
+			let n_instances=modeldata.instances.len();
+			if 0<n_instances{
+				let model_uniforms = get_instances_buffer_data(&modeldata.instances);
+				let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+					label: Some(format!("Model{} Buf",i).as_str()),
+					contents: bytemuck::cast_slice(&model_uniforms),
+					usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+				});
+				let texture_view=match modeldata.texture{
+					Some(texture_id)=>{
+						match double_map.get(&texture_id){
+							Some(&mapped_texture_id)=>&texture_views[mapped_texture_id as usize],
+							None=>&self.temp_squid_texture_view,
+						}
 					},
-					wgpu::BindGroupEntry {
-						binding: 1,
-						resource: wgpu::BindingResource::TextureView(&self.temp_squid_texture_view),
-					},
-					wgpu::BindGroupEntry {
-						binding: 2,
-						resource: wgpu::BindingResource::Sampler(&self.samplers.repeat),
-					},
-				],
-				label: Some(format!("ModelGraphics{}",i).as_str()),
-			});
-			let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some("Vertex"),
-				contents: bytemuck::cast_slice(&modeldata.vertices),
-				usage: wgpu::BufferUsages::VERTEX,
-			});
-			//all of these are being moved here
-			instance_count+=modeldata.instances.len();
-			self.models.push(ModelGraphics{
-				instances:modeldata.instances,
-				vertex_buf,
-				entities: modeldata.entities.iter().map(|indices|{
-					let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-						label: Some("Index"),
-						contents: bytemuck::cast_slice(&indices),
-						usage: wgpu::BufferUsages::INDEX,
-					});
-					Entity {
-						index_buf,
-						index_count: indices.len() as u32,
-					}
-				}).collect(),
-				bind_group: model_bind_group,
-				model_buf,
-			})
+					None=>&self.temp_squid_texture_view,
+				};
+				let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+					layout: &self.bind_group_layouts.model,
+					entries: &[
+						wgpu::BindGroupEntry {
+							binding: 0,
+							resource: model_buf.as_entire_binding(),
+						},
+						wgpu::BindGroupEntry {
+							binding: 1,
+							resource: wgpu::BindingResource::TextureView(texture_view),
+						},
+						wgpu::BindGroupEntry {
+							binding: 2,
+							resource: wgpu::BindingResource::Sampler(&self.samplers.repeat),
+						},
+					],
+					label: Some(format!("Model{} Bind Group",i).as_str()),
+				});
+				let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+					label: Some("Vertex"),
+					contents: bytemuck::cast_slice(&modeldata.vertices),
+					usage: wgpu::BufferUsages::VERTEX,
+				});
+				//all of these are being moved here
+				instance_count+=n_instances;
+				self.models.push(ModelGraphics{
+					instances:modeldata.instances,
+					vertex_buf,
+					entities: modeldata.entities.iter().map(|indices|{
+						let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+							label: Some("Index"),
+							contents: bytemuck::cast_slice(&indices),
+							usage: wgpu::BufferUsages::INDEX,
+						});
+						Entity {
+							index_buf,
+							index_count: indices.len() as u32,
+						}
+					}).collect(),
+					bind_group: model_bind_group,
+					model_buf,
+				});
+			}else{
+				println!("WARNING: Model{} has 0 instances",i);
+			}
 		}
 		println!("Graphics Objects: {}",self.models.len());
 		println!("Graphics Instances: {}",instance_count);
@@ -284,47 +297,6 @@ fn get_instances_buffer_data(instances:&Vec<ModelInstance>) -> Vec<f32> {
 	raw
 }
 
-fn generate_modeldatas(data:obj::ObjData,color:[f32;4]) -> Vec<ModelData>{
-	let mut modeldatas=Vec::new();
-	let mut vertices = Vec::new();
-	let mut vertex_index = std::collections::HashMap::<obj::IndexTuple,u16>::new();
-	for object in data.objects {
-		vertices.clear();
-		vertex_index.clear();
-		let mut entities = Vec::new();
-		for group in object.groups {
-			let mut indices = Vec::new();
-			for poly in group.polys {
-				for end_index in 2..poly.0.len() {
-					for &index in &[0, end_index - 1, end_index] {
-						let vert = poly.0[index];
-						if let Some(&i)=vertex_index.get(&vert){
-							indices.push(i);
-						}else{
-							let i=vertices.len() as u16;
-							vertices.push(Vertex {
-								pos: data.position[vert.0],
-								texture: data.texture[vert.1.unwrap()],
-								normal: data.normal[vert.2.unwrap()],
-								color,
-							});
-							vertex_index.insert(vert,i);
-							indices.push(i);
-						}
-					}
-				}
-			}
-			entities.push(indices);
-		}
-		modeldatas.push(ModelData {
-			instances: Vec::new(),
-			vertices:vertices.clone(),
-			entities,
-		});
-	}
-	modeldatas
-}
-
 impl framework::Example for GraphicsData {
 	fn optional_features() -> wgpu::Features {
 		wgpu::Features::TEXTURE_COMPRESSION_ASTC
@@ -340,85 +312,12 @@ impl framework::Example for GraphicsData {
 		device: &wgpu::Device,
 		queue: &wgpu::Queue,
 	) -> Self {
-		let unit_cube=obj::ObjData{
-			position: vec![
-				[-1.,-1., 1.],//left bottom back
-				[ 1.,-1., 1.],//right bottom back
-				[ 1., 1., 1.],//right top back
-				[-1., 1., 1.],//left top back
-				[-1., 1.,-1.],//left top front
-				[ 1., 1.,-1.],//right top front
-				[ 1.,-1.,-1.],//right bottom front
-				[-1.,-1.,-1.],//left bottom front
-			],
-			texture: vec![[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0]],
-			normal: vec![
-				[1.,0.,0.],//AabbFace::Right
-				[0.,1.,0.],//AabbFace::Top
-				[0.,0.,1.],//AabbFace::Back
-				[-1.,0.,0.],//AabbFace::Left
-				[0.,-1.,0.],//AabbFace::Bottom
-				[0.,0.,-1.],//AabbFace::Front
-			],
-			objects: vec![obj::Object{
-				name: "Unit Cube".to_owned(),
-				groups: vec![obj::Group{
-					name: "Cube Vertices".to_owned(),
-					index: 0,
-					material: None,
-					polys: vec![
-						// back (0, 0, 1)
-						obj::SimplePolygon(vec![
-							obj::IndexTuple(0,Some(0),Some(2)),
-							obj::IndexTuple(1,Some(1),Some(2)),
-							obj::IndexTuple(2,Some(2),Some(2)),
-							obj::IndexTuple(3,Some(3),Some(2)),
-						]),
-						// front (0, 0,-1)
-						obj::SimplePolygon(vec![
-							obj::IndexTuple(4,Some(0),Some(5)),
-							obj::IndexTuple(5,Some(1),Some(5)),
-							obj::IndexTuple(6,Some(2),Some(5)),
-							obj::IndexTuple(7,Some(3),Some(5)),
-						]),
-						// right (1, 0, 0)
-						obj::SimplePolygon(vec![
-							obj::IndexTuple(6,Some(0),Some(0)),
-							obj::IndexTuple(5,Some(1),Some(0)),
-							obj::IndexTuple(2,Some(2),Some(0)),
-							obj::IndexTuple(1,Some(3),Some(0)),
-						]),
-						// left (-1, 0, 0)
-						obj::SimplePolygon(vec![
-							obj::IndexTuple(0,Some(0),Some(3)),
-							obj::IndexTuple(3,Some(1),Some(3)),
-							obj::IndexTuple(4,Some(2),Some(3)),
-							obj::IndexTuple(7,Some(3),Some(3)),
-						]),
-						// top (0, 1, 0)
-						obj::SimplePolygon(vec![
-							obj::IndexTuple(5,Some(1),Some(1)),
-							obj::IndexTuple(4,Some(0),Some(1)),
-							obj::IndexTuple(3,Some(3),Some(1)),
-							obj::IndexTuple(2,Some(2),Some(1)),
-						]),
-						// bottom (0,-1, 0)
-						obj::SimplePolygon(vec![
-							obj::IndexTuple(1,Some(1),Some(4)),
-							obj::IndexTuple(0,Some(0),Some(4)),
-							obj::IndexTuple(7,Some(3),Some(4)),
-							obj::IndexTuple(6,Some(2),Some(4)),
-						]),
-					],
-				}]
-			}],
-			material_libs: Vec::new(),
-		};
+		let unit_cube=primitives::the_unit_cube_lol();
 		let mut modeldatas = Vec::<ModelData>::new();
-		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
-		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
-		modeldatas.append(&mut generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
-		modeldatas.append(&mut generate_modeldatas(unit_cube.clone(),ModelData::COLOR_FLOATS_WHITE));
+		modeldatas.append(&mut model::generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
+		modeldatas.append(&mut model::generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
+		modeldatas.append(&mut model::generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
+		modeldatas.append(&mut model::generate_modeldatas(unit_cube.clone(),ModelData::COLOR_FLOATS_WHITE));
 		println!("models.len = {:?}", modeldatas.len());
 		modeldatas[0].instances.push(ModelInstance{
 			transform:glam::Mat4::from_translation(glam::vec3(10.,0.,-10.)),
@@ -795,7 +694,6 @@ impl framework::Example for GraphicsData {
 		let depth_view = Self::create_depth_texture(config, device);
 
 		let mut graphics=GraphicsData {
-			handy_unit_cube:unit_cube,
 			start_time: Instant::now(),
 			camera,
 			physics,
@@ -817,13 +715,13 @@ impl framework::Example for GraphicsData {
 		};
 
 		graphics.generate_model_physics(&modeldatas);
-		graphics.generate_model_graphics(&device,modeldatas);
+		graphics.generate_model_graphics(&device,&queue,modeldatas,Vec::new());
 
 		return graphics;
 	}
 
 	#[allow(clippy::single_match)]
-	fn update(&mut self, device: &wgpu::Device, event: winit::event::WindowEvent) {
+	fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, event: winit::event::WindowEvent) {
 		//nothing atm
 		match event {
 			winit::event::WindowEvent::DroppedFile(path) => {
@@ -840,16 +738,16 @@ impl framework::Example for GraphicsData {
 					//.snf = "SNBF"
 					if let (Ok(()),Ok(()))=(std::io::Read::read_exact(&mut input, &mut first_8),std::io::Seek::rewind(&mut input)){
 						//
-						if let Some(modeldatas)={
+						if let Some(Ok((modeldatas,textures,spawn_point)))={
 							if &first_8==b"<roblox!"{
 								if let Ok(dom) = rbx_binary::from_reader(input){
-									Some(self.generate_modeldatas_roblox(dom))
+									Some(load_roblox::generate_modeldatas_roblox(dom))
 								}else{
 									None
 								}
 							}else if &first_8==b"<roblox "{
 								if let Ok(dom) = rbx_xml::from_reader(input,rbx_xml::DecodeOptions::default()){
-									Some(self.generate_modeldatas_roblox(dom))
+									Some(load_roblox::generate_modeldatas_roblox(dom))
 								}else{
 									None
 								}
@@ -863,7 +761,13 @@ impl framework::Example for GraphicsData {
 							self.models.clear();
 							self.physics.models.clear();
 							self.generate_model_physics(&modeldatas);
-							self.generate_model_graphics(device,modeldatas);
+							self.generate_model_graphics(device,queue,modeldatas,textures);
+							//manual reset
+							let time=self.physics.time;
+							instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
+								time,
+								instruction: body::PhysicsInstruction::SetPosition(spawn_point),
+							})
 						}else{
 							println!("No modeldatas were generated");
 						}

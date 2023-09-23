@@ -53,7 +53,7 @@ pub trait Example: 'static + Sized {
 		device: &wgpu::Device,
 		queue: &wgpu::Queue,
 	);
-	fn update(&mut self, device: &wgpu::Device, event: WindowEvent);
+	fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, event: WindowEvent);
 	fn move_mouse(&mut self, delta: (f64,f64));
 	fn render(
 		&mut self,
@@ -369,7 +369,7 @@ fn start<E: Example>(
 					println!("{:#?}", instance.generate_report());
 				}
 				_ => {
-					example.update(&device,event);
+					example.update(&device,&queue,event);
 				}
 			},
 			event::Event::DeviceEvent {
