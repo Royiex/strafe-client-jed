@@ -181,24 +181,41 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
 		(size, surface)
 	};
-	let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, Some(&surface))
-		.await
-		.expect("No suitable GPU adapters found on the system!");
+
+	let adapter;
+
+	let optional_features = E::optional_features();
+	let required_features = E::required_features();
+
+	//no helper function smh gotta write it myself
+	let adapters = instance.enumerate_adapters(backends);
+
+	let mut chosen_adapter = None;
+	for adapter in adapters {
+		if !adapter.is_surface_supported(&surface) {
+			continue;
+		}
+
+		let adapter_features = adapter.features();
+		if adapter_features.contains(required_features) {
+			chosen_adapter = Some(adapter);
+			if adapter_features.contains(optional_features) {
+				break;
+			}
+		}
+	}
+
+	if let Some(maybe_chosen_adapter) = chosen_adapter{
+		adapter=maybe_chosen_adapter;
+	}else{
+		panic!("No suitable GPU adapters found on the system!");
+	}
 
 	#[cfg(not(target_arch = "wasm32"))]
 	{
 		let adapter_info = adapter.get_info();
 		println!("Using {} ({:?})", adapter_info.name, adapter_info.backend);
 	}
-
-	let optional_features = E::optional_features();
-	let required_features = E::required_features();
-	let adapter_features = adapter.features();
-	assert!(
-		adapter_features.contains(required_features),
-		"Adapter does not support required features for this example: {:?}",
-		required_features - adapter_features
-	);
 
 	let required_downlevel_capabilities = E::required_downlevel_capabilities();
 	let downlevel_capabilities = adapter.get_downlevel_capabilities();
@@ -223,7 +240,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 		.request_device(
 			&wgpu::DeviceDescriptor {
 				label: None,
-				features: (optional_features & adapter_features) | required_features,
+				features: (optional_features & adapter.features()) | required_features,
 				limits: needed_limits,
 			},
 			trace_dir.ok().as_ref().map(std::path::Path::new),
