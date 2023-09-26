@@ -79,24 +79,21 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 					object.properties.get("Shape"),//this will also skip unions
 				)
 			{
-				let model_instance=ModelInstance {
-						transform:glam::Mat4::from_translation(
-								glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
-							)
-							* glam::Mat4::from_mat3(
-								glam::Mat3::from_cols(
-									glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
-									glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
-									glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
-								),
-							)
-							* glam::Mat4::from_scale(
-								glam::Vec3::new(size.x,size.y,size.z)/2.0
-							),
-						color: glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
-					};
+				let model_transform=glam::Affine3A::from_translation(
+					glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
+				)
+				* glam::Affine3A::from_mat3(
+					glam::Mat3::from_cols(
+						glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
+						glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
+						glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
+					),
+				)
+				* glam::Affine3A::from_scale(
+					glam::Vec3::new(size.x,size.y,size.z)/2.0
+				);
 				if object.name=="MapStart"{
-					spawn_point=glam::Vec4Swizzles::xyz(model_instance.transform*glam::Vec3::Y.extend(1.0))+glam::vec3(0.0,2.5,0.0);
+					spawn_point=model_transform.transform_point3(glam::Vec3::Y)+glam::vec3(0.0,2.5,0.0);
 					println!("Found MapStart{:?}",spawn_point);
 				}
 				if *transparency==1.0||shape.to_u32()!=1 {
@@ -105,10 +102,34 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 				temp_objects.clear();
 				recursive_collect_superclass(&mut temp_objects, &dom, object,"Decal");
 
+				let mut texture_transform=glam::Affine2::IDENTITY;
 				let mut i_can_only_load_one_texture_per_model=None;
 				for &decal_ref in &temp_objects{
 					if let Some(decal)=dom.get_by_ref(decal_ref){
 						if let Some(rbx_dom_weak::types::Variant::Content(content)) = decal.properties.get("Texture") {
+							if decal.class=="Texture"{
+								//generate tranform
+								if let (
+										Some(rbx_dom_weak::types::Variant::Float32(ox)),
+										Some(rbx_dom_weak::types::Variant::Float32(oy)),
+										Some(rbx_dom_weak::types::Variant::Float32(sx)),
+										Some(rbx_dom_weak::types::Variant::Float32(sy)),
+									) = (
+										decal.properties.get("OffsetStudsU"),
+										decal.properties.get("OffsetStudsV"),
+										decal.properties.get("StudsPerTileU"),
+										decal.properties.get("StudsPerTileV"),
+									)
+								{
+									//pretend we don't need to know the face
+									texture_transform=glam::Affine2::from_translation(
+										glam::vec2(*ox/size.x,*oy/size.y)
+									)
+									*glam::Affine2::from_scale(
+										glam::vec2(*sx/size.x,*sy/size.y)
+									);
+								}
+							}
 							if let Ok(asset_id)=content.clone().into_string().parse::<RobloxAssetId>(){
 								if let Some(&texture_id)=texture_id_from_asset_id.get(&asset_id.0){
 									i_can_only_load_one_texture_per_model=Some(texture_id);
@@ -125,6 +146,11 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 						}
 					}
 				}
+				let model_instance=ModelInstance {
+					model_transform,
+					texture_transform,
+					color: glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
+				};
 				match i_can_only_load_one_texture_per_model{
 					//push to existing texture model
 					Some(texture_id)=>modeldatas[(texture_id+1) as usize].instances.push(model_instance),

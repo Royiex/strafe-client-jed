@@ -7,10 +7,10 @@ pub struct Vertex {
 	pub normal: [f32; 3],
 	pub color: [f32; 4],
 }
-
 #[derive(Clone)]
 pub struct ModelInstance {
-	pub transform: glam::Mat4,
+	pub model_transform: glam::Affine3A,
+	pub texture_transform: glam::Affine2,
 	pub color: glam::Vec4,
 }
 

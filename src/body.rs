@@ -269,12 +269,12 @@ type TreyMesh = Aabb;
 pub struct ModelPhysics {
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
-	transform: glam::Mat4,
+	model_transform: glam::Affine3A,
 }
 
 impl ModelPhysics {
-	pub fn new(transform:glam::Mat4) -> Self {
-		Self{transform}
+	pub fn new(model_transform:glam::Affine3A) -> Self {
+		Self{model_transform}
 	}
 	pub fn unit_vertices(&self) -> [glam::Vec3;8] {
 		Aabb::unit_vertices()
@@ -282,7 +282,7 @@ impl ModelPhysics {
 	pub fn mesh(&self) -> TreyMesh {
 		let mut aabb=Aabb::new();
 		for &vertex in self.unit_vertices().iter() {
-			aabb.grow(glam::Vec4Swizzles::xyz(self.transform*vertex.extend(1.0)));
+			aabb.grow(self.model_transform.transform_point3(vertex));
 		}
 		return aabb;
 	}
@@ -303,7 +303,7 @@ impl ModelPhysics {
 		return aabb;
 	}
 	pub fn face_normal(&self,face:TreyMeshFace) -> glam::Vec3 {
-		glam::Vec4Swizzles::xyz(Aabb::normal(face).extend(0.0))//this is wrong for scale
+		Aabb::normal(face)//this is wrong for scale
 	}
 }
 
