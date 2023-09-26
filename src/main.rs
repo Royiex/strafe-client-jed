@@ -161,9 +161,9 @@ impl GraphicsData {
 		depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
 	}
 
-	fn generate_modeldatas_roblox<R: std::io::Read>(&self,input:R) -> Vec<ModelData>{
+	fn generate_modeldatas_roblox(&self,dom:rbx_dom_weak::WeakDom) -> Vec<ModelData>{
 		let mut modeldatas=generate_modeldatas(self.handy_unit_cube.clone(),ModelData::COLOR_FLOATS_WHITE);
-		match load_roblox::get_objects(input, "BasePart") {
+		match load_roblox::get_objects(dom, "BasePart") {
 			Ok(objects)=>{
 				for object in objects.iter() {
 					if let (
@@ -830,13 +830,40 @@ impl framework::Example for GraphicsData {
 				println!("opening file: {:?}", &path);
 				//oh boy! let's load the map!
 				if let Ok(file)=std::fs::File::open(path){
-					let input = std::io::BufReader::new(file);
-					let modeldatas=self.generate_modeldatas_roblox(input);
-					//if generate_modeldatas succeeds, clear the previous ones
-					self.models.clear();
-					self.physics.models.clear();
-					self.generate_model_physics(&modeldatas);
-					self.generate_model_graphics(device,modeldatas);
+					let mut input = std::io::BufReader::new(file);
+					let mut first_8=[0u8;8];
+					//.rbxm roblox binary = "<roblox!"
+					//.rbxmx roblox xml = "<roblox "
+					//.bsp = "VBSP"
+					//.vmf = 
+					//.snf = "SNMF"
+					//.snf = "SNBF"
+					if let (Ok(()),Ok(()))=(std::io::Read::read_exact(&mut input, &mut first_8),std::io::Seek::rewind(&mut input)){
+						//
+						if let Some(modeldatas)={
+							if &first_8==b"<roblox!"{
+								if let Ok(dom) = rbx_binary::from_reader(input){
+									Some(self.generate_modeldatas_roblox(dom))
+								}else{
+									None
+								}
+							//}else if &first_8[0..4]==b"VBSP"{
+							//	self.generate_modeldatas_valve(input)
+							}else{
+								None
+							}
+						}{
+							//if generate_modeldatas succeeds, clear the previous ones
+							self.models.clear();
+							self.physics.models.clear();
+							self.generate_model_physics(&modeldatas);
+							self.generate_model_graphics(device,modeldatas);
+						}else{
+							println!("No modeldatas were generated");
+						}
+					}else{
+						println!("Failed ro read first 8 bytes and seek back to beginning of file.");
+					}
 				}else{
 					println!("Could not open file");
 				}

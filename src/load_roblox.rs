@@ -10,10 +10,8 @@ fn class_is_a(class: &str, superclass: &str) -> bool {
 	}
 	return false
 }
-pub fn get_objects<R: std::io::Read>(buf_thing: R, superclass: &str) -> Result<std::vec::Vec<rbx_dom_weak::Instance>, Box<dyn std::error::Error>> {
-	// Using buffered I/O is recommended with rbx_binary
-	let dom = rbx_binary::from_reader(buf_thing)?;
 
+pub fn get_objects(dom:rbx_dom_weak::WeakDom, superclass: &str) -> Result<std::vec::Vec<rbx_dom_weak::Instance>, Box<dyn std::error::Error>> {
 	let mut objects = std::vec::Vec::<rbx_dom_weak::Instance>::new();
 	//move matching instances into objects
 	let (_,mut instances) = dom.into_raw();
