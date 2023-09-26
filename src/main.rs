@@ -134,7 +134,6 @@ pub struct GraphicsData {
 	models: Vec<ModelGraphics>,
 	depth_view: wgpu::TextureView,
 	staging_belt: wgpu::util::StagingBelt,
-	handy_unit_cube: obj::ObjData,
 }
 
 impl GraphicsData {
@@ -169,100 +168,117 @@ impl GraphicsData {
 		).flatten().collect());
 		println!("Physics Objects: {}",self.physics.models.len());
 	}
-	fn generate_model_graphics<R: std::io::Read>(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,mut modeldatas:Vec<ModelData>,mut textures:Vec<R>){
+	fn generate_model_graphics(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,mut modeldatas:Vec<ModelData>,textures:Vec<String>){
 		//generate texture view per texture
-		let texture_views:Vec<wgpu::TextureView>=textures.iter_mut().map(|mut t|{
-			let image = ddsfile::Dds::read(&mut t).unwrap();
 
-			let size = wgpu::Extent3d {
-				width: image.get_width(),
-				height: image.get_height(),
-				depth_or_array_layers: 1,
-			};
+		//idk how to do this gooder lol
+		let mut double_map=std::collections::HashMap::<u32,u32>::new();
+		let mut texture_views:Vec<wgpu::TextureView>=Vec::with_capacity(textures.len());
+		for (i,t) in textures.iter().enumerate(){
+			if let Ok(mut file) = std::fs::File::open(std::path::Path::new(&format!("textures/{}.dds",t))){
+				let image = ddsfile::Dds::read(&mut file).unwrap();
 
-			let layer_size = wgpu::Extent3d {
-				depth_or_array_layers: 1,
-				..size
-			};
-			let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
+				let size = wgpu::Extent3d {
+					width: image.get_width()/4*4,//floor(w,4), should be ceil(w,4)
+					height: image.get_height()/4*4,
+					depth_or_array_layers: 1,
+				};
 
-			let texture = device.create_texture_with_data(
-				queue,
-				&wgpu::TextureDescriptor {
-					size,
-					mip_level_count: max_mips,
-					sample_count: 1,
-					dimension: wgpu::TextureDimension::D2,
-					format: wgpu::TextureFormat::Bc7RgbaUnorm,
-					usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-					label: Some("Squid Texture"),
-					view_formats: &[],
-				},
-				&image.data,
-			);
+				let layer_size = wgpu::Extent3d {
+					depth_or_array_layers: 1,
+					..size
+				};
+				let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
 
-			texture.create_view(&wgpu::TextureViewDescriptor {
-				label: Some("Squid Texture View"),
-				dimension: Some(wgpu::TextureViewDimension::D2),
-				..wgpu::TextureViewDescriptor::default()
-			})
-		}).collect();
+				let texture = device.create_texture_with_data(
+					queue,
+					&wgpu::TextureDescriptor {
+						size,
+						mip_level_count: max_mips,
+						sample_count: 1,
+						dimension: wgpu::TextureDimension::D2,
+						format: wgpu::TextureFormat::Bc7RgbaUnorm,
+						usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+						label: Some(format!("Texture{}",i).as_str()),
+						view_formats: &[],
+					},
+					&image.data,
+				);
+
+				double_map.insert(i as u32, texture_views.len() as u32);
+				texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
+					label: Some(format!("Texture{} View",i).as_str()),
+					dimension: Some(wgpu::TextureViewDimension::D2),
+					..wgpu::TextureViewDescriptor::default()
+				}));
+			}
+		}
 		//drain the modeldata vec so entities can be /moved/ to models.entities
 		let mut instance_count=0;
 		self.models.reserve(modeldatas.len());
 		for (i,modeldata) in modeldatas.drain(..).enumerate() {
-			let model_uniforms = get_instances_buffer_data(&modeldata.instances);
-			let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some(format!("ModelGraphics{}",i).as_str()),
-				contents: bytemuck::cast_slice(&model_uniforms),
-				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-			});
-			let texture_view=match modeldata.texture{
-				Some(texture_id)=>&texture_views[texture_id as usize],
-				None=>&self.temp_squid_texture_view,
-			};
-			let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-				layout: &self.bind_group_layouts.model,
-				entries: &[
-					wgpu::BindGroupEntry {
-						binding: 0,
-						resource: model_buf.as_entire_binding(),
+			let n_instances=modeldata.instances.len();
+			if 0<n_instances{
+				let model_uniforms = get_instances_buffer_data(&modeldata.instances);
+				let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+					label: Some(format!("Model{} Buf",i).as_str()),
+					contents: bytemuck::cast_slice(&model_uniforms),
+					usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+				});
+				let texture_view=match modeldata.texture{
+					Some(texture_id)=>{
+						match double_map.get(&texture_id){
+							Some(&mapped_texture_id)=>&texture_views[mapped_texture_id as usize],
+							None=>&self.temp_squid_texture_view,
+						}
 					},
-					wgpu::BindGroupEntry {
-						binding: 1,
-						resource: wgpu::BindingResource::TextureView(texture_view),
-					},
-					wgpu::BindGroupEntry {
-						binding: 2,
-						resource: wgpu::BindingResource::Sampler(&self.samplers.repeat),
-					},
-				],
-				label: Some(format!("ModelGraphics{}",i).as_str()),
-			});
-			let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-				label: Some("Vertex"),
-				contents: bytemuck::cast_slice(&modeldata.vertices),
-				usage: wgpu::BufferUsages::VERTEX,
-			});
-			//all of these are being moved here
-			instance_count+=modeldata.instances.len();
-			self.models.push(ModelGraphics{
-				instances:modeldata.instances,
-				vertex_buf,
-				entities: modeldata.entities.iter().map(|indices|{
-					let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-						label: Some("Index"),
-						contents: bytemuck::cast_slice(&indices),
-						usage: wgpu::BufferUsages::INDEX,
-					});
-					Entity {
-						index_buf,
-						index_count: indices.len() as u32,
-					}
-				}).collect(),
-				bind_group: model_bind_group,
-				model_buf,
-			})
+					None=>&self.temp_squid_texture_view,
+				};
+				let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+					layout: &self.bind_group_layouts.model,
+					entries: &[
+						wgpu::BindGroupEntry {
+							binding: 0,
+							resource: model_buf.as_entire_binding(),
+						},
+						wgpu::BindGroupEntry {
+							binding: 1,
+							resource: wgpu::BindingResource::TextureView(texture_view),
+						},
+						wgpu::BindGroupEntry {
+							binding: 2,
+							resource: wgpu::BindingResource::Sampler(&self.samplers.repeat),
+						},
+					],
+					label: Some(format!("Model{} Bind Group",i).as_str()),
+				});
+				let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+					label: Some("Vertex"),
+					contents: bytemuck::cast_slice(&modeldata.vertices),
+					usage: wgpu::BufferUsages::VERTEX,
+				});
+				//all of these are being moved here
+				instance_count+=n_instances;
+				self.models.push(ModelGraphics{
+					instances:modeldata.instances,
+					vertex_buf,
+					entities: modeldata.entities.iter().map(|indices|{
+						let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+							label: Some("Index"),
+							contents: bytemuck::cast_slice(&indices),
+							usage: wgpu::BufferUsages::INDEX,
+						});
+						Entity {
+							index_buf,
+							index_count: indices.len() as u32,
+						}
+					}).collect(),
+					bind_group: model_bind_group,
+					model_buf,
+				});
+			}else{
+				println!("WARNING: Model{} has 0 instances",i);
+			}
 		}
 		println!("Graphics Objects: {}",self.models.len());
 		println!("Graphics Instances: {}",instance_count);
@@ -678,7 +694,6 @@ impl framework::Example for GraphicsData {
 		let depth_view = Self::create_depth_texture(config, device);
 
 		let mut graphics=GraphicsData {
-			handy_unit_cube:unit_cube,
 			start_time: Instant::now(),
 			camera,
 			physics,
@@ -700,7 +715,7 @@ impl framework::Example for GraphicsData {
 		};
 
 		graphics.generate_model_physics(&modeldatas);
-		graphics.generate_model_graphics(&device,&queue,modeldatas,Vec::<std::fs::File>::new());
+		graphics.generate_model_graphics(&device,&queue,modeldatas,Vec::new());
 
 		return graphics;
 	}
@@ -723,16 +738,16 @@ impl framework::Example for GraphicsData {
 					//.snf = "SNBF"
 					if let (Ok(()),Ok(()))=(std::io::Read::read_exact(&mut input, &mut first_8),std::io::Seek::rewind(&mut input)){
 						//
-						if let Some(modeldatas)={
+						if let Some(Ok((modeldatas,textures,spawn_point)))={
 							if &first_8==b"<roblox!"{
 								if let Ok(dom) = rbx_binary::from_reader(input){
-									Some(self.generate_modeldatas_roblox(dom))
+									Some(load_roblox::generate_modeldatas_roblox(dom))
 								}else{
 									None
 								}
 							}else if &first_8==b"<roblox "{
 								if let Ok(dom) = rbx_xml::from_reader(input,rbx_xml::DecodeOptions::default()){
-									Some(self.generate_modeldatas_roblox(dom))
+									Some(load_roblox::generate_modeldatas_roblox(dom))
 								}else{
 									None
 								}
@@ -746,26 +761,19 @@ impl framework::Example for GraphicsData {
 							self.models.clear();
 							self.physics.models.clear();
 							self.generate_model_physics(&modeldatas);
-							self.generate_model_graphics(device,modeldatas);
+							self.generate_model_graphics(device,queue,modeldatas,textures);
+							//manual reset
+							let time=self.physics.time;
+							instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
+								time,
+								instruction: body::PhysicsInstruction::SetPosition(spawn_point),
+							})
 						}else{
 							println!("No modeldatas were generated");
 						}
 					}else{
 						println!("Failed ro read first 8 bytes and seek back to beginning of file.");
 					}
-					//let input = std::io::BufReader::new(file);
-					//let (modeldatas,textures)=load_roblox::generate_modeldatas_roblox(input).unwrap();
-					//if generate_modeldatas succeeds, clear the previous ones
-					//self.models.clear();
-					//self.physics.models.clear();
-					//self.generate_model_physics(&modeldatas);
-					//self.generate_model_graphics(device,queue,modeldatas,textures);
-					//manual reset
-					//let time=self.physics.time;
-					//instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
-					//	time,
-					//	instruction: body::PhysicsInstruction::SetPosition(spawn_point),
-					//})
 				}else{
 					println!("Could not open file");
 				}

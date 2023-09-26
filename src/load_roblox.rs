@@ -51,7 +51,7 @@ impl std::str::FromStr for RobloxAssetId {
         Err(RobloxAssetIdParseErr)
     }
 }
-pub fn generate_modeldatas_roblox(dom:&rbx_dom_weak::WeakDom) -> Result<(Vec<ModelData>,Vec<std::fs::File>), Box<dyn std::error::Error>>{
+pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<ModelData>,Vec<String>,glam::Vec3), Box<dyn std::error::Error>>{
 	//ModelData includes texture dds
 	let mut spawn_point=glam::Vec3::ZERO;
 
@@ -136,8 +136,5 @@ pub fn generate_modeldatas_roblox(dom:&rbx_dom_weak::WeakDom) -> Result<(Vec<Mod
 			}
 		}
 	}
-	let texture_files:Result<Vec<std::fs::File>,_>=asset_id_from_texture_id.iter().map(|asset_id|{
-		std::fs::File::open(std::path::Path::new(&format!("textures/{}.dds",asset_id)))
-	}).collect();
-	Ok((modeldatas,texture_files?,spawn_point))
+	Ok((modeldatas,asset_id_from_texture_id.iter().map(|t|t.to_string()).collect(),spawn_point))
 }
