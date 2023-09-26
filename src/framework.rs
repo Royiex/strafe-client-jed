@@ -191,17 +191,23 @@ async fn setup<E: Example>(title: &str) -> Setup {
 	let adapters = instance.enumerate_adapters(backends);
 
 	let mut chosen_adapter = None;
+	let mut chosen_adapter_score=0;
 	for adapter in adapters {
 		if !adapter.is_surface_supported(&surface) {
 			continue;
 		}
 
+		let score=match adapter.get_info().device_type{
+			wgpu::DeviceType::IntegratedGpu=>3,
+			wgpu::DeviceType::DiscreteGpu=>4,
+			wgpu::DeviceType::VirtualGpu=>2,
+			wgpu::DeviceType::Other|wgpu::DeviceType::Cpu=>1,
+		};
+
 		let adapter_features = adapter.features();
-		if adapter_features.contains(required_features) {
-			chosen_adapter = Some(adapter);
-			if adapter_features.contains(optional_features) {
-				break;
-			}
+		if chosen_adapter_score<score&&adapter_features.contains(required_features) {
+			chosen_adapter_score=score;
+			chosen_adapter=Some(adapter);
 		}
 	}
 
