@@ -17,6 +17,7 @@ pollster = "0.3.0"
 rbx_binary = "0.7.1"
 rbx_dom_weak = "2.5.0"
 rbx_reflection_database = "0.2.7"
+rbx_xml = "0.13.1"
 wgpu = "0.17.0"
 winit = "0.28.6"
 

@@ -847,6 +847,12 @@ impl framework::Example for GraphicsData {
 								}else{
 									None
 								}
+							}else if &first_8==b"<roblox "{
+								if let Ok(dom) = rbx_xml::from_reader(input,rbx_xml::DecodeOptions::default()){
+									Some(self.generate_modeldatas_roblox(dom))
+								}else{
+									None
+								}
 							//}else if &first_8[0..4]==b"VBSP"{
 							//	self.generate_modeldatas_valve(input)
 							}else{
