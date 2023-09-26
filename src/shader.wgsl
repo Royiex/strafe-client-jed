@@ -49,9 +49,10 @@ struct ModelInstance{
 //my fancy idea is to create a megatexture for each model that includes all the textures each intance will need
 //the texture transform then maps the texture coordinates to the location of the specific texture
 //group 1 is the model
+const MAX_MODEL_INSTANCES=4096;
 @group(1)
 @binding(0)
-var<storage> model_instances: array<ModelInstance>;
+var<uniform> model_instances: array<ModelInstance, MAX_MODEL_INSTANCES>;
 @group(1)
 @binding(1)
 var model_texture: texture_2d<f32>;

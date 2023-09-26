@@ -222,7 +222,7 @@ impl GraphicsData {
 			let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 				label: Some(format!("ModelGraphics{}",i).as_str()),
 				contents: bytemuck::cast_slice(&model_uniforms),
-				usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+				usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 			});
 			let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
 				layout: &self.bind_group_layouts.model,
@@ -330,9 +330,6 @@ impl framework::Example for GraphicsData {
 		wgpu::Features::TEXTURE_COMPRESSION_ASTC
 			| wgpu::Features::TEXTURE_COMPRESSION_ETC2
 			| wgpu::Features::TEXTURE_COMPRESSION_BC
-	}
-	fn required_features() -> wgpu::Features {
-		wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
 	}
 	fn required_limits() -> wgpu::Limits {
 		wgpu::Limits::default() //framework.rs was using goofy limits that caused me a multi-day headache
@@ -498,7 +495,7 @@ impl framework::Example for GraphicsData {
 					binding: 0,
 					visibility: wgpu::ShaderStages::VERTEX,
 					ty: wgpu::BindingType::Buffer {
-						ty: wgpu::BufferBindingType::Storage { read_only: true },
+						ty: wgpu::BufferBindingType::Uniform,
 						has_dynamic_offset: false,
 						min_binding_size: None,
 					},
