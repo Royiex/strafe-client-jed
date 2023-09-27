@@ -36,17 +36,19 @@ fn get_texture_refs(dom:&rbx_dom_weak::WeakDom) -> Vec<rbx_dom_weak::types::Ref>
 struct RobloxAssetId(u64);
 struct RobloxAssetIdParseErr;
 impl std::str::FromStr for RobloxAssetId {
-    type Err=RobloxAssetIdParseErr;
-    fn from_str(s: &str) -> Result<Self, Self::Err>{
-        let regman=regex::Regex::new(r"(\d+)$").unwrap();
-        if let Some(captures) = regman.captures(s) {
-            if captures.len()==2{//captures[0] is all captures concatenated, and then each individual capture
-                if let Ok(id) = captures[0].parse::<u64>() {
-                    return Ok(Self(id));
-                }
-            }
-        }
-        Err(RobloxAssetIdParseErr)
+	type Err=RobloxAssetIdParseErr;
+	fn from_str(s: &str) -> Result<Self, Self::Err>{
+		let regman=regex::Regex::new(r"(\d+)$").unwrap();
+		if let Some(captures) = regman.captures(s) {
+			if captures.len()==2{//captures[0] is all captures concatenated, and then each individual capture
+				if let Ok(id) = captures[0].parse::<u64>() {
+					return Ok(Self(id));
+				}
+			}
+		}
+		Err(RobloxAssetIdParseErr)
+	}
+}
     }
 }
 pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<ModelData>,Vec<String>,glam::Vec3), Box<dyn std::error::Error>>{
