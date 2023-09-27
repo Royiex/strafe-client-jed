@@ -358,7 +358,7 @@ fn start<E: Example>(
 				WindowEvent::KeyboardInput {
 					input:
 						event::KeyboardInput {
-							virtual_keycode: Some(event::VirtualKeyCode::R),
+							virtual_keycode: Some(event::VirtualKeyCode::Scroll),
 							state: event::ElementState::Pressed,
 							..
 						},
