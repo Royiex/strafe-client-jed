@@ -2,7 +2,7 @@ pub fn the_unit_cube_lol() -> obj::ObjData{
 	generate_partial_unit_cube([Some(glam::Affine2::IDENTITY);6])
 }
 pub fn generate_partial_unit_cube(face_transforms:[Option<glam::Affine2>;6])->obj::ObjData{
-	let default_polys=vec![
+	let default_polys=[
 		// right (1, 0, 0)
 		obj::SimplePolygon(vec![
 			obj::IndexTuple(6,Some(0),Some(0)),
@@ -46,11 +46,29 @@ pub fn generate_partial_unit_cube(face_transforms:[Option<glam::Affine2>;6])->ob
 			obj::IndexTuple(7,Some(3),Some(5)),
 		]),
 	];
+	let default_verts=[[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0]];
 	//generate transformed vertices
+	let mut generated_verts=Vec::new();
+	let mut transforms=Vec::new();
 	let mut generated_polys=Vec::new();
 	for (i,maybe_transform) in face_transforms.iter().enumerate(){
 		if let Some(transform)=maybe_transform{
-			generated_polys.push(default_polys[i].clone());
+			let transform_index=if let Some(transform_index)=transforms.iter().position(|&t|t==transform){
+				transform_index
+			}else{
+				//create new transform_index
+				let transform_index=transforms.len();
+				transforms.push(transform);
+				for vert in default_verts{
+					generated_verts.push(*transform.transform_point2(glam::vec2(vert[0],vert[1])).as_ref());
+				}
+				transform_index
+			};
+			generated_polys.push(obj::SimplePolygon(
+				default_polys[i].0.iter().map(
+					|&v|obj::IndexTuple(v.0,Some(v.1.unwrap()+4*transform_index),v.2)
+				).collect()
+			));
 		}
 	}
 	obj::ObjData{
@@ -64,7 +82,7 @@ pub fn generate_partial_unit_cube(face_transforms:[Option<glam::Affine2>;6])->ob
 			[ 1.,-1.,-1.],//right bottom front
 			[-1.,-1.,-1.],//left bottom front
 		],
-		texture: vec![[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0]],
+		texture: generated_verts,
 		normal: vec![
 			[ 1., 0., 0.],//AabbFace::Right
 			[ 0., 1., 0.],//AabbFace::Top
