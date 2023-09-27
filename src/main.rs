@@ -215,11 +215,14 @@ impl GraphicsData {
 		}
 		//drain the modeldata vec so entities can be /moved/ to models.entities
 		let mut instance_count=0;
+		let uniform_buffer_binding_size=<GraphicsData as framework::Example>::required_limits().max_uniform_buffer_binding_size as usize;
+		let chunk_size=uniform_buffer_binding_size/MODEL_BUFFER_SIZE_BYTES;
 		self.models.reserve(modeldatas.len());
 		for (i,modeldata) in modeldatas.drain(..).enumerate() {
 			let n_instances=modeldata.instances.len();
-			if 0<n_instances{
-				let model_uniforms = get_instances_buffer_data(&modeldata.instances);
+			instance_count+=n_instances;
+			for instances_chunk in modeldata.instances.rchunks(chunk_size){
+				let model_uniforms = get_instances_buffer_data(instances_chunk);
 				let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 					label: Some(format!("Model{} Buf",i).as_str()),
 					contents: bytemuck::cast_slice(&model_uniforms),
@@ -258,9 +261,8 @@ impl GraphicsData {
 					usage: wgpu::BufferUsages::VERTEX,
 				});
 				//all of these are being moved here
-				instance_count+=n_instances;
 				self.models.push(ModelGraphics{
-					instances:modeldata.instances,
+					instances:instances_chunk.to_vec(),
 					vertex_buf,
 					entities: modeldata.entities.iter().map(|indices|{
 						let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -276,8 +278,6 @@ impl GraphicsData {
 					bind_group: model_bind_group,
 					model_buf,
 				});
-			}else{
-				println!("WARNING: Model{} has 0 instances",i);
 			}
 		}
 		println!("Graphics Objects: {}",self.models.len());
@@ -286,6 +286,7 @@ impl GraphicsData {
 }
 
 const MODEL_BUFFER_SIZE:usize=4*4 + 2*2 + 2+2 + 4;//let size=std::mem::size_of::<ModelInstance>();
+const MODEL_BUFFER_SIZE_BYTES:usize=MODEL_BUFFER_SIZE*4;
 fn get_instances_buffer_data(instances:&[ModelInstance]) -> Vec<f32> {
 	let mut raw = Vec::with_capacity(MODEL_BUFFER_SIZE*instances.len());
 	for (i,mi) in instances.iter().enumerate(){
