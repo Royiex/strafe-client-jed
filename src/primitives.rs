@@ -5,30 +5,30 @@ pub fn generate_partial_unit_cube(face_transforms:[Option<glam::Affine2>;6])->ob
 	let default_polys=[
 		// right (1, 0, 0)
 		obj::SimplePolygon(vec![
-			obj::IndexTuple(6,Some(0),Some(0)),
+			obj::IndexTuple(6,Some(2),Some(0)),
 			obj::IndexTuple(5,Some(1),Some(0)),
-			obj::IndexTuple(2,Some(2),Some(0)),
+			obj::IndexTuple(2,Some(0),Some(0)),
 			obj::IndexTuple(1,Some(3),Some(0)),
 		]),
 		// top (0, 1, 0)
 		obj::SimplePolygon(vec![
-			obj::IndexTuple(5,Some(1),Some(1)),
-			obj::IndexTuple(4,Some(0),Some(1)),
-			obj::IndexTuple(3,Some(3),Some(1)),
-			obj::IndexTuple(2,Some(2),Some(1)),
+			obj::IndexTuple(5,Some(3),Some(1)),
+			obj::IndexTuple(4,Some(2),Some(1)),
+			obj::IndexTuple(3,Some(1),Some(1)),
+			obj::IndexTuple(2,Some(0),Some(1)),
 		]),
 		// back (0, 0, 1)
 		obj::SimplePolygon(vec![
-			obj::IndexTuple(0,Some(0),Some(2)),
-			obj::IndexTuple(1,Some(1),Some(2)),
-			obj::IndexTuple(2,Some(2),Some(2)),
-			obj::IndexTuple(3,Some(3),Some(2)),
+			obj::IndexTuple(0,Some(3),Some(2)),
+			obj::IndexTuple(1,Some(2),Some(2)),
+			obj::IndexTuple(2,Some(1),Some(2)),
+			obj::IndexTuple(3,Some(0),Some(2)),
 		]),
 		// left (-1, 0, 0)
 		obj::SimplePolygon(vec![
-			obj::IndexTuple(0,Some(0),Some(3)),
+			obj::IndexTuple(0,Some(2),Some(3)),
 			obj::IndexTuple(3,Some(1),Some(3)),
-			obj::IndexTuple(4,Some(2),Some(3)),
+			obj::IndexTuple(4,Some(0),Some(3)),
 			obj::IndexTuple(7,Some(3),Some(3)),
 		]),
 		// bottom (0,-1, 0)
@@ -40,10 +40,10 @@ pub fn generate_partial_unit_cube(face_transforms:[Option<glam::Affine2>;6])->ob
 		]),
 		// front (0, 0,-1)
 		obj::SimplePolygon(vec![
-			obj::IndexTuple(4,Some(0),Some(5)),
-			obj::IndexTuple(5,Some(1),Some(5)),
-			obj::IndexTuple(6,Some(2),Some(5)),
-			obj::IndexTuple(7,Some(3),Some(5)),
+			obj::IndexTuple(4,Some(1),Some(5)),
+			obj::IndexTuple(5,Some(0),Some(5)),
+			obj::IndexTuple(6,Some(3),Some(5)),
+			obj::IndexTuple(7,Some(2),Some(5)),
 		]),
 	];
 	let default_verts=[[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0]];
@@ -73,14 +73,14 @@ pub fn generate_partial_unit_cube(face_transforms:[Option<glam::Affine2>;6])->ob
 	}
 	obj::ObjData{
 		position: vec![
-			[-1.,-1., 1.],//left bottom back
-			[ 1.,-1., 1.],//right bottom back
-			[ 1., 1., 1.],//right top back
-			[-1., 1., 1.],//left top back
-			[-1., 1.,-1.],//left top front
-			[ 1., 1.,-1.],//right top front
-			[ 1.,-1.,-1.],//right bottom front
-			[-1.,-1.,-1.],//left bottom front
+			[-1.,-1., 1.],//0 left bottom back
+			[ 1.,-1., 1.],//1 right bottom back
+			[ 1., 1., 1.],//2 right top back
+			[-1., 1., 1.],//3 left top back
+			[-1., 1.,-1.],//4 left top front
+			[ 1., 1.,-1.],//5 right top front
+			[ 1.,-1.,-1.],//6 right bottom front
+			[-1.,-1.,-1.],//7 left bottom front
 		],
 		texture: generated_verts,
 		normal: vec![
