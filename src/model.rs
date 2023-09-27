@@ -10,7 +10,6 @@ pub struct Vertex {
 #[derive(Clone)]
 pub struct ModelInstance {
 	pub model_transform: glam::Affine3A,
-	pub texture_transform: glam::Affine2,
 	pub color: glam::Vec4,
 }
 

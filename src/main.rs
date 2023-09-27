@@ -285,7 +285,7 @@ impl GraphicsData {
 	}
 }
 
-const MODEL_BUFFER_SIZE:usize=4*4 + 2*2 + 2+2 + 4;//let size=std::mem::size_of::<ModelInstance>();
+const MODEL_BUFFER_SIZE:usize=4*4 + 4;//let size=std::mem::size_of::<ModelInstance>();
 const MODEL_BUFFER_SIZE_BYTES:usize=MODEL_BUFFER_SIZE*4;
 fn get_instances_buffer_data(instances:&[ModelInstance]) -> Vec<f32> {
 	let mut raw = Vec::with_capacity(MODEL_BUFFER_SIZE*instances.len());
@@ -293,11 +293,6 @@ fn get_instances_buffer_data(instances:&[ModelInstance]) -> Vec<f32> {
     	let mut v = raw.split_off(MODEL_BUFFER_SIZE*i);
     	//model_transform
     	raw.extend_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&glam::Mat4::from(mi.model_transform))[..]);
-    	//texture_matrix
-    	raw.extend_from_slice(&AsRef::<[f32; 2*2]>::as_ref(&mi.texture_transform.matrix2)[..]);
-    	//texture_offset
-    	raw.extend_from_slice(AsRef::<[f32; 2]>::as_ref(&mi.texture_transform.translation));
-    	raw.extend_from_slice(&[0.0,0.0]);
     	//color
     	raw.extend_from_slice(AsRef::<[f32; 4]>::as_ref(&mi.color));
     	raw.append(&mut v);
@@ -329,40 +324,33 @@ impl framework::Example for GraphicsData {
 		println!("models.len = {:?}", modeldatas.len());
 		modeldatas[0].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(10.,0.,-10.)),
-			texture_transform:glam::Affine2::IDENTITY,
 			color:ModelData::COLOR_VEC4_WHITE,
 		});
 		//quad monkeys
 		modeldatas[1].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,10.)),
-			texture_transform:glam::Affine2::IDENTITY,
 			color:ModelData::COLOR_VEC4_WHITE,
 		});
 		modeldatas[1].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,10.)),
-			texture_transform:glam::Affine2::IDENTITY,
 			color:glam::vec4(1.0,0.0,0.0,1.0),
 		});
 		modeldatas[1].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,20.)),
-			texture_transform:glam::Affine2::IDENTITY,
 			color:glam::vec4(0.0,1.0,0.0,1.0),
 		});
 		modeldatas[1].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,20.)),
-			texture_transform:glam::Affine2::IDENTITY,
 			color:glam::vec4(0.0,0.0,1.0,1.0),
 		});
 		//teapot
 		modeldatas[2].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(-10.,5.,10.)),
-			texture_transform:glam::Affine2::from_scale(glam::vec2(2.0,2.0)),
 			color:ModelData::COLOR_VEC4_WHITE,
 		});
 		//ground
 		modeldatas[3].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(0.,0.,0.))*glam::Affine3A::from_scale(glam::vec3(160.0, 1.0, 160.0)),
-			texture_transform:glam::Affine2::IDENTITY,
 			color:ModelData::COLOR_VEC4_WHITE,
 		});
 
