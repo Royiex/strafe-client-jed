@@ -186,11 +186,19 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 												decal.properties.get("StudsPerTileV"),
 											)
 										{
-											//pretend we don't need to know the face
+											let (size_u,size_v)=match face{
+												0=>(size.z,size.y),//right
+												1=>(size.x,size.z),//top
+												2=>(size.x,size.y),//back
+												3=>(size.z,size.y),//left
+												4=>(size.x,size.z),//bottom
+												5=>(size.x,size.y),//front
+												_=>(1.,1.),
+											};
 											roblox_texture_transform=RobloxTextureTransform{
-												offset_u:*ox/size.x,offset_v:*oy/size.y,
-												scale_u:*sx/size.x,scale_v:*sy/size.y,
-											}
+												offset_u:*ox/(*sx),offset_v:*oy/(*sy),
+												scale_u:size_u/(*sx),scale_v:size_v/(*sy),
+											};
 										}
 									}
 									//I can alos put the color into here and generate the vertices with the color
