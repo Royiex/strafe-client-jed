@@ -36,7 +36,7 @@ pub fn generate_bvh(boxen:Vec<Aabb>)->BvhNode{
 fn generate_bvh_node(boxen:Vec<(usize,Aabb)>)->BvhNode{
 	let n=boxen.len();
 	if n<20{
-		let mut aabb=Aabb::new();
+		let mut aabb=Aabb::default();
 		let models=boxen.into_iter().map(|b|{aabb.join(&b.1);b.0 as u32}).collect();
 		BvhNode{
 			children:Vec::new(),
@@ -51,9 +51,9 @@ fn generate_bvh_node(boxen:Vec<(usize,Aabb)>)->BvhNode{
 		for (i,aabb) in boxen.iter(){
 			let center=aabb.center();
 			octant.insert(*i,0);
-			sort_x.push((*i,center.x));
-			sort_y.push((*i,center.y));
-			sort_z.push((*i,center.z));
+			sort_x.push((*i,center.x()));
+			sort_y.push((*i,center.y()));
+			sort_z.push((*i,center.z()));
 		}
 		sort_x.sort_by(|tup0,tup1|tup0.1.partial_cmp(&tup1.1).unwrap());
 		sort_y.sort_by(|tup0,tup1|tup0.1.partial_cmp(&tup1.1).unwrap());
@@ -92,7 +92,7 @@ fn generate_bvh_node(boxen:Vec<(usize,Aabb)>)->BvhNode{
 			};
 			list_list[list_id].push((i,aabb));
 		}
-		let mut aabb=Aabb::new();
+		let mut aabb=Aabb::default();
 		let children=list_list.into_iter().map(|b|{
 			let node=generate_bvh_node(b);
 			aabb.join(&node.aabb);

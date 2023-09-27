@@ -74,14 +74,14 @@ impl<Task,Value:Clone,F:FnMut(Task)->Value> CompatWorker<Task,Value,F> {
 fn test_worker() {
 	println!("hiiiii");
 	// Create the worker thread
-	let worker = Worker::new(crate::physics::Body::with_pva(glam::Vec3::ZERO,glam::Vec3::ZERO,glam::Vec3::ZERO),
-		|_|crate::physics::Body::with_pva(glam::Vec3::ONE,glam::Vec3::ONE,glam::Vec3::ONE)
+	let worker = Worker::new(crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO),
+		|_|crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE)
 	);
 
 	// Send tasks to the worker
 	for _ in 0..5 {
 		let task = crate::instruction::TimedInstruction{
-			time:0,
+			time:crate::integer::Time::ZERO,
 			instruction:crate::physics::PhysicsInstruction::StrafeTick,
 		};
 		worker.send(task).unwrap();
@@ -95,7 +95,7 @@ fn test_worker() {
 
 	// Send a new task
 	let task = crate::instruction::TimedInstruction{
-		time:0,
+		time:crate::integer::Time::ZERO,
 		instruction:crate::physics::PhysicsInstruction::StrafeTick,
 	};
 	worker.send(task).unwrap();

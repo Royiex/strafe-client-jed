@@ -1,3 +1,4 @@
+use crate::integer::{Ratio64,Ratio64Vec2};
 struct Ratio{
 	ratio:f64,
 }
@@ -7,23 +8,25 @@ enum DerivedFov{
 }
 enum Fov{
 	Exactly{x:f64,y:f64},
-	DeriveX{x:DerivedFov,y:f64},
-	DeriveY{x:f64,y:DerivedFov},
+	SpecifyXDeriveY{x:f64,y:DerivedFov},
+	SpecifyYDeriveX{x:DerivedFov,y:f64},
 }
 impl Default for Fov{
-	fn default() -> Self {
-		Fov::DeriveX{x:DerivedFov::FromScreenAspect,y:1.0}
+	fn default()->Self{
+		Fov::SpecifyYDeriveX{x:DerivedFov::FromScreenAspect,y:1.0}
 	}
 }
-
+enum DerivedSensitivity{
+	FromRatio(Ratio64),
+}
 enum Sensitivity{
-	Exactly{x:f64,y:f64},
-	DeriveX{x:Ratio,y:f64},
-	DeriveY{x:f64,y:Ratio},
+	Exactly{x:Ratio64,y:Ratio64},
+	SpecifyXDeriveY{x:Ratio64,y:DerivedSensitivity},
+	SpecifyYDeriveX{x:DerivedSensitivity,y:Ratio64},
 }
 impl Default for Sensitivity{
-	fn default() -> Self {
-		Sensitivity::DeriveY{x:0.001,y:Ratio{ratio:1.0}}
+	fn default()->Self{
+		Sensitivity::SpecifyXDeriveY{x:Ratio64::ONE*524288,y:DerivedSensitivity::FromRatio(Ratio64::ONE)}
 	}
 }
 
@@ -36,21 +39,25 @@ impl UserSettings{
 	pub fn calculate_fov(&self,zoom:f64,screen_size:&glam::UVec2)->glam::DVec2{
 		zoom*match &self.fov{
 			&Fov::Exactly{x,y}=>glam::dvec2(x,y),
-			Fov::DeriveX{x,y}=>match x{
-				DerivedFov::FromScreenAspect=>glam::dvec2(y*(screen_size.x as f64/screen_size.y as f64),*y),
-				DerivedFov::FromAspect(ratio)=>glam::dvec2(y*ratio.ratio,*y),
-			},
-			Fov::DeriveY{x,y}=>match y{
+			Fov::SpecifyXDeriveY{x,y}=>match y{
 				DerivedFov::FromScreenAspect=>glam::dvec2(*x,x*(screen_size.y as f64/screen_size.x as f64)),
 				DerivedFov::FromAspect(ratio)=>glam::dvec2(*x,x*ratio.ratio),
 			},
+			Fov::SpecifyYDeriveX{x,y}=>match x{
+				DerivedFov::FromScreenAspect=>glam::dvec2(y*(screen_size.x as f64/screen_size.y as f64),*y),
+				DerivedFov::FromAspect(ratio)=>glam::dvec2(y*ratio.ratio,*y),
+			},
 		}
 	}
-	pub fn calculate_sensitivity(&self)->glam::DVec2{
+	pub fn calculate_sensitivity(&self)->Ratio64Vec2{
 		match &self.sensitivity{
-			&Sensitivity::Exactly{x,y}=>glam::dvec2(x,y),
-			Sensitivity::DeriveX{x,y}=>glam::dvec2(y*x.ratio,*y),
-			Sensitivity::DeriveY{x,y}=>glam::dvec2(*x,x*y.ratio),
+			Sensitivity::Exactly{x,y}=>Ratio64Vec2::new(x.clone(),y.clone()),
+			Sensitivity::SpecifyXDeriveY{x,y}=>match y{
+				DerivedSensitivity::FromRatio(ratio)=>Ratio64Vec2::new(x.clone(),x.mul_ref(ratio)),
+			}
+			Sensitivity::SpecifyYDeriveX{x,y}=>match x{
+				DerivedSensitivity::FromRatio(ratio)=>Ratio64Vec2::new(y.mul_ref(ratio),y.clone()),
+			}
 		}
 	}
 }
@@ -71,7 +78,7 @@ pub fn read_user_settings()->UserSettings{
 				x:fov_x,
 				y:fov_y
 			},
-			(Ok(Some(fov_x)),Ok(None))=>Fov::DeriveY{
+			(Ok(Some(fov_x)),Ok(None))=>Fov::SpecifyXDeriveY{
 				x:fov_x,
 				y:if let Ok(Some(fov_y_from_x_ratio))=cfg.getfloat("camera","fov_y_from_x_ratio"){
 					DerivedFov::FromAspect(Ratio{ratio:fov_y_from_x_ratio})
@@ -79,7 +86,7 @@ pub fn read_user_settings()->UserSettings{
 					DerivedFov::FromScreenAspect
 				}
 			},
-			(Ok(None),Ok(Some(fov_y)))=>Fov::DeriveX{
+			(Ok(None),Ok(Some(fov_y)))=>Fov::SpecifyYDeriveX{
 				x:if let Ok(Some(fov_x_from_y_ratio))=cfg.getfloat("camera","fov_x_from_y_ratio"){
 					DerivedFov::FromAspect(Ratio{ratio:fov_x_from_y_ratio})
 				}else{
@@ -94,20 +101,24 @@ pub fn read_user_settings()->UserSettings{
 		let (cfg_sensitivity_x,cfg_sensitivity_y)=(cfg.getfloat("camera","sensitivity_x"),cfg.getfloat("camera","sensitivity_y"));
 		let sensitivity=match(cfg_sensitivity_x,cfg_sensitivity_y){
 			(Ok(Some(sensitivity_x)),Ok(Some(sensitivity_y)))=>Sensitivity::Exactly {
-				x:sensitivity_x,
-				y:sensitivity_y
+				x:Ratio64::try_from(sensitivity_x).unwrap(),
+				y:Ratio64::try_from(sensitivity_y).unwrap(),
 			},
-			(Ok(Some(sensitivity_x)),Ok(None))=>Sensitivity::DeriveY{
-				x:sensitivity_x,
-				y:Ratio{
-					ratio:if let Ok(Some(sensitivity_y_from_x_ratio))=cfg.getfloat("camera","sensitivity_y_from_x_ratio"){sensitivity_y_from_x_ratio}else{1.0}
-				}
-			},
-			(Ok(None),Ok(Some(sensitivity_y)))=>Sensitivity::DeriveX{
-				x:Ratio{
-					ratio:if let Ok(Some(sensitivity_x_from_y_ratio))=cfg.getfloat("camera","sensitivity_x_from_y_ratio"){sensitivity_x_from_y_ratio}else{1.0}
+			(Ok(Some(sensitivity_x)),Ok(None))=>Sensitivity::SpecifyXDeriveY{
+				x:Ratio64::try_from(sensitivity_x).unwrap(),
+				y:if let Ok(Some(sensitivity_y_from_x_ratio))=cfg.getfloat("camera","sensitivity_y_from_x_ratio"){
+					DerivedSensitivity::FromRatio(Ratio64::try_from(sensitivity_y_from_x_ratio).unwrap())
+				}else{
+					DerivedSensitivity::FromRatio(Ratio64::ONE)
 				},
-				y:sensitivity_y,
+			},
+			(Ok(None),Ok(Some(sensitivity_y)))=>Sensitivity::SpecifyYDeriveX{
+				x:if let Ok(Some(sensitivity_x_from_y_ratio))=cfg.getfloat("camera","sensitivity_x_from_y_ratio"){
+					DerivedSensitivity::FromRatio(Ratio64::try_from(sensitivity_x_from_y_ratio).unwrap())
+				}else{
+					DerivedSensitivity::FromRatio(Ratio64::ONE)
+				},
+				y:Ratio64::try_from(sensitivity_y).unwrap(),
 			},
 			_=>{
 				Sensitivity::default()

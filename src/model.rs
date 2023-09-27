@@ -1,12 +1,6 @@
-use bytemuck::{Pod, Zeroable};
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-pub struct Vertex {
-	pub pos: [f32; 3],
-	pub tex: [f32; 2],
-	pub normal: [f32; 3],
-	pub color: [f32; 4],
-}
+use crate::integer::{Planar64,Planar64Vec3,Planar64Affine3};
+pub type TextureCoordinate=glam::Vec2;
+pub type Color4=glam::Vec4;
 #[derive(Clone,Hash,PartialEq,Eq)]
 pub struct IndexedVertex{
 	pub pos:u32,
@@ -22,50 +16,25 @@ pub struct IndexedGroup{
 	pub polys:Vec<IndexedPolygon>,
 }
 pub struct IndexedModel{
-	pub unique_pos:Vec<[f32; 3]>,
-	pub unique_tex:Vec<[f32; 2]>,
-	pub unique_normal:Vec<[f32; 3]>,
-	pub unique_color:Vec<[f32; 4]>,
+	pub unique_pos:Vec<Planar64Vec3>,
+	pub unique_normal:Vec<Planar64Vec3>,
+	pub unique_tex:Vec<TextureCoordinate>,
+	pub unique_color:Vec<Color4>,
 	pub unique_vertices:Vec<IndexedVertex>,
 	pub groups: Vec<IndexedGroup>,
 	pub instances:Vec<ModelInstance>,
 }
-pub struct IndexedGroupFixedTexture{
-	pub polys:Vec<IndexedPolygon>,
-}
-pub struct IndexedModelSingleTexture{
-	pub unique_pos:Vec<[f32; 3]>,
-	pub unique_tex:Vec<[f32; 2]>,
-	pub unique_normal:Vec<[f32; 3]>,
-	pub unique_color:Vec<[f32; 4]>,
-	pub unique_vertices:Vec<IndexedVertex>,
-	pub texture:Option<u32>,//RenderPattern? material/texture/shader/flat color
-	pub groups: Vec<IndexedGroupFixedTexture>,
-	pub instances:Vec<ModelGraphicsInstance>,
-}
-pub struct ModelSingleTexture{
-	pub instances: Vec<ModelGraphicsInstance>,
-	pub vertices: Vec<Vertex>,
-	pub entities: Vec<Vec<u16>>,
-	pub texture: Option<u32>,
-}
-#[derive(Clone)]
-pub struct ModelGraphicsInstance{
-	pub transform:glam::Mat4,
-	pub normal_transform:glam::Mat3,
-	pub color:glam::Vec4,
-}
 pub struct ModelInstance{
 	//pub id:u64,//this does not actually help with map fixes resimulating bots, they must always be resimulated
-	pub transform:glam::Affine3A,
-	pub color:glam::Vec4,//transparency is in here
+	pub transform:Planar64Affine3,
+	pub color:Color4,//transparency is in here
 	pub attributes:CollisionAttributes,
 	pub temp_indexing:Vec<TempIndexedAttributes>,
 }
 impl std::default::Default for ModelInstance{
 	fn default() -> Self {
 		Self{
-			color:glam::Vec4::ONE,
+			color:Color4::ONE,
 			transform:Default::default(),
 			attributes:Default::default(),
 			temp_indexing:Default::default(),
@@ -77,7 +46,7 @@ pub struct IndexedModelInstances{
 	pub models:Vec<IndexedModel>,
 	//may make this into an object later.
 	pub modes:Vec<ModeDescription>,
-	pub spawn_point:glam::Vec3,
+	pub spawn_point:Planar64Vec3,
 }
 //stage description referencing flattened ids is spooky, but the map loading is meant to be deterministic.
 pub struct ModeDescription{
@@ -131,13 +100,13 @@ pub struct ContactingLadder{
 //you have this effect while intersecting
 #[derive(Clone)]
 pub struct IntersectingWater{
-	pub viscosity:i64,
-	pub density:i64,
-	pub current:glam::Vec3,
+	pub viscosity:Planar64,
+	pub density:Planar64,
+	pub current:Planar64Vec3,
 }
 #[derive(Clone)]
 pub struct IntersectingAccelerator{
-	pub acceleration:glam::Vec3
+	pub acceleration:Planar64Vec3
 }
 //All models can be given these attributes
 #[derive(Clone)]
@@ -146,7 +115,7 @@ pub struct GameMechanicJumpLimit{
 }
 #[derive(Clone)]
 pub struct GameMechanicBooster{
-	pub velocity:glam::Vec3,
+	pub velocity:Planar64Vec3,
 }
 #[derive(Clone)]
 pub enum ZoneBehaviour{
@@ -227,7 +196,7 @@ impl std::default::Default for CollisionAttributes{
 	}
 }
 
-pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:[f32;4]) -> Vec<IndexedModel>{
+pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:Color4)->Vec<IndexedModel>{
 	let mut unique_vertex_index = std::collections::HashMap::<obj::IndexTuple,u32>::new();
 	return data.objects.iter().map(|object|{
 		unique_vertex_index.clear();
@@ -257,9 +226,9 @@ pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:[f32;4]) -> 
 			}
 		}).collect();
 		IndexedModel{
-			unique_pos: data.position.clone(),
-			unique_tex: data.texture.clone(),
-			unique_normal: data.normal.clone(),
+			unique_pos: data.position.iter().map(|&v|Planar64Vec3::try_from(v).unwrap()).collect(),
+			unique_tex: data.texture.iter().map(|&v|TextureCoordinate::from_array(v)).collect(),
+			unique_normal: data.normal.iter().map(|&v|Planar64Vec3::try_from(v).unwrap()).collect(),
 			unique_color: vec![color],
 			unique_vertices,
 			groups,

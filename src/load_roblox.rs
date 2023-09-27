@@ -1,4 +1,5 @@
 use crate::primitives;
+use crate::integer::{Planar64,Planar64Vec3,Planar64Mat3,Planar64Affine3};
 
 fn class_is_a(class: &str, superclass: &str) -> bool {
 	if class==superclass {
@@ -30,7 +31,20 @@ fn get_texture_refs(dom:&rbx_dom_weak::WeakDom) -> Vec<rbx_dom_weak::types::Ref>
 	//next class
 	objects
 }
-fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3,force_intersecting:bool)->crate::model::CollisionAttributes{
+fn planar64_affine3_from_roblox(cf:&rbx_dom_weak::types::CFrame,size:&rbx_dom_weak::types::Vector3)->Planar64Affine3{
+	Planar64Affine3::new(
+		Planar64Mat3::from_cols(
+			Planar64Vec3::try_from([cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x]).unwrap()
+			*Planar64::try_from(size.x/2.0).unwrap(),
+			Planar64Vec3::try_from([cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y]).unwrap()
+			*Planar64::try_from(size.y/2.0).unwrap(),
+			Planar64Vec3::try_from([cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z]).unwrap()
+			*Planar64::try_from(size.z/2.0).unwrap(),
+		),
+		Planar64Vec3::try_from([cf.position.x,cf.position.y,cf.position.z]).unwrap()
+	)
+}
+fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_intersecting:bool)->crate::model::CollisionAttributes{
 	let mut general=crate::model::GameMechanicAttributes::default();
 	let mut intersecting=crate::model::IntersectingAttributes::default();
 	let mut contacting=crate::model::ContactingAttributes::default();
@@ -76,7 +90,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3,force_intersect
 		}
 	}
 	//need some way to skip this
-	if velocity!=glam::Vec3::ZERO{
+	if velocity!=Planar64Vec3::ZERO{
 		general.booster=Some(crate::model::GameMechanicBooster{velocity});
 	}
 	match force_can_collide{
@@ -189,7 +203,7 @@ enum RobloxBasePartDescription{
 }
 pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::IndexedModelInstances{
 	//IndexedModelInstances includes textures
-	let mut spawn_point=glam::Vec3::ZERO;
+	let mut spawn_point=Planar64Vec3::ZERO;
 
 	let mut indexed_models=Vec::new();
 	let mut model_id_from_description=std::collections::HashMap::<RobloxBasePartDescription,usize>::new();
@@ -218,26 +232,14 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 					object.properties.get("CanCollide"),
 				)
 			{
-				let model_transform=glam::Affine3A::from_translation(
-					glam::Vec3::new(cf.position.x,cf.position.y,cf.position.z)
-				)
-				* glam::Affine3A::from_mat3(
-					glam::Mat3::from_cols(
-						glam::Vec3::new(cf.orientation.x.x,cf.orientation.y.x,cf.orientation.z.x),
-						glam::Vec3::new(cf.orientation.x.y,cf.orientation.y.y,cf.orientation.z.y),
-						glam::Vec3::new(cf.orientation.x.z,cf.orientation.y.z,cf.orientation.z.z),
-					),
-				)
-				* glam::Affine3A::from_scale(
-					glam::Vec3::new(size.x,size.y,size.z)/2.0
-				);
+				let model_transform=planar64_affine3_from_roblox(cf,size);
 
 				//push TempIndexedAttributes
 				let mut force_intersecting=false;
 				let mut temp_indexing_attributes=Vec::new();
 				if let Some(attr)=match &object.name[..]{
 					"MapStart"=>{
-						spawn_point=model_transform.transform_point3(glam::Vec3::ZERO)+glam::vec3(0.0,2.5,0.0);
+						spawn_point=model_transform.transform_point3(Planar64Vec3::ZERO)+Planar64Vec3::Y*5/2;
 						Some(crate::model::TempIndexedAttributes::Start{mode_id:0})
 					},
 					"UnorderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::UnorderedCheckpoint{mode_id:0}),
@@ -463,7 +465,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 				indexed_models[model_id].instances.push(crate::model::ModelInstance {
 					transform:model_transform,
 					color:glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
-					attributes:get_attributes(&object.name,*can_collide,glam::vec3(velocity.x,velocity.y,velocity.z),force_intersecting),
+					attributes:get_attributes(&object.name,*can_collide,Planar64Vec3::try_from([velocity.x,velocity.y,velocity.z]).unwrap(),force_intersecting),
 					temp_indexing:temp_indexing_attributes,
 				});
 			}

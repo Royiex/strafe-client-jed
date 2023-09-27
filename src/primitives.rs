@@ -1,4 +1,5 @@
-use crate::model::{IndexedModel, IndexedPolygon, IndexedGroup, IndexedVertex};
+use crate::model::{Color4,TextureCoordinate,IndexedModel,IndexedPolygon,IndexedGroup,IndexedVertex};
+use crate::integer::Planar64Vec3;
 
 #[derive(Debug)]
 pub enum Primitives{
@@ -17,24 +18,29 @@ pub enum CubeFace{
 	Bottom,
 	Front,
 }
-const CUBE_DEFAULT_TEXTURE_COORDS:[[f32;2];4]=[[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0]];
-const CUBE_DEFAULT_VERTICES:[[f32;3];8]=[
-	[-1.,-1., 1.],//0 left bottom back
-	[ 1.,-1., 1.],//1 right bottom back
-	[ 1., 1., 1.],//2 right top back
-	[-1., 1., 1.],//3 left top back
-	[-1., 1.,-1.],//4 left top front
-	[ 1., 1.,-1.],//5 right top front
-	[ 1.,-1.,-1.],//6 right bottom front
-	[-1.,-1.,-1.],//7 left bottom front
+const CUBE_DEFAULT_TEXTURE_COORDS:[TextureCoordinate;4]=[
+	TextureCoordinate::new(0.0,0.0),
+	TextureCoordinate::new(1.0,0.0),
+	TextureCoordinate::new(1.0,1.0),
+	TextureCoordinate::new(0.0,1.0),
 ];
-const CUBE_DEFAULT_NORMALS:[[f32;3];6]=[
-	[ 1., 0., 0.],//CubeFace::Right
-	[ 0., 1., 0.],//CubeFace::Top
-	[ 0., 0., 1.],//CubeFace::Back
-	[-1., 0., 0.],//CubeFace::Left
-	[ 0.,-1., 0.],//CubeFace::Bottom
-	[ 0., 0.,-1.],//CubeFace::Front
+const CUBE_DEFAULT_VERTICES:[Planar64Vec3;8]=[
+	Planar64Vec3::int(-1,-1, 1),//0 left bottom back
+	Planar64Vec3::int( 1,-1, 1),//1 right bottom back
+	Planar64Vec3::int( 1, 1, 1),//2 right top back
+	Planar64Vec3::int(-1, 1, 1),//3 left top back
+	Planar64Vec3::int(-1, 1,-1),//4 left top front
+	Planar64Vec3::int( 1, 1,-1),//5 right top front
+	Planar64Vec3::int( 1,-1,-1),//6 right bottom front
+	Planar64Vec3::int(-1,-1,-1),//7 left bottom front
+];
+const CUBE_DEFAULT_NORMALS:[Planar64Vec3;6]=[
+	Planar64Vec3::int( 1, 0, 0),//CubeFace::Right
+	Planar64Vec3::int( 0, 1, 0),//CubeFace::Top
+	Planar64Vec3::int( 0, 0, 1),//CubeFace::Back
+	Planar64Vec3::int(-1, 0, 0),//CubeFace::Left
+	Planar64Vec3::int( 0,-1, 0),//CubeFace::Bottom
+	Planar64Vec3::int( 0, 0,-1),//CubeFace::Front
 ];
 const CUBE_DEFAULT_POLYS:[[[u32;3];4];6]=[
 	// right (1, 0, 0)
@@ -89,12 +95,12 @@ pub enum WedgeFace{
 	Left,
 	Bottom,
 }
-const WEDGE_DEFAULT_NORMALS:[[f32;3];5]=[
-	[ 1., 0., 0.],//Wedge::Right
-	[ 0., 1.,-1.],//Wedge::TopFront
-	[ 0., 0., 1.],//Wedge::Back
-	[-1., 0., 0.],//Wedge::Left
-	[ 0.,-1., 0.],//Wedge::Bottom
+const WEDGE_DEFAULT_NORMALS:[Planar64Vec3;5]=[
+	Planar64Vec3::int( 1, 0, 0),//Wedge::Right
+	Planar64Vec3::int( 0, 1,-1),//Wedge::TopFront
+	Planar64Vec3::int( 0, 0, 1),//Wedge::Back
+	Planar64Vec3::int(-1, 0, 0),//Wedge::Left
+	Planar64Vec3::int( 0,-1, 0),//Wedge::Bottom
 ];
 /*
 local cornerWedgeVerticies = {
@@ -113,20 +119,18 @@ pub enum CornerWedgeFace{
 	Bottom,
 	Front,
 }
-const CORNERWEDGE_DEFAULT_NORMALS:[[f32;3];5]=[
-	[ 1., 0., 0.],//CornerWedge::Right
-	[ 0., 1., 1.],//CornerWedge::BackTop
-	[-1., 1., 0.],//CornerWedge::LeftTop
-	[ 0.,-1., 0.],//CornerWedge::Bottom
-	[ 0., 0.,-1.],//CornerWedge::Front
+const CORNERWEDGE_DEFAULT_NORMALS:[Planar64Vec3;5]=[
+	Planar64Vec3::int( 1, 0, 0),//CornerWedge::Right
+	Planar64Vec3::int( 0, 1, 1),//CornerWedge::BackTop
+	Planar64Vec3::int(-1, 1, 0),//CornerWedge::LeftTop
+	Planar64Vec3::int( 0,-1, 0),//CornerWedge::Bottom
+	Planar64Vec3::int( 0, 0,-1),//CornerWedge::Front
 ];
 //HashMap fits this use case perfectly but feels like using a sledgehammer to drive a nail
 pub fn unit_sphere()->crate::model::IndexedModel{
-	let mut indexed_model=crate::model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap(),*glam::Vec4::ONE.as_ref()).remove(0);
+	let mut indexed_model=crate::model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap(),Color4::ONE).remove(0);
 	for pos in indexed_model.unique_pos.iter_mut(){
-		pos[0]=pos[0]*0.5;
-		pos[1]=pos[1]*0.5;
-		pos[2]=pos[2]*0.5;
+		*pos=*pos/2;
 	}
 	indexed_model
 }
@@ -141,11 +145,11 @@ pub fn unit_cube()->crate::model::IndexedModel{
 	t.insert(CubeFace::Front,FaceDescription::default());
 	generate_partial_unit_cube(t)
 }
-const TEAPOT_TRANSFORM:glam::Mat3=glam::mat3(glam::vec3(0.0,0.1,0.0),glam::vec3(-0.1,0.0,0.0),glam::vec3(0.0,0.0,0.1));
+const TEAPOT_TRANSFORM:crate::integer::Planar64Mat3=crate::integer::Planar64Mat3::int_from_cols_array([0,1,0, -1,0,0, 0,0,1]);
 pub fn unit_cylinder()->crate::model::IndexedModel{
-	let mut indexed_model=crate::model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap(),*glam::Vec4::ONE.as_ref()).remove(0);
+	let mut indexed_model=crate::model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap(),Color4::ONE).remove(0);
 	for pos in indexed_model.unique_pos.iter_mut(){
-		[pos[0],pos[1],pos[2]]=*(TEAPOT_TRANSFORM*glam::Vec3::from_array(*pos)).as_ref();
+		*pos=TEAPOT_TRANSFORM*(*pos)/10;
 	}
 	indexed_model
 }
@@ -174,33 +178,33 @@ pub fn unit_cornerwedge()->crate::model::IndexedModel{
 pub struct FaceDescription{
 	pub texture:Option<u32>,
 	pub transform:glam::Affine2,
-	pub color:glam::Vec4,
+	pub color:Color4,
 }
 impl std::default::Default for FaceDescription{
 	fn default()->Self {
 		Self{
 			texture:None,
 			transform:glam::Affine2::IDENTITY,
-			color:glam::vec4(1.0,1.0,1.0,0.0),//zero alpha to hide the default texture
+			color:Color4::new(1.0,1.0,1.0,0.0),//zero alpha to hide the default texture
 		}
 	}
 }
 impl FaceDescription{
-	pub fn new(texture:u32,transform:glam::Affine2,color:glam::Vec4)->Self{
+	pub fn new(texture:u32,transform:glam::Affine2,color:Color4)->Self{
 		Self{texture:Some(texture),transform,color}
 	}
 	pub fn from_texture(texture:u32)->Self{
 		Self{
 			texture:Some(texture),
 			transform:glam::Affine2::IDENTITY,
-			color:glam::Vec4::ONE,
+			color:Color4::ONE,
 		}
 	}
 }
 //TODO: it's probably better to use a shared vertex buffer between all primitives and use indexed rendering instead of generating a unique vertex buffer for each primitive.
 //implementation: put all roblox primitives into one model.groups <- this won't work but I forget why
 pub fn generate_partial_unit_cube(face_descriptions:CubeFaceDescription)->crate::model::IndexedModel{
-	let mut generated_pos=Vec::<[f32;3]>::new();
+	let mut generated_pos=Vec::new();
 	let mut generated_tex=Vec::new();
 	let mut generated_normal=Vec::new();
 	let mut generated_color=Vec::new();
@@ -217,16 +221,16 @@ pub fn generate_partial_unit_cube(face_descriptions:CubeFaceDescription)->crate:
 			let transform_index=transforms.len();
 			transforms.push(face_description.transform);
 			for tex in CUBE_DEFAULT_TEXTURE_COORDS{
-				generated_tex.push(*face_description.transform.transform_point2(glam::Vec2::from_array(tex)).as_ref());
+				generated_tex.push(face_description.transform.transform_point2(tex));
 			}
 			transform_index
 		} as u32;
-		let color_index=if let Some(color_index)=generated_color.iter().position(|color|color==face_description.color.as_ref()){
+		let color_index=if let Some(color_index)=generated_color.iter().position(|&color|color==face_description.color){
 			color_index
 		}else{
 			//create new color_index
 			let color_index=generated_color.len();
-			generated_color.push(*face_description.color.as_ref());
+			generated_color.push(face_description.color);
 			color_index
 		} as u32;
 		let face_id=match face{
@@ -315,7 +319,7 @@ pub fn generate_partial_unit_wedge(face_descriptions:WedgeFaceDescription)->crat
 			[6,2,4],
 		],
 	];
-	let mut generated_pos=Vec::<[f32;3]>::new();
+	let mut generated_pos=Vec::new();
 	let mut generated_tex=Vec::new();
 	let mut generated_normal=Vec::new();
 	let mut generated_color=Vec::new();
@@ -332,16 +336,16 @@ pub fn generate_partial_unit_wedge(face_descriptions:WedgeFaceDescription)->crat
 			let transform_index=transforms.len();
 			transforms.push(face_description.transform);
 			for tex in CUBE_DEFAULT_TEXTURE_COORDS{
-				generated_tex.push(*face_description.transform.transform_point2(glam::Vec2::from_array(tex)).as_ref());
+				generated_tex.push(face_description.transform.transform_point2(tex));
 			}
 			transform_index
 		} as u32;
-		let color_index=if let Some(color_index)=generated_color.iter().position(|color|color==face_description.color.as_ref()){
+		let color_index=if let Some(color_index)=generated_color.iter().position(|&color|color==face_description.color){
 			color_index
 		}else{
 			//create new color_index
 			let color_index=generated_color.len();
-			generated_color.push(*face_description.color.as_ref());
+			generated_color.push(face_description.color);
 			color_index
 		} as u32;
 		let face_id=match face{
@@ -427,7 +431,7 @@ pub fn generate_partial_unit_cornerwedge(face_descriptions:CornerWedgeFaceDescri
 			[7,2,4],
 		],
 	];
-	let mut generated_pos=Vec::<[f32;3]>::new();
+	let mut generated_pos=Vec::new();
 	let mut generated_tex=Vec::new();
 	let mut generated_normal=Vec::new();
 	let mut generated_color=Vec::new();
@@ -444,16 +448,16 @@ pub fn generate_partial_unit_cornerwedge(face_descriptions:CornerWedgeFaceDescri
 			let transform_index=transforms.len();
 			transforms.push(face_description.transform);
 			for tex in CUBE_DEFAULT_TEXTURE_COORDS{
-				generated_tex.push(*face_description.transform.transform_point2(glam::Vec2::from_array(tex)).as_ref());
+				generated_tex.push(face_description.transform.transform_point2(tex));
 			}
 			transform_index
 		} as u32;
-		let color_index=if let Some(color_index)=generated_color.iter().position(|color|color==face_description.color.as_ref()){
+		let color_index=if let Some(color_index)=generated_color.iter().position(|&color|color==face_description.color){
 			color_index
 		}else{
 			//create new color_index
 			let color_index=generated_color.len();
-			generated_color.push(*face_description.color.as_ref());
+			generated_color.push(face_description.color);
 			color_index
 		} as u32;
 		let face_id=match face{

@@ -1,5 +1,7 @@
 use crate::{instruction::{InstructionEmitter, InstructionConsumer, TimedInstruction}, zeroes::zeroes2};
 
+use crate::integer::{Time,Planar64,Planar64Vec3,Planar64Mat3,Angle32,Ratio64,Ratio64Vec2};
+
 #[derive(Debug)]
 pub enum PhysicsInstruction {
 	CollisionStart(RelativeCollision),
@@ -47,31 +49,12 @@ pub enum InputInstruction {
 		//for interpolation / networking / playback reasons, most playback heads will always want
 		//to be 1 instruction ahead to generate the next state for interpolation.
 }
-#[derive(Clone)]
+#[derive(Clone,Hash)]
 pub struct Body {
-	position: glam::Vec3,//I64 where 2^32 = 1 u
-	velocity: glam::Vec3,//I64 where 2^32 = 1 u/s
-	acceleration: glam::Vec3,//I64 where 2^32 = 1 u/s/s
-	time: TIME,//nanoseconds x xxxxD!
-}
-trait MyHash{
-	fn hash(&self) -> u64;
-}
-impl MyHash for Body {
-	fn hash(&self) -> u64 {
-		let mut hasher=std::collections::hash_map::DefaultHasher::new();
-		for &el in self.position.as_ref().iter() {
-			std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
-		}
-		for &el in self.velocity.as_ref().iter() {
-			std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
-		}
-		for &el in self.acceleration.as_ref().iter() {
-			 std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
-		}
-		std::hash::Hasher::write(&mut hasher, self.time.to_ne_bytes().as_slice());
-		return std::hash::Hasher::finish(&hasher);//hash check to see if walk target is valid
-	}
+	position: Planar64Vec3,//I64 where 2^32 = 1 u
+	velocity: Planar64Vec3,//I64 where 2^32 = 1 u/s
+	acceleration: Planar64Vec3,//I64 where 2^32 = 1 u/s/s
+	time:Time,//nanoseconds x xxxxD!
 }
 
 pub enum MoveRestriction {
@@ -92,7 +75,7 @@ impl InputState {
 	}
 }
 impl crate::instruction::InstructionEmitter<InputInstruction> for InputState{
-	fn next_instruction(&self, time_limit:crate::body::TIME) -> Option<TimedInstruction<InputInstruction>> {
+	fn next_instruction(&self, time_limit:crate::body::Time) -> Option<TimedInstruction<InputInstruction>> {
 		//this is polled by PhysicsState for actions like Jump
 		//no, it has to be the other way around. physics is run up until the jump instruction, and then the jump instruction is pushed.
 		self.queue.get(0)
@@ -110,24 +93,24 @@ impl crate::instruction::InstructionConsumer<InputInstruction> for InputState{
 #[derive(Clone,Debug)]
 pub struct MouseState {
 	pub pos: glam::IVec2,
-	pub time: TIME,
+	pub time:Time,
 }
 impl Default for MouseState{
 	fn default() -> Self {
 		Self {
-			time:0,
+			time:Time::ZERO,
 			pos:glam::IVec2::ZERO,
 		}
 	}
 }
 impl MouseState {
-	pub fn lerp(&self,target:&MouseState,time:TIME)->glam::IVec2 {
+	pub fn lerp(&self,target:&MouseState,time:Time)->glam::IVec2 {
 		let m0=self.pos.as_i64vec2();
 		let m1=target.pos.as_i64vec2();
 		//these are deltas
-		let t1t=(target.time-time) as i64;
-		let tt0=(time-self.time) as i64;
-		let dt=(target.time-self.time) as i64;
+		let t1t=(target.time-time).nanos();
+		let tt0=(time-self.time).nanos();
+		let dt=(target.time-self.time).nanos();
 		((m0*t1t+m1*tt0)/dt).as_ivec2()
 	}
 }
@@ -137,55 +120,71 @@ pub enum WalkEnum{
 	Transient,
 }
 pub struct WalkState {
-	pub target_velocity: glam::Vec3,
-	pub target_time: TIME,
+	pub target_velocity: Planar64Vec3,
+	pub target_time: Time,
 	pub state: WalkEnum,
 }
 impl WalkState {
 	pub fn new() -> Self {
 		Self{
-			target_velocity:glam::Vec3::ZERO,
-			target_time:0,
+			target_velocity:Planar64Vec3::ZERO,
+			target_time:Time::ZERO,
 			state:WalkEnum::Reached,
 		}
 	}
 }
 
+
+
 #[derive(Clone)]
 pub struct PhysicsCamera {
-	offset: glam::Vec3,
-	angles: glam::DVec2,//YAW AND THEN PITCH
-	//punch: glam::Vec3,
-	//punch_velocity: glam::Vec3,
-	sensitivity: glam::DVec2,
-	mouse:MouseState,
+	offset: Planar64Vec3,
+	//punch: Planar64Vec3,
+	//punch_velocity: Planar64Vec3,
+	sensitivity:Ratio64Vec2,//dots to Angle32 ratios
+	mouse:MouseState,//last seen absolute mouse pos
+	clamped_mouse_pos:glam::IVec2,//angles are calculated from this cumulative value
+	angle_pitch_lower_limit:Angle32,
+	angle_pitch_upper_limit:Angle32,
+	//angle limits could be an enum + struct that defines whether it's limited and selects clamp or wrap depending
+	// enum AngleLimit{
+	// 	Unlimited,
+	// 	Limited{lower:Angle32,upper:Angle32},
+	// }
+	//pitch_limit:AngleLimit,
+	//yaw_limit:AngleLimit,
 }
 
-#[inline]
-fn mat3_from_rotation_y_f64(angle: f64) -> glam::Mat3 {
-	let (sina, cosa) = angle.sin_cos();
-	glam::Mat3::from_cols(
-		glam::Vec3::new(cosa as f32, 0.0, -sina as f32),
-		glam::Vec3::Y,
-		glam::Vec3::new(sina as f32, 0.0, cosa as f32),
-	)
-}
 impl PhysicsCamera {
-	pub fn from_offset(offset:glam::Vec3) -> Self {
+	pub fn from_offset(offset:Planar64Vec3) -> Self {
 		Self{
 			offset,
-			angles: glam::DVec2::ZERO,
-			sensitivity: glam::dvec2(1.0/1024.0,1.0/1024.0),
-			mouse:MouseState{pos:glam::IVec2::ZERO,time:-1},//escape initialization hell divide by zero
+			sensitivity:Ratio64Vec2::ONE*200_000,
+			mouse:MouseState::default(),//t=0 does not cause divide by zero because it's immediately replaced
+			clamped_mouse_pos:glam::IVec2::ZERO,
+			angle_pitch_lower_limit:-Angle32::FRAC_PI_2,
+			angle_pitch_upper_limit:Angle32::FRAC_PI_2,
 		}
 	}
-	pub fn simulate_move_angles(&self, mouse_pos: glam::IVec2) -> glam::DVec2 {
-		let mut a=self.angles-self.sensitivity*(mouse_pos-self.mouse.pos).as_dvec2();
-		a.y=a.y.clamp(-std::f64::consts::FRAC_PI_2, std::f64::consts::FRAC_PI_2);
-		return a
+	pub fn move_mouse(&mut self,mouse_pos:glam::IVec2){
+		let mut unclamped_mouse_pos=self.clamped_mouse_pos+mouse_pos-self.mouse.pos;
+		unclamped_mouse_pos.y=unclamped_mouse_pos.y.clamp(
+			self.sensitivity.y.rhs_div_int(self.angle_pitch_lower_limit.get() as i64) as i32,
+			self.sensitivity.y.rhs_div_int(self.angle_pitch_upper_limit.get() as i64) as i32,
+		);
+		self.clamped_mouse_pos=unclamped_mouse_pos;
 	}
-	fn simulate_move_rotation_y(&self, mouse_pos_x: i32) -> glam::Mat3 {
-		mat3_from_rotation_y_f64(self.angles.x-self.sensitivity.x*((mouse_pos_x-self.mouse.pos.x) as f64))
+	pub fn simulate_move_angles(&self,mouse_pos:glam::IVec2)->glam::Vec2 {
+		let a=-self.sensitivity.mul_int((mouse_pos-self.mouse.pos+self.clamped_mouse_pos).as_i64vec2());
+		let ax=Angle32::wrap_from_i64(a.x);
+		let ay=Angle32::clamp_from_i64(a.y)
+		//clamp to actual vertical cam limit
+		.clamp(self.angle_pitch_lower_limit,self.angle_pitch_upper_limit);
+		return glam::vec2(ax.into(),ay.into());
+	}
+	fn simulate_move_rotation_y(&self,mouse_pos_x:i32)->Planar64Mat3{
+		let ax=-self.sensitivity.x.mul_int((mouse_pos_x-self.mouse.pos.x+self.clamped_mouse_pos.x) as i64);
+		Planar64Mat3::from_rotation_y(Angle32::wrap_from_i64(ax))
 	}
 }
 
@@ -206,52 +205,50 @@ pub struct WorldState{}
 pub struct StyleModifiers{
 	pub controls_mask:u32,//controls which are unable to be activated
 	pub controls_held:u32,//controls which must be active to be able to strafe
-	pub mv:f32,
-	pub walkspeed:f32,
-	pub friction:f32,
-	pub walk_accel:f32,
-	pub gravity:glam::Vec3,
-	pub strafe_tick_num:TIME,
-	pub strafe_tick_den:TIME,
-	pub hitbox_halfsize:glam::Vec3,
+	pub mv:Planar64,
+	pub walkspeed:Planar64,
+	pub friction:Planar64,
+	pub walk_accel:Planar64,
+	pub gravity:Planar64Vec3,
+	pub strafe_tick_rate:Ratio64,
+	pub hitbox_halfsize:Planar64Vec3,
 }
 impl std::default::Default for StyleModifiers{
 	fn default() -> Self {
 		Self{
 			controls_mask: !0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held: 0,
-			strafe_tick_num: 100,//100t
-			strafe_tick_den: 1_000_000_000,
-			gravity: glam::vec3(0.0,-100.0,0.0),
-			friction: 1.2,
-			walk_accel: 90.0,
-			mv: 2.7,
-			walkspeed: 18.0,
-			hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
+			strafe_tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			gravity: Planar64Vec3::int(0,-100,0),
+			friction: Planar64::int(12)/10,
+			walk_accel: Planar64::int(90),
+			mv: Planar64::int(27)/10,
+			walkspeed: Planar64::int(18),
+			hitbox_halfsize: Planar64Vec3::int(2,5,2)/2,
 		}
 	}
 }
 impl StyleModifiers{
-	const CONTROL_MOVEFORWARD:u32 = 0b00000001;
-	const CONTROL_MOVEBACK:u32 = 0b00000010;
-	const CONTROL_MOVERIGHT:u32 = 0b00000100;
-	const CONTROL_MOVELEFT:u32 = 0b00001000;
-	const CONTROL_MOVEUP:u32 = 0b00010000;
-	const CONTROL_MOVEDOWN:u32 = 0b00100000;
-	const CONTROL_JUMP:u32 = 0b01000000;
-	const CONTROL_ZOOM:u32 = 0b10000000;
+	const CONTROL_MOVEFORWARD:u32=0b00000001;
+	const CONTROL_MOVEBACK:u32=0b00000010;
+	const CONTROL_MOVERIGHT:u32=0b00000100;
+	const CONTROL_MOVELEFT:u32=0b00001000;
+	const CONTROL_MOVEUP:u32=0b00010000;
+	const CONTROL_MOVEDOWN:u32=0b00100000;
+	const CONTROL_JUMP:u32=0b01000000;
+	const CONTROL_ZOOM:u32=0b10000000;
 
-	const FORWARD_DIR:glam::Vec3 = glam::Vec3::NEG_Z;
-	const RIGHT_DIR:glam::Vec3 = glam::Vec3::X;
-	const UP_DIR:glam::Vec3 = glam::Vec3::Y;
+	const RIGHT_DIR:Planar64Vec3=Planar64Vec3::X;
+	const UP_DIR:Planar64Vec3=Planar64Vec3::Y;
+	const FORWARD_DIR:Planar64Vec3=Planar64Vec3::NEG_Z;
 
 	fn get_control(&self,control:u32,controls:u32)->bool{
 		controls&self.controls_mask&control==control
 	}
 
-	fn get_control_dir(&self,controls:u32)->glam::Vec3{
+	fn get_control_dir(&self,controls:u32)->Planar64Vec3{
 		//don't get fancy just do it
-		let mut control_dir:glam::Vec3 = glam::Vec3::ZERO;
+		let mut control_dir:Planar64Vec3 = Planar64Vec3::ZERO;
 		//Disallow strafing if held controls are not held
 		if controls&self.controls_held!=self.controls_held{
 			return control_dir;
@@ -262,10 +259,10 @@ impl StyleModifiers{
 			control_dir+=Self::FORWARD_DIR;
 		}
 		if controls & Self::CONTROL_MOVEBACK == Self::CONTROL_MOVEBACK {
-			control_dir+=-Self::FORWARD_DIR;
+			control_dir-=Self::FORWARD_DIR;
 		}
 		if controls & Self::CONTROL_MOVELEFT == Self::CONTROL_MOVELEFT {
-			control_dir+=-Self::RIGHT_DIR;
+			control_dir-=Self::RIGHT_DIR;
 		}
 		if controls & Self::CONTROL_MOVERIGHT == Self::CONTROL_MOVERIGHT {
 			control_dir+=Self::RIGHT_DIR;
@@ -274,14 +271,14 @@ impl StyleModifiers{
 			control_dir+=Self::UP_DIR;
 		}
 		if controls & Self::CONTROL_MOVEDOWN == Self::CONTROL_MOVEDOWN {
-			control_dir+=-Self::UP_DIR;
+			control_dir-=Self::UP_DIR;
 		}
 		return control_dir
 	}
 }
 
 pub struct PhysicsState{
-	pub time:TIME,
+	pub time:Time,
 	pub body:Body,
 	pub world:WorldState,//currently there is only one state the world can be in
 	pub game:GameMechanicsState,
@@ -303,7 +300,7 @@ pub struct PhysicsState{
 	pub mode_from_mode_id:std::collections::HashMap::<u32,usize>,
 	//the spawn point is where you spawn when you load into the map.
 	//This is not the same as Reset which teleports you to Spawn0
-	pub spawn_point:glam::Vec3,
+	pub spawn_point:Planar64Vec3,
 }
 #[derive(Clone)]
 pub struct PhysicsOutputState{
@@ -312,7 +309,7 @@ pub struct PhysicsOutputState{
 }
 impl PhysicsOutputState{
 	pub fn adjust_mouse(&self,mouse:&MouseState)->(glam::Vec3,glam::Vec2){
-		(self.body.extrapolated_position(mouse.time)+self.camera.offset,self.camera.simulate_move_angles(mouse.pos).as_vec2())
+		((self.body.extrapolated_position(mouse.time)+self.camera.offset).into(),self.camera.simulate_move_angles(mouse.pos))
 	}
 }
 
@@ -335,15 +332,15 @@ pub struct ModelPhysics {
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
 	mesh: TreyMesh,
-	transform:glam::Affine3A,
+	transform:crate::integer::Planar64Affine3,
 	attributes:PhysicsCollisionAttributes,
 }
 
 impl ModelPhysics {
-	fn from_model_transform_attributes(model:&crate::model::IndexedModel,transform:&glam::Affine3A,attributes:PhysicsCollisionAttributes)->Self{
-		let mut aabb=TreyMesh::new();
+	fn from_model_transform_attributes(model:&crate::model::IndexedModel,transform:&crate::integer::Planar64Affine3,attributes:PhysicsCollisionAttributes)->Self{
+		let mut aabb=TreyMesh::default();
 		for indexed_vertex in &model.unique_vertices {
-			aabb.grow(transform.transform_point3(glam::Vec3::from_array(model.unique_pos[indexed_vertex.pos as usize])));
+			aabb.grow(transform.transform_point3(model.unique_pos[indexed_vertex.pos as usize]));
 		}
 		Self{
 			mesh:aabb,
@@ -358,16 +355,16 @@ impl ModelPhysics {
 			crate::model::CollisionAttributes::Decoration=>None,
 		}
 	}
-	pub fn unit_vertices(&self) -> [glam::Vec3;8] {
+	pub fn unit_vertices(&self) -> [Planar64Vec3;8] {
 		TreyMesh::unit_vertices()
 	}
 	pub fn mesh(&self) -> &TreyMesh {
 		return &self.mesh;
 	}
-	pub fn face_mesh(&self,face:TreyMeshFace)->TreyMesh{
-		self.mesh.face(face)
-	}
-	pub fn face_normal(&self,face:TreyMeshFace) -> glam::Vec3 {
+	// pub fn face_mesh(&self,face:TreyMeshFace)->TreyMesh{
+	// 	self.mesh.face(face)
+	// }
+	pub fn face_normal(&self,face:TreyMeshFace) -> Planar64Vec3 {
 		TreyMesh::normal(face)//this is wrong for scale
 	}
 }
@@ -384,34 +381,32 @@ impl RelativeCollision {
 	pub fn model<'a>(&self,models:&'a Vec<ModelPhysics>)->Option<&'a ModelPhysics>{
 		models.get(self.model as usize)
 	}
-	pub fn mesh(&self,models:&Vec<ModelPhysics>) -> TreyMesh {
-		return self.model(models).unwrap().face_mesh(self.face).clone()
-	}
-	pub fn normal(&self,models:&Vec<ModelPhysics>) -> glam::Vec3 {
+	// pub fn mesh(&self,models:&Vec<ModelPhysics>) -> TreyMesh {
+	// 	return self.model(models).unwrap().face_mesh(self.face).clone()
+	// }
+	pub fn normal(&self,models:&Vec<ModelPhysics>) -> Planar64Vec3 {
 		return self.model(models).unwrap().face_normal(self.face)
 	}
 }
 
-pub type TIME = i64;
-
 impl Body {
-	pub fn with_pva(position:glam::Vec3,velocity:glam::Vec3,acceleration:glam::Vec3) -> Self {
+	pub fn with_pva(position:Planar64Vec3,velocity:Planar64Vec3,acceleration:Planar64Vec3) -> Self {
 		Self{
 			position,
 			velocity,
 			acceleration,
-			time: 0,
+			time:Time::ZERO,
 		}
 	}
-	pub fn extrapolated_position(&self,time: TIME)->glam::Vec3{
-		let dt=(time-self.time) as f64/1_000_000_000f64;
-		self.position+self.velocity*(dt as f32)+self.acceleration*((0.5*dt*dt) as f32)
+	pub fn extrapolated_position(&self,time:Time)->Planar64Vec3{
+		let dt=time-self.time;
+		self.position+self.velocity*dt+self.acceleration*(dt*dt/2)
 	}
-	pub fn extrapolated_velocity(&self,time: TIME)->glam::Vec3{
-		let dt=(time-self.time) as f64/1_000_000_000f64;
-		self.velocity+self.acceleration*(dt as f32)
+	pub fn extrapolated_velocity(&self,time:Time)->Planar64Vec3{
+		let dt=time-self.time;
+		self.velocity+self.acceleration*dt
 	}
-	pub fn advance_time(&mut self, time: TIME){
+	pub fn advance_time(&mut self,time:Time){
 		self.position=self.extrapolated_position(time);
 		self.velocity=self.extrapolated_velocity(time);
 		self.time=time;
@@ -421,9 +416,9 @@ impl Body {
 impl Default for PhysicsState{
 	fn default() -> Self {
  		Self{
-			spawn_point:glam::vec3(0.0,50.0,0.0),
-			body: Body::with_pva(glam::vec3(0.0,50.0,0.0),glam::vec3(0.0,0.0,0.0),glam::vec3(0.0,-100.0,0.0)),
-			time: 0,
+			spawn_point:Planar64Vec3::int(0,50,0),
+			body: Body::with_pva(Planar64Vec3::int(0,50,0),Planar64Vec3::int(0,0,0),Planar64Vec3::int(0,-100,0)),
+			time: Time::ZERO,
 			style:StyleModifiers::default(),
 			grounded: false,
 			contacts: std::collections::HashMap::new(),
@@ -431,7 +426,7 @@ impl Default for PhysicsState{
 			models: Vec::new(),
 			bvh:crate::bvh::BvhNode::default(),
 			walk: WalkState::new(),
-			camera: PhysicsCamera::from_offset(glam::vec3(0.0,4.5-2.5,0.0)),
+			camera: PhysicsCamera::from_offset(Planar64Vec3::int(0,2,0)),//4.5-2.5=2
 			next_mouse: MouseState::default(),
 			controls: 0,
 			world:WorldState{},
@@ -501,7 +496,7 @@ impl PhysicsState {
 					//shitty mice are 125Hz which is 8ms so this should cover that.
 					//setting this to 100us still doesn't print even though it's 10x lower than the polling rate,
 					//so mouse events are probably not handled separately from drawing and fire right before it :(
-					if 10_000_000<ins.time-self.next_mouse.time{
+					if Time::from_millis(10)<ins.time-self.next_mouse.time{
 						//push an event to extrapolate no movement from
 						timeline.push_front(TimedInstruction{
 							time:last_mouse_time,
@@ -629,7 +624,7 @@ impl PhysicsState {
 		}
 	}
 	//tickless gaming
-	pub fn run(&mut self, time_limit:TIME){
+	pub fn run(&mut self, time_limit:Time){
 		//prepare is ommitted - everything is done via instructions.
 		while let Some(instruction) = self.next_instruction(time_limit) {//collect
 			//process
@@ -638,7 +633,7 @@ impl PhysicsState {
 		}
 	}
 
-	pub fn advance_time(&mut self, time: TIME){
+	pub fn advance_time(&mut self, time: Time){
 		self.body.advance_time(time);
 		self.time=time;
 	}
@@ -648,32 +643,32 @@ impl PhysicsState {
 	}
 	fn jump(&mut self){
 		self.grounded=false;//do I need this?
-		let mut v=self.body.velocity+glam::Vec3::new(0.0,0.715588/2.0*100.0,0.0);
+		let mut v=self.body.velocity+Planar64Vec3::int(0,715588,0)/(2*1000000/100);//0.715588/2.0*100.0
 		self.contact_constrain_velocity(&mut v);
 		self.body.velocity=v;
 	}
 
-	fn contact_constrain_velocity(&self,velocity:&mut glam::Vec3){
+	fn contact_constrain_velocity(&self,velocity:&mut Planar64Vec3){
 		for (_,contact) in &self.contacts {
 			let n=contact.normal(&self.models);
 			let d=velocity.dot(n);
-			if d<0f32{
-				(*velocity)-=d/n.length_squared()*n;
+			if d<Planar64::ZERO{
+				(*velocity)-=n*(d/n.dot(n));
 			}
 		}
 	}
-	fn contact_constrain_acceleration(&self,acceleration:&mut glam::Vec3){
+	fn contact_constrain_acceleration(&self,acceleration:&mut Planar64Vec3){
 		for (_,contact) in &self.contacts {
 			let n=contact.normal(&self.models);
 			let d=acceleration.dot(n);
-			if d<0f32{
-				(*acceleration)-=d/n.length_squared()*n;
+			if d<Planar64::ZERO{
+				(*acceleration)-=n*(d/n.dot(n));
 			}
 		}
 	}
 	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		return Some(TimedInstruction{
-			time:(self.time*self.style.strafe_tick_num/self.style.strafe_tick_den+1)*self.style.strafe_tick_den/self.style.strafe_tick_num,
+			time:Time::from_nanos(self.style.strafe_tick_rate.rhs_div_int(self.style.strafe_tick_rate.mul_int(self.time.nanos())+1)),
 			//only poll the physics if there is a before and after mouse event
 			instruction:PhysicsInstruction::StrafeTick
 		});
@@ -716,19 +711,21 @@ impl PhysicsState {
 			let mut v=self.walk.target_velocity;
 			self.contact_constrain_velocity(&mut v);
 			let mut target_diff=v-self.body.velocity;
-			target_diff.y=0f32;
-			if target_diff==glam::Vec3::ZERO{
-				let mut a=glam::Vec3::ZERO;
+			//remove normal component
+			target_diff-=Planar64Vec3::Y*target_diff.y();
+			if target_diff==Planar64Vec3::ZERO{
+				let mut a=Planar64Vec3::ZERO;
 				self.contact_constrain_acceleration(&mut a);
 				self.body.acceleration=a;
 				self.walk.state=WalkEnum::Reached;
 			}else{
-				let accel=self.style.walk_accel.min(self.style.gravity.length()*self.style.friction);
+				//normal friction acceleration is clippedAcceleration.dot(normal)*friction
+				let accel=self.style.walk_accel.min(self.style.gravity.dot(Planar64Vec3::NEG_Y)*self.style.friction);
 				let time_delta=target_diff.length()/accel;
-				let mut a=target_diff/time_delta;
+				let mut a=target_diff.with_length(accel);
 				self.contact_constrain_acceleration(&mut a);
 				self.body.acceleration=a;
-				self.walk.target_time=self.body.time+((time_delta as f64)*1_000_000_000f64) as TIME;
+				self.walk.target_time=self.body.time+Time::from(time_delta);
 				self.walk.state=WalkEnum::Transient;
 			}
 		}else{
@@ -750,13 +747,13 @@ impl PhysicsState {
 		}
 	}
 	fn mesh(&self) -> TreyMesh {
-		let mut aabb=TreyMesh::new();
+		let mut aabb=TreyMesh::default();
 		for vertex in TreyMesh::unit_vertices(){
 			aabb.grow(self.body.position+self.style.hitbox_halfsize*vertex);
 		}
 		aabb
 	}
-	fn predict_collision_end(&self,time:TIME,time_limit:TIME,collision_data:&RelativeCollision) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn predict_collision_end(&self,time:Time,time_limit:Time,collision_data:&RelativeCollision) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//must treat cancollide false objects differently: you may not exit through the same face you entered.
 		//RelativeCollsion must reference the full model instead of a particular face
 		//this is Ctrl+C Ctrl+V of predict_collision_start but with v=-v before the calc and t=-t after the calc
@@ -769,26 +766,26 @@ impl PhysicsState {
 		//collect x
 		match collision_data.face {
 			TreyMeshFace::Top|TreyMeshFace::Back|TreyMeshFace::Bottom|TreyMeshFace::Front=>{
-				for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,0.5*a.x) {
+				for t in zeroes2(mesh0.max.x()-mesh1.min.x(),v.x(),a.x()/2) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
-					if time<=t_time&&t_time<best_time&&0f32<v.x+a.x*-t{
+					let t_time=self.body.time-Time::from(t);
+					if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.x()+a.x()*-t{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Left);
 						break;
 					}
 				}
-				for t in zeroes2(mesh0.min.x-mesh1.max.x,v.x,0.5*a.x) {
+				for t in zeroes2(mesh0.min.x()-mesh1.max.x(),v.x(),a.x()/2) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
-					if time<=t_time&&t_time<best_time&&v.x+a.x*-t<0f32{
+					let t_time=self.body.time-Time::from(t);
+					if time<=t_time&&t_time<best_time&&v.x()+a.x()*-t<Planar64::ZERO{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Right);
@@ -798,14 +795,14 @@ impl PhysicsState {
 			},
 			TreyMeshFace::Left=>{
 				//generate event if v.x<0||a.x<0
-				if -v.x<0f32{
+				if -v.x()<Planar64::ZERO{
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Left);
 				}
 			},
 			TreyMeshFace::Right=>{
 				//generate event if 0<v.x||0<a.x
-				if 0f32<(-v.x){
+				if Planar64::ZERO<(-v.x()){
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Right);
 				}
@@ -814,26 +811,26 @@ impl PhysicsState {
 		//collect y
 		match collision_data.face {
 			TreyMeshFace::Left|TreyMeshFace::Back|TreyMeshFace::Right|TreyMeshFace::Front=>{
-				for t in zeroes2(mesh0.max.y-mesh1.min.y,v.y,0.5*a.y) {
+				for t in zeroes2(mesh0.max.y()-mesh1.min.y(),v.y(),a.y()/2) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
-					if time<=t_time&&t_time<best_time&&0f32<v.y+a.y*-t{
+					let t_time=self.body.time-Time::from(t);
+					if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.y()+a.y()*-t{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Bottom);
 						break;
 					}
 				}
-				for t in zeroes2(mesh0.min.y-mesh1.max.y,v.y,0.5*a.y) {
+				for t in zeroes2(mesh0.min.y()-mesh1.max.y(),v.y(),a.y()/2) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
-					if time<=t_time&&t_time<best_time&&v.y+a.y*-t<0f32{
+					let t_time=self.body.time-Time::from(t);
+					if time<=t_time&&t_time<best_time&&v.y()+a.y()*-t<Planar64::ZERO{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Top);
@@ -843,14 +840,14 @@ impl PhysicsState {
 			},
 			TreyMeshFace::Bottom=>{
 				//generate event if v.y<0||a.y<0
-				if -v.y<0f32{
+				if -v.y()<Planar64::ZERO{
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Bottom);
 				}
 			},
 			TreyMeshFace::Top=>{
 				//generate event if 0<v.y||0<a.y
-				if 0f32<(-v.y){
+				if Planar64::ZERO<(-v.y()){
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Top);
 				}
@@ -859,26 +856,26 @@ impl PhysicsState {
 		//collect z
 		match collision_data.face {
 			TreyMeshFace::Left|TreyMeshFace::Bottom|TreyMeshFace::Right|TreyMeshFace::Top=>{
-				for t in zeroes2(mesh0.max.z-mesh1.min.z,v.z,0.5*a.z) {
+				for t in zeroes2(mesh0.max.z()-mesh1.min.z(),v.z(),a.z()/2) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
-					if time<=t_time&&t_time<best_time&&0f32<v.z+a.z*-t{
+					let t_time=self.body.time-Time::from(t);
+					if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.z()+a.z()*-t{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Front);
 						break;
 					}
 				}
-				for t in zeroes2(mesh0.min.z-mesh1.max.z,v.z,0.5*a.z) {
+				for t in zeroes2(mesh0.min.z()-mesh1.max.z(),v.z(),a.z()/2) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
-					if time<=t_time&&t_time<best_time&&v.z+a.z*-t<0f32{
+					let t_time=self.body.time-Time::from(t);
+					if time<=t_time&&t_time<best_time&&v.z()+a.z()*-t<Planar64::ZERO{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Back);
@@ -888,14 +885,14 @@ impl PhysicsState {
 			},
 			TreyMeshFace::Front=>{
 				//generate event if v.z<0||a.z<0
-				if -v.z<0f32{
+				if -v.z()<Planar64::ZERO{
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Front);
 				}
 			},
 			TreyMeshFace::Back=>{
 				//generate event if 0<v.z||0<a.z
-				if 0f32<(-v.z){
+				if Planar64::ZERO<(-v.z()){
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Back);
 				}
@@ -910,7 +907,7 @@ impl PhysicsState {
 		}
 		None
 	}
-	fn predict_collision_start(&self,time:TIME,time_limit:TIME,model_id:u32) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn predict_collision_start(&self,time:Time,time_limit:Time,model_id:u32) -> Option<TimedInstruction<PhysicsInstruction>> {
 		let mesh0=self.mesh();
 		let mesh1=self.models.get(model_id as usize).unwrap().mesh();
 		let (p,v,a,body_time)=(self.body.position,self.body.velocity,self.body.acceleration,self.body.time);
@@ -918,15 +915,15 @@ impl PhysicsState {
 		let mut best_time=time_limit;
 		let mut best_face:Option<TreyMeshFace>=None;
 		//collect x
-		for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,0.5*a.x) {
+		for t in zeroes2(mesh0.max.x()-mesh1.min.x(),v.x(),a.x()/2) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as TIME;
-			if time<=t_time&&t_time<best_time&&0f32<v.x+a.x*t{
+			let t_time=body_time+Time::from(t);
+			if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.x()+a.x()*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
+				if mesh1.min.y()<mesh0.max.y()+dp.y()&&mesh0.min.y()+dp.y()<mesh1.max.y()&&mesh1.min.z()<mesh0.max.z()+dp.z()&&mesh0.min.z()+dp.z()<mesh1.max.z() {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Left);
@@ -934,15 +931,15 @@ impl PhysicsState {
 				}
 			}
 		}
-		for t in zeroes2(mesh0.min.x-mesh1.max.x,v.x,0.5*a.x) {
+		for t in zeroes2(mesh0.min.x()-mesh1.max.x(),v.x(),a.x()/2) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as TIME;
-			if time<=t_time&&t_time<best_time&&v.x+a.x*t<0f32{
+			let t_time=body_time+Time::from(t);
+			if time<=t_time&&t_time<best_time&&v.x()+a.x()*t<Planar64::ZERO{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
+				if mesh1.min.y()<mesh0.max.y()+dp.y()&&mesh0.min.y()+dp.y()<mesh1.max.y()&&mesh1.min.z()<mesh0.max.z()+dp.z()&&mesh0.min.z()+dp.z()<mesh1.max.z() {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Right);
@@ -951,15 +948,15 @@ impl PhysicsState {
 			}
 		}
 		//collect y
-		for t in zeroes2(mesh0.max.y-mesh1.min.y,v.y,0.5*a.y) {
+		for t in zeroes2(mesh0.max.y()-mesh1.min.y(),v.y(),a.y()/2) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as TIME;
-			if time<=t_time&&t_time<best_time&&0f32<v.y+a.y*t{
+			let t_time=body_time+Time::from(t);
+			if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.y()+a.y()*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
+				if mesh1.min.x()<mesh0.max.x()+dp.x()&&mesh0.min.x()+dp.x()<mesh1.max.x()&&mesh1.min.z()<mesh0.max.z()+dp.z()&&mesh0.min.z()+dp.z()<mesh1.max.z() {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Bottom);
@@ -967,15 +964,15 @@ impl PhysicsState {
 				}
 			}
 		}
-		for t in zeroes2(mesh0.min.y-mesh1.max.y,v.y,0.5*a.y) {
+		for t in zeroes2(mesh0.min.y()-mesh1.max.y(),v.y(),a.y()/2) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as TIME;
-			if time<=t_time&&t_time<best_time&&v.y+a.y*t<0f32{
+			let t_time=body_time+Time::from(t);
+			if time<=t_time&&t_time<best_time&&v.y()+a.y()*t<Planar64::ZERO{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
+				if mesh1.min.x()<mesh0.max.x()+dp.x()&&mesh0.min.x()+dp.x()<mesh1.max.x()&&mesh1.min.z()<mesh0.max.z()+dp.z()&&mesh0.min.z()+dp.z()<mesh1.max.z() {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Top);
@@ -984,15 +981,15 @@ impl PhysicsState {
 			}
 		}
 		//collect z
-		for t in zeroes2(mesh0.max.z-mesh1.min.z,v.z,0.5*a.z) {
+		for t in zeroes2(mesh0.max.z()-mesh1.min.z(),v.z(),a.z()/2) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as TIME;
-			if time<=t_time&&t_time<best_time&&0f32<v.z+a.z*t{
+			let t_time=body_time+Time::from(t);
+			if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.z()+a.z()*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x {
+				if mesh1.min.y()<mesh0.max.y()+dp.y()&&mesh0.min.y()+dp.y()<mesh1.max.y()&&mesh1.min.x()<mesh0.max.x()+dp.x()&&mesh0.min.x()+dp.x()<mesh1.max.x() {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Front);
@@ -1000,15 +997,15 @@ impl PhysicsState {
 				}
 			}
 		}
-		for t in zeroes2(mesh0.min.z-mesh1.max.z,v.z,0.5*a.z) {
+		for t in zeroes2(mesh0.min.z()-mesh1.max.z(),v.z(),a.z()/2) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as TIME;
-			if time<=t_time&&t_time<best_time&&v.z+a.z*t<0f32{
+			let t_time=body_time+Time::from(t);
+			if time<=t_time&&t_time<best_time&&v.z()+a.z()*t<Planar64::ZERO{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x {
+				if mesh1.min.y()<mesh0.max.y()+dp.y()&&mesh0.min.y()+dp.y()<mesh1.max.y()&&mesh1.min.x()<mesh0.max.x()+dp.x()&&mesh0.min.x()+dp.x()<mesh1.max.x() {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Back);
@@ -1032,7 +1029,7 @@ impl PhysicsState {
 
 impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState {
 	//this little next instruction function can cache its return value and invalidate the cached value by watching the State.
-	fn next_instruction(&self,time_limit:TIME) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn next_instruction(&self,time_limit:Time) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//JUST POLLING!!! NO MUTATION
 		let mut collector = crate::instruction::InstructionCollector::new(time_limit);
 		//check for collision stop instructions with curent contacts
@@ -1043,7 +1040,7 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 		// 	collector.collect(self.predict_collision_end2(self.time,time_limit,collision_data));
 		// }
 		//check for collision start instructions (against every part in the game with no optimization!!)
-		let mut aabb=crate::aabb::Aabb::new();
+		let mut aabb=crate::aabb::Aabb::default();
 		aabb.grow(self.body.extrapolated_position(self.time));
 		aabb.grow(self.body.extrapolated_position(time_limit));
 		aabb.inflate(self.style.hitbox_halfsize);
@@ -1111,7 +1108,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						if let Some(mode)=self.get_mode(stage_element.mode_id){
 							if let Some(&spawn)=mode.get_spawn_model_id(self.game.stage_id){
 								if let Some(model)=self.models.get(spawn as usize){
-									self.body.position=model.transform.transform_point3(glam::Vec3::Y)+glam::Vec3::Y*(self.style.hitbox_halfsize.y+0.1);
+									self.body.position=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(self.style.hitbox_halfsize.y()+Planar64::ONE/16);
 									//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
 									self.contacts.clear();
 									self.intersects.clear();
@@ -1159,7 +1156,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						if let Some(mode)=self.get_mode(stage_element.mode_id){
 							if let Some(&spawn)=mode.get_spawn_model_id(self.game.stage_id){
 								if let Some(model)=self.models.get(spawn as usize){
-									self.body.position=model.transform.transform_point3(glam::Vec3::Y)+glam::Vec3::Y*(self.style.hitbox_halfsize.y+0.1);
+									self.body.position=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(self.style.hitbox_halfsize.y()+Planar64::ONE/16);
 									//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
 									self.contacts.clear();
 									self.intersects.clear();
@@ -1205,14 +1202,14 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				let control_dir=camera_mat*self.style.get_control_dir(self.controls);
 				let d=self.body.velocity.dot(control_dir);
 				if d<self.style.mv {
-					let mut v=self.body.velocity+(self.style.mv-d)*control_dir;
+					let mut v=self.body.velocity+control_dir*(self.style.mv-d);
 					self.contact_constrain_velocity(&mut v);
 					self.body.velocity=v;
 				}
 			}
 			PhysicsInstruction::ReachWalkTargetVelocity => {
 				//precisely set velocity
-				let mut a=glam::Vec3::ZERO;
+				let mut a=Planar64Vec3::ZERO;
 				self.contact_constrain_acceleration(&mut a);
 				self.body.acceleration=a;
 				let mut v=self.walk.target_velocity;
@@ -1225,11 +1222,11 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				let mut refresh_walk_target_velocity=true;
 				match input_instruction{
 					PhysicsInputInstruction::SetNextMouse(m) => {
-						self.camera.angles=self.camera.simulate_move_angles(self.next_mouse.pos);
+						self.camera.move_mouse(self.next_mouse.pos);
 						(self.camera.mouse,self.next_mouse)=(self.next_mouse.clone(),m);
 					},
 					PhysicsInputInstruction::ReplaceMouse(m0,m1) => {
-						self.camera.angles=self.camera.simulate_move_angles(m0.pos);
+						self.camera.move_mouse(m0.pos);
 						(self.camera.mouse,self.next_mouse)=(m0,m1);
 					},
 					PhysicsInputInstruction::SetMoveForward(s) => self.set_control(StyleModifiers::CONTROL_MOVEFORWARD,s),
@@ -1252,7 +1249,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsInputInstruction::Reset => {
 						//temp
 						self.body.position=self.spawn_point;
-						self.body.velocity=glam::Vec3::ZERO;
+						self.body.velocity=Planar64Vec3::ZERO;
 						//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
 						self.contacts.clear();
 						self.body.acceleration=self.style.gravity;
@@ -1267,7 +1264,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					if refresh_walk_target_velocity{
 						let camera_mat=self.camera.simulate_move_rotation_y(self.camera.mouse.lerp(&self.next_mouse,self.time).x);
 						let control_dir=camera_mat*self.style.get_control_dir(self.controls);
-						self.walk.target_velocity=self.style.walkspeed*control_dir;
+						self.walk.target_velocity=control_dir*self.style.walkspeed;
 					}
 					self.refresh_walk_target();
 				}
