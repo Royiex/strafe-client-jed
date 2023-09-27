@@ -355,7 +355,7 @@ impl framework::Example for GraphicsData {
 		//teapot
 		modeldatas[2].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(-10.,5.,10.)),
-			texture_transform:glam::Affine2::IDENTITY,
+			texture_transform:glam::Affine2::from_scale(glam::vec2(2.0,2.0)),
 			color:ModelData::COLOR_VEC4_WHITE,
 		});
 		//ground
