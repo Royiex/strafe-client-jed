@@ -1,3 +1,5 @@
+use crate::model::{IndexedModel, IndexedPolygon, IndexedGroup, IndexedVertex};
+
 const CUBE_DEFAULT_TEXTURE_COORDS:[[f32;2];4]=[[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0]];
 const CUBE_DEFAULT_VERTICES:[[f32;3];8]=[
 	[-1.,-1., 1.],//0 left bottom back
@@ -20,7 +22,7 @@ const CUBE_DEFAULT_NORMALS:[[f32;3];6]=[
 const CUBE_DEFAULT_POLYS:[[[u32;3];4];6]=[
 	// right (1, 0, 0)
 	[
-		[6,2,0],//[vert,tex,norm]
+		[6,2,0],//[vertex,tex,norm]
 		[5,1,0],
 		[2,0,0],
 		[1,3,0],
@@ -61,82 +63,108 @@ const CUBE_DEFAULT_POLYS:[[[u32;3];4];6]=[
 		[7,2,5],
 	],
 ];
-pub fn the_unit_cube_lol() -> crate::model::ModelData{
-	generate_partial_unit_cube([Some(FaceDescription::default());6],None)
+pub fn the_unit_cube_lol() -> crate::model::IndexedModel{
+	generate_partial_unit_cube([Some(FaceDescription::default());6])
 }
 
+#[derive(Copy,Clone)]
 pub struct FaceDescription{
+	texture:Option<u32>,
 	transform:glam::Affine2,
 	color:glam::Vec4,
 }
 impl std::default::Default for FaceDescription{
 	fn default() -> Self {
 		Self{
+			texture:None,
 			transform:glam::Affine2::IDENTITY,
 			color:glam::Vec4::ONE,
 		}
 	}
 }
 impl FaceDescription{
-	pub fn new(transform:glam::Affine2,color:glam::Vec4)->Self{
-		Self{transform,color}
+	pub fn new(texture:u32,transform:glam::Affine2,color:glam::Vec4)->Self{
+		Self{texture:Some(texture),transform,color}
+	}
+	pub fn from_texture(texture:u32)->Self{
+		Self{
+			texture:Some(texture),
+			transform:glam::Affine2::IDENTITY,
+			color:glam::Vec4::ONE,
+		}
 	}
 }
-pub fn generate_partial_unit_cube(face_transforms:[Option<FaceDescription>;6],texture:Option<u32>) -> crate::model::ModelData{	//generate transformed vertices
-	let mut generated_verts=Vec::new();
+//TODO: it's probably better to use a shared vertex buffer between all primitives and use indexed rendering instead of generating a unique vertex buffer for each primitive.
+pub fn generate_partial_unit_cube(face_descriptions:[Option<FaceDescription>;6]) -> crate::model::IndexedModel{
+	let mut generated_pos=Vec::<[f32;3]>::new();
+	let mut generated_tex=Vec::new();
+	let mut generated_normal=Vec::new();
+	let mut generated_color=Vec::new();
+	let mut generated_vertices=Vec::new();
+	let mut groups=Vec::new();
 	let mut transforms=Vec::new();
-	let mut generated_polys=Vec::new();
-	for (i,maybe_transform) in face_transforms.iter().enumerate(){
-		if let Some(transform)=maybe_transform{
-			let transform_index=if let Some(transform_index)=transforms.iter().position(|&t|t==transform){
+	//note that on a cube every vertex is guaranteed to be unique, so there's no need to hash them against existing vertices.
+	for (i,maybe_face_description) in face_descriptions.iter().enumerate(){
+		if let Some(face_description)=maybe_face_description{
+			//assume that scanning short lists is faster than hashing.
+			let transform_index=if let Some(transform_index)=transforms.iter().position(|&transform|transform==face_description.transform){
 				transform_index
 			}else{
 				//create new transform_index
 				let transform_index=transforms.len();
-				transforms.push(transform);
-				for vert in default_verts{
-					generated_verts.push(*transform.transform_point2(glam::vec2(vert[0],vert[1])).as_ref());
+				transforms.push(face_description.transform);
+				for tex in CUBE_DEFAULT_TEXTURE_COORDS{
+					generated_tex.push(*face_description.transform.transform_point2(glam::Vec2::from_array(tex)).as_ref());
 				}
 				transform_index
-			};
-			generated_polys.push(obj::SimplePolygon(
-				default_polys[i].0.iter().map(
-					|&v|obj::IndexTuple(v.0,Some(v.1.unwrap()+4*transform_index),v.2)
-				).collect()
-			));
+			} as u32;
+			let color_index=if let Some(color_index)=generated_color.iter().position(|color|color==face_description.color.as_ref()){
+				color_index
+			}else{
+				//create new color_index
+				let color_index=generated_color.len();
+				generated_color.push(*face_description.color.as_ref());
+				color_index
+			} as u32;
+			//always push normal
+			let normal_index=generated_normal.len() as u32;
+			generated_normal.push(CUBE_DEFAULT_NORMALS[i]);
+			//push vertices as they are needed
+			groups.push(IndexedGroup{
+				texture:face_description.texture,
+				polys:vec![IndexedPolygon{
+					vertices:CUBE_DEFAULT_POLYS[i].map(|tup|{
+						let pos=CUBE_DEFAULT_VERTICES[tup[0] as usize];
+						let pos_index=if let Some(pos_index)=generated_pos.iter().position(|&p|p==pos){
+							pos_index
+						}else{
+							//create new pos_index
+							let pos_index=generated_pos.len();
+							generated_pos.push(pos);
+							pos_index
+						} as u32;
+						//always push vertex
+						let vertex=IndexedVertex{
+							pos:pos_index,
+							tex:tup[1]+4*transform_index,
+							normal:normal_index,
+							color:color_index,
+						};
+						let vert_index=generated_vertices.len();
+						generated_vertices.push(vertex);
+						vert_index as u32
+					}).to_vec(),
+				}],
+			});
 		}
 	}
-	let mut vertices = Vec::new();
-	let mut vertex_index = std::collections::HashMap::<obj::IndexTuple,u16>::new();
-	let mut entities = Vec::new();
-	for group in object.groups {
-		let mut indices = Vec::new();
-		for poly in group.polys {
-			for end_index in 2..poly.0.len() {
-				for &index in &[0, end_index - 1, end_index] {
-					let vert = poly.0[index];
-					if let Some(&i)=vertex_index.get(&vert){
-						indices.push(i);
-					}else{
-						let i=vertices.len() as u16;
-						vertices.push(Vertex {
-							pos: data.position[vert.0],
-							texture: data.texture[vert.1.unwrap()],
-							normal: data.normal[vert.2.unwrap()],
-							color,
-						});
-						vertex_index.insert(vert,i);
-						indices.push(i);
-					}
-				}
-			}
-		}
-		entities.push(indices);
-	}
-	ModelData {
-		instances: Vec::new(),
-		vertices,
-		entities,
-		texture,
+	IndexedModel{
+		unique_pos:generated_pos,
+		unique_tex:generated_tex,
+		unique_normal:generated_normal,
+		unique_color:generated_color,
+		unique_vertices:generated_vertices,
+		groups,
+		instances:Vec::new(),
 	}
 }
