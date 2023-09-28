@@ -87,11 +87,15 @@ impl GraphicsData {
 		depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
 	}
 
-	fn generate_model_physics(&mut self,modeldatas:&Vec<ModelData>){
-		self.physics.models.append(&mut modeldatas.iter().map(|m|
+	fn generate_model_physics(&mut self,indexed_models:&model::IndexedModelInstances){
+		for instance in indexed_models.instances{
 			//make aabb and run vertices to get realistic bounds
-			m.instances.iter().map(|t|body::ModelPhysics::new(t.model_transform))
-		).flatten().collect());
+			if let Some(model)=indexed_models.models.get(instance.model as usize){
+				self.physics.models.push(body::ModelPhysics::from_model(model,instance.model_transform));
+			}else{
+				println!("oh no model missing id={}",instance.model);
+			}
+		}
 		println!("Physics Objects: {}",self.physics.models.len());
 	}
 	fn generate_model_graphics(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,mut indexed_models:model::IndexedModelInstances){
