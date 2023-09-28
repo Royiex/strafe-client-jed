@@ -240,7 +240,9 @@ impl framework::Example for GraphicsData {
 	fn optional_features() -> wgpu::Features {
 		wgpu::Features::TEXTURE_COMPRESSION_ASTC
 			| wgpu::Features::TEXTURE_COMPRESSION_ETC2
-			| wgpu::Features::TEXTURE_COMPRESSION_BC
+	}
+	fn required_features() -> wgpu::Features {
+		wgpu::Features::TEXTURE_COMPRESSION_BC
 	}
 	fn required_limits() -> wgpu::Limits {
 		wgpu::Limits::default() //framework.rs was using goofy limits that caused me a multi-day headache
