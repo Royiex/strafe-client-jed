@@ -1,4 +1,4 @@
-use crate::model::{ModelData,ModelInstance};
+use crate::model::{IndexedModelInstances,ModelInstance};
 
 use crate::primitives;
 
@@ -129,12 +129,13 @@ impl RobloxUnitCubeGenerationData{
 		}
     }
 }
-pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<ModelData>,Vec<String>,glam::Vec3), Box<dyn std::error::Error>>{
+pub fn generate_indexed_model_instances_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(IndexedModelInstances,Vec<String>,glam::Vec3), Box<dyn std::error::Error>>{
 	//ModelData includes texture dds
 	let mut spawn_point=glam::Vec3::ZERO;
 
 	//TODO: generate unit Block, Wedge, etc. after based on part shape lists
-	let mut modeldatas=Vec::new();
+	let mut indexed_models=Vec::new();
+	let mut model_instances=Vec::new();
 
 	let mut texture_id_from_asset_id=std::collections::HashMap::<u64,u32>::new();
 	let mut asset_id_from_texture_id=Vec::new();

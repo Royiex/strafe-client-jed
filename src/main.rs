@@ -17,8 +17,12 @@ struct Entity {
 	index_buf: wgpu::Buffer,
 }
 
+struct ModelGraphicsInstance {
+	model_transform: glam::Affine3A,
+	color: glam::Vec4,
+}
 struct ModelGraphics {
-	instances: Vec<ModelInstance>,
+	instances: Vec<ModelGraphicsInstance>,
 	vertex_buf: wgpu::Buffer,
 	entities: Vec<Entity>,
 	bind_group: wgpu::BindGroup,
@@ -90,13 +94,13 @@ impl GraphicsData {
 		).flatten().collect());
 		println!("Physics Objects: {}",self.physics.models.len());
 	}
-	fn generate_model_graphics(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,mut modeldatas:Vec<ModelData>,textures:Vec<String>){
+	fn generate_model_graphics(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,mut indexed_models:model::IndexedModelInstances){
 		//generate texture view per texture
 
 		//idk how to do this gooder lol
 		let mut double_map=std::collections::HashMap::<u32,u32>::new();
-		let mut texture_views:Vec<wgpu::TextureView>=Vec::with_capacity(textures.len());
-		for (i,t) in textures.iter().enumerate(){
+		let mut texture_views:Vec<wgpu::TextureView>=Vec::with_capacity(indexed_models.textures.len());
+		for (i,t) in indexed_models.textures.iter().enumerate(){
 			if let Ok(mut file) = std::fs::File::open(std::path::Path::new(&format!("textures/{}.dds",t))){
 				let image = ddsfile::Dds::read(&mut file).unwrap();
 
