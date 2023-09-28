@@ -3,14 +3,14 @@ use bytemuck::{Pod, Zeroable};
 #[repr(C)]
 pub struct Vertex {
 	pub pos: [f32; 3],
-	pub texture: [f32; 2],
+	pub tex: [f32; 2],
 	pub normal: [f32; 3],
 	pub color: [f32; 4],
 }
-#[derive(Hash)]
+#[derive(Hash,PartialEq,Eq)]
 pub struct IndexedVertex{
 	pub pos:u32,
-	pub texture:u32,
+	pub tex:u32,
 	pub normal:u32,
 	pub color:u32,
 }
@@ -23,7 +23,7 @@ pub struct IndexedGroup{
 }
 pub struct IndexedModel{
 	pub unique_pos:Vec<[f32; 3]>,
-	pub unique_texture:Vec<[f32; 2]>,
+	pub unique_tex:Vec<[f32; 2]>,
 	pub unique_normal:Vec<[f32; 3]>,
 	pub unique_color:Vec<[f32; 4]>,
 	pub unique_vertices:Vec<IndexedVertex>,
@@ -59,7 +59,7 @@ pub fn generate_indexed_model_from_obj(data:obj::ObjData,color:[f32;4]) -> Vec<I
 								let i=unique_vertices.len() as u32;
 								unique_vertices.push(IndexedVertex{
 									pos: tup.0 as u32,
-									texture: tup.1.unwrap() as u32,
+									tex: tup.1.unwrap() as u32,
 									normal: tup.2.unwrap() as u32,
 									color: 0,
 								});
@@ -73,7 +73,7 @@ pub fn generate_indexed_model_from_obj(data:obj::ObjData,color:[f32;4]) -> Vec<I
 		}).collect();
 		IndexedModel{
 			unique_pos: data.position.clone(),
-			unique_texture: data.texture.clone(),
+			unique_tex: data.texture.clone(),
 			unique_normal: data.normal.clone(),
 			unique_color: vec![color],
 			unique_vertices,
