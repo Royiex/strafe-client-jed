@@ -1,7 +1,6 @@
-pub fn the_unit_cube_lol() -> obj::ObjData{
-	generate_partial_unit_cube([Some(glam::Affine2::IDENTITY);6])
+pub fn the_unit_cube_lol() -> crate::model::ModelData{
+	generate_partial_unit_cube([Some(FaceDescription::default());6],None)
 }
-pub fn generate_partial_unit_cube(face_transforms:[Option<glam::Affine2>;6])->obj::ObjData{
 	let default_polys=[
 		// right (1, 0, 0)
 		obj::SimplePolygon(vec![
@@ -101,5 +100,57 @@ pub fn generate_partial_unit_cube(face_transforms:[Option<glam::Affine2>;6])->ob
 			}]
 		}],
 		material_libs: Vec::new(),
+	}
+}
+pub struct FaceDescription{
+	transform:glam::Affine2,
+	color:glam::Vec4,
+}
+impl std::default::Default for FaceDescription{
+	fn default() -> Self {
+		Self{
+			transform:glam::Affine2::IDENTITY,
+			color:glam::Vec4::ONE,
+		}
+	}
+}
+impl FaceDescription{
+	pub fn new(transform:glam::Affine2,color:glam::Vec4)->Self{
+		Self{transform,color}
+	}
+}
+pub fn generate_partial_unit_cube(face_transforms:[Option<FaceDescription>;6],texture:Option<u32>) -> crate::model::ModelData{
+	let mut vertices = Vec::new();
+	let mut vertex_index = std::collections::HashMap::<obj::IndexTuple,u16>::new();
+	let mut entities = Vec::new();
+	for group in object.groups {
+		let mut indices = Vec::new();
+		for poly in group.polys {
+			for end_index in 2..poly.0.len() {
+				for &index in &[0, end_index - 1, end_index] {
+					let vert = poly.0[index];
+					if let Some(&i)=vertex_index.get(&vert){
+						indices.push(i);
+					}else{
+						let i=vertices.len() as u16;
+						vertices.push(Vertex {
+							pos: data.position[vert.0],
+							texture: data.texture[vert.1.unwrap()],
+							normal: data.normal[vert.2.unwrap()],
+							color,
+						});
+						vertex_index.insert(vert,i);
+						indices.push(i);
+					}
+				}
+			}
+		}
+		entities.push(indices);
+	}
+	ModelData {
+		instances: Vec::new(),
+		vertices,
+		entities,
+		texture,
 	}
 }

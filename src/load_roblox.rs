@@ -105,12 +105,12 @@ struct RobloxUnitCubeGenerationData{
 }
 impl std::cmp::Eq for RobloxUnitCubeGenerationData{}//????
 impl std::default::Default for RobloxUnitCubeGenerationData{
-    fn default() -> Self {
-    	Self{
+	fn default() -> Self {
+		Self{
 			texture:None,
 			faces:[Some(RobloxColorAndTextureTransform::default());6],
 		}
-    }
+	}
 }
 impl std::hash::Hash for RobloxUnitCubeGenerationData {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

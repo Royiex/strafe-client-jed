@@ -253,12 +253,11 @@ impl framework::Example for GraphicsData {
 		device: &wgpu::Device,
 		queue: &wgpu::Queue,
 	) -> Self {
-		let unit_cube=primitives::the_unit_cube_lol();
 		let mut modeldatas = Vec::<ModelData>::new();
 		modeldatas.append(&mut model::generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
 		modeldatas.append(&mut model::generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
 		modeldatas.append(&mut model::generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
-		modeldatas.append(&mut model::generate_modeldatas(unit_cube.clone(),ModelData::COLOR_FLOATS_WHITE));
+		modeldatas.push(primitives::the_unit_cube_lol());
 		println!("models.len = {:?}", modeldatas.len());
 		modeldatas[0].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(10.,0.,-10.)),
