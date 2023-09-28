@@ -70,79 +70,41 @@ impl std::hash::Hash for RobloxTextureTransform {
 		self.scale_v.to_ne_bytes().hash(state);
 	}
 }
-#[derive(Clone,Copy,PartialEq)]
-struct RobloxColorAndTextureTransform{
-	transform:RobloxTextureTransform,
+#[derive(Clone,PartialEq)]
+struct RobloxFaceTextureDescription{
+	texture:u32,
 	color:glam::Vec4,
+	transform:RobloxTextureTransform,
 }
-impl std::cmp::Eq for RobloxColorAndTextureTransform{}//????
-impl std::default::Default for RobloxColorAndTextureTransform{
-    fn default() -> Self {
-        Self{
-        	transform:RobloxTextureTransform::default(),
-        	color:glam::Vec4::ONE,
-        }
-    }
-}
-impl std::hash::Hash for RobloxColorAndTextureTransform {
+impl std::cmp::Eq for RobloxFaceTextureDescription{}//????
+impl std::hash::Hash for RobloxFaceTextureDescription {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.texture.hash(state);
 		self.transform.hash(state);
         for &el in self.color.as_ref().iter() {
             el.to_ne_bytes().hash(state);
         }
     }
 }
-struct PartFaceTextureDescription{
-	texture:u32,
-	color:glam::Vec4,
-	transform:RobloxTextureTransform,
+type RobloxPartDescription=[Option<RobloxFaceTextureDescription>;6];
+//type RobloxWedgeDescription=[Option<RobloxFaceTextureDescription>;5];
+#[derive(Clone,Eq,Hash,PartialEq)]
+enum RobloxBasePartDescription{
+	Part(RobloxPartDescription),
+	//Wedge(RobloxWedgeDescription),
 }
-type PartTextureDescription=[Option<PartFaceTextureDescription>;6];
-#[derive(PartialEq)]
-struct RobloxUnitCubeGenerationData{
-	texture:Option<u32>,
-	faces:[Option<RobloxColorAndTextureTransform>;6],
-}
-impl std::cmp::Eq for RobloxUnitCubeGenerationData{}//????
-impl std::default::Default for RobloxUnitCubeGenerationData{
-	fn default() -> Self {
-		Self{
-			texture:None,
-			faces:[Some(RobloxColorAndTextureTransform::default());6],
-		}
-	}
-}
-impl std::hash::Hash for RobloxUnitCubeGenerationData {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.texture.hash(state);
-        for &el in self.color.as_ref().iter() {
-            el.to_ne_bytes().hash(state);
-        }
-        self.faces.hash(state);
-    }
-}
-impl RobloxUnitCubeGenerationData{
-    fn empty() -> Self {
-    	Self{
-			texture:None,
-			faces:[None,None,None,None,None,None],
-		}
-    }
-}
-pub fn generate_indexed_model_instances_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(IndexedModelInstances,Vec<String>,glam::Vec3), Box<dyn std::error::Error>>{
-	//ModelData includes texture dds
+pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(IndexedModelInstances,glam::Vec3), Box<dyn std::error::Error>>{
+	//IndexedModelInstances includes textures
 	let mut spawn_point=glam::Vec3::ZERO;
 
-	//TODO: generate unit Block, Wedge, etc. after based on part shape lists
 	let mut indexed_models=Vec::new();
-	let mut model_instances=Vec::new();
+	let mut model_id_from_description=std::collections::HashMap::<RobloxBasePartDescription,usize>::new();
 
 	let mut texture_id_from_asset_id=std::collections::HashMap::<u64,u32>::new();
 	let mut asset_id_from_texture_id=Vec::new();
 
 	let mut object_refs=Vec::new();
 	let mut temp_objects=Vec::new();
-	let mut model_id_from_ucgd=std::collections::HashMap::<RobloxUnitCubeGenerationData,usize>::new();
 	recursive_collect_superclass(&mut object_refs, &dom, dom.root(),"BasePart");
 	for object_ref in object_refs {
 		if let Some(object)=dom.get_by_ref(object_ref){
@@ -183,7 +145,7 @@ pub fn generate_indexed_model_instances_roblox(dom:rbx_dom_weak::WeakDom) -> Res
 				temp_objects.clear();
 				recursive_collect_superclass(&mut temp_objects, &dom, object,"Decal");
 
-				let mut part_texture_description:PartTextureDescription=[None,None,None,None,None,None];
+				let mut part_texture_description:RobloxPartDescription=[None,None,None,None,None,None];
 				for &decal_ref in &temp_objects{
 					if let Some(decal)=dom.get_by_ref(decal_ref){
 						if let (
@@ -240,7 +202,7 @@ pub fn generate_indexed_model_instances_roblox(dom:rbx_dom_weak::WeakDom) -> Res
 											roblox_texture_color=glam::vec4(decal_color3.r,decal_color3.g,decal_color3.b,1.0-*decal_transparency);
 										}
 									}
-									part_texture_description[face as usize]=Some(PartFaceTextureDescription{
+									part_texture_description[face as usize]=Some(RobloxFaceTextureDescription{
 										texture:texture_id,
 										color:roblox_texture_color,
 										transform:roblox_texture_transform,
@@ -252,65 +214,49 @@ pub fn generate_indexed_model_instances_roblox(dom:rbx_dom_weak::WeakDom) -> Res
 						}
 					}
 				}
-				let mut unit_cube_generation_data_list=Vec::new();
-				let mut unit_cube_from_face_description=std::collections::HashMap::<u32,usize>::new();
-				//use part_texture_description to extract unique texture faces
-				let mut add_negative_cube=false;
-				let mut negative_cube=RobloxUnitCubeGenerationData::empty();
-				for (i,maybe_part_face) in part_texture_description.iter().enumerate(){
-					if let Some(part_face)=maybe_part_face{
-						let unit_cube_id=if let Some(&unit_cube_id)=unit_cube_from_face_description.get(&part_face.texture){
-							unit_cube_id
-						}else{
-							let unit_cube_id=unit_cube_generation_data_list.len();
-							unit_cube_generation_data_list.push(RobloxUnitCubeGenerationData::empty());
-							unit_cube_from_face_description.insert(texture_with_color,unit_cube_id);
-							unit_cube_generation_data_list[unit_cube_id].texture=Some(part_face.texture);
-							unit_cube_id
-						};
-						unit_cube_generation_data_list[unit_cube_id].faces[i]=Some(part_face.transform_color);
-					}else{
-						add_negative_cube=true;
-						negative_cube.faces[i]=Some(RobloxTextureTransform::default());
+				//TODO: generate unit Block, Wedge, etc. based on part shape lists
+				let basepart_texture_description=RobloxBasePartDescription::Part(part_texture_description);
+				//make new model if unit cube has not been crated before
+				let model_id=if let Some(&model_id)=model_id_from_description.get(&basepart_texture_description){
+					//push to existing texture model
+					model_id
+				}else{
+					let model_id=indexed_models.len();
+					model_id_from_description.insert(basepart_texture_description.clone(),model_id);//borrow checker going crazy
+					match basepart_texture_description{
+						RobloxBasePartDescription::Part(part_texture_description)=>{
+							let unit_cube_faces=part_texture_description.map(|face|{
+								match face{
+									Some(roblox_texture_transform)=>Some(
+										primitives::FaceDescription{
+											texture:Some(roblox_texture_transform.texture),
+											transform:glam::Affine2::from_translation(
+												glam::vec2(roblox_texture_transform.transform.offset_u,roblox_texture_transform.transform.offset_v)
+											)
+											*glam::Affine2::from_scale(
+												glam::vec2(roblox_texture_transform.transform.scale_u,roblox_texture_transform.transform.scale_v)
+											),
+											color:roblox_texture_transform.color,
+										}
+									),
+									None=>Some(primitives::FaceDescription::default()),
+								}
+							});
+							let indexed_model=primitives::generate_partial_unit_cube(unit_cube_faces);
+							indexed_models.push(indexed_model);
+							model_id
+						},
 					}
-				}
-				//must add the rest of the cube to complete the faces!
-				if add_negative_cube{
-					unit_cube_generation_data_list.push(negative_cube);
-				}
-				for roblox_unit_cube_generation_data in unit_cube_generation_data_list.drain(..){
-					//make new model if unit cube has not been crated before
-					let model_id=if let Some(&model_id)=model_id_from_ucgd.get(&roblox_unit_cube_generation_data){
-						//push to existing texture model
-						model_id
-					}else{
-						let unit_cube_generation_data=roblox_unit_cube_generation_data.faces.map(|face|{
-							match face{
-								Some(roblox_texture_transform)=>Some(
-									glam::Affine2::from_translation(
-										glam::vec2(roblox_texture_transform.offset_u,roblox_texture_transform.offset_v)
-									)
-									*glam::Affine2::from_scale(
-										glam::vec2(roblox_texture_transform.scale_u,roblox_texture_transform.scale_v)
-									)
-								),
-								None=>None,
-							}
-						});
-						let mut new_modeldatas=crate::model::generate_modeldatas(primitives::generate_partial_unit_cube(unit_cube_generation_data),*roblox_unit_cube_generation_data.color.as_ref());
-						new_modeldatas[0].texture=roblox_unit_cube_generation_data.texture;
-						let model_id=modeldatas.len();
-						modeldatas.append(&mut new_modeldatas);
-						model_id_from_ucgd.insert(roblox_unit_cube_generation_data,model_id);
-						model_id
-					};
-					modeldatas[model_id].instances.push(ModelInstance {
-						model_transform,
-						color: glam::Vec4::ONE,//glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
-					});
-				}
+				};
+				indexed_models[model_id].instances.push(ModelInstance {
+					model_transform,
+					color: glam::Vec4::ONE,//glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
+				});
 			}
 		}
 	}
-	Ok((modeldatas,asset_id_from_texture_id.iter().map(|t|t.to_string()).collect(),spawn_point))
+	Ok((IndexedModelInstances{
+		textures:asset_id_from_texture_id.iter().map(|t|t.to_string()).collect(),
+		models:indexed_models,
+	},spawn_point))
 }
