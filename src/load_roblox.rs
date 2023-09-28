@@ -70,29 +70,64 @@ impl std::hash::Hash for RobloxTextureTransform {
 		self.scale_v.to_ne_bytes().hash(state);
 	}
 }
-#[derive(Hash)]
+#[derive(Clone,Copy,PartialEq)]
+struct RobloxColorAndTextureTransform{
+	transform:RobloxTextureTransform,
+	color:glam::Vec4,
+}
+impl std::cmp::Eq for RobloxColorAndTextureTransform{}//????
+impl std::default::Default for RobloxColorAndTextureTransform{
+    fn default() -> Self {
+        Self{
+        	transform:RobloxTextureTransform::default(),
+        	color:glam::Vec4::ONE,
+        }
+    }
+}
+impl std::hash::Hash for RobloxColorAndTextureTransform {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.transform.hash(state);
+        for &el in self.color.as_ref().iter() {
+            el.to_ne_bytes().hash(state);
+        }
+    }
+}
 struct PartFaceTextureDescription{
 	texture:u32,
+	color:glam::Vec4,
 	transform:RobloxTextureTransform,
 }
 type PartTextureDescription=[Option<PartFaceTextureDescription>;6];
-#[derive(Hash,Eq,PartialEq)]
+#[derive(PartialEq)]
 struct RobloxUnitCubeGenerationData{
 	texture:Option<u32>,
+	color:glam::Vec4,
 	faces:[Option<RobloxTextureTransform>;6],
 }
+impl std::cmp::Eq for RobloxUnitCubeGenerationData{}//????
 impl std::default::Default for RobloxUnitCubeGenerationData{
     fn default() -> Self {
     	Self{
 			texture:None,
+			color:glam::Vec4::ONE,
 			faces:[Some(RobloxTextureTransform::default());6],
 		}
+    }
+}
+impl std::hash::Hash for RobloxUnitCubeGenerationData {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.texture.hash(state);
+        for &el in self.color.as_ref().iter() {
+            el.to_ne_bytes().hash(state);
+        }
+        self.faces.hash(state);
     }
 }
 impl RobloxUnitCubeGenerationData{
     fn empty() -> Self {
     	Self{
 			texture:None,
+			color:glam::Vec4::ONE,
 			faces:[None,None,None,None,None,None],
 		}
     }
@@ -156,9 +191,13 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 						if let (
 							Some(rbx_dom_weak::types::Variant::Content(content)),
 							Some(rbx_dom_weak::types::Variant::Enum(normalid)),
+							Some(rbx_dom_weak::types::Variant::Color3uint8(decal_color3)),
+							Some(rbx_dom_weak::types::Variant::Float32(decal_transparency)),
 						) = (
 							decal.properties.get("Texture"),
 							decal.properties.get("Face"),
+							decal.properties.get("Color"),
+							decal.properties.get("Transparency"),
 						) {
 							if let Ok(asset_id)=content.clone().into_string().parse::<RobloxAssetId>(){
 								let texture_id=if let Some(&texture_id)=texture_id_from_asset_id.get(&asset_id.0){
@@ -171,7 +210,7 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 								};
 								let face=normalid.to_u32();
 								if face<6{
-									let mut roblox_texture_transform=RobloxTextureTransform::default();
+									let mut roblox_texture_transform=RobloxColorAndTextureTransform::default();
 									if decal.class=="Texture"{
 										//generate tranform
 										if let (
@@ -195,16 +234,19 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 												5=>(size.x,size.y),//front
 												_=>(1.,1.),
 											};
-											roblox_texture_transform=RobloxTextureTransform{
-												offset_u:*ox/(*sx),offset_v:*oy/(*sy),
-												scale_u:size_u/(*sx),scale_v:size_v/(*sy),
+											roblox_texture_transform=RobloxColorAndTextureTransform{
+												transform:RobloxTextureTransform{
+													offset_u:*ox/(*sx),offset_v:*oy/(*sy),
+													scale_u:size_u/(*sx),scale_v:size_v/(*sy),
+												},
+												color:glam::vec4(decal_color3.r as f32/255f32, decal_color3.g as f32/255f32, decal_color3.b as f32/255f32, 1.0-*decal_transparency),
 											};
 										}
 									}
-									//I can alos put the color into here and generate the vertices with the color
 									part_texture_description[face as usize]=Some(PartFaceTextureDescription{
 										texture:texture_id,
-										transform:roblox_texture_transform,
+										color:roblox_texture_transform.color,
+										transform:roblox_texture_transform.transform,
 									});
 								}else{
 									println!("goofy ahh roblox gave NormalId {}", face);
@@ -226,6 +268,7 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 							let unit_cube_id=unit_cube_generation_data_list.len();
 							unit_cube_generation_data_list.push(RobloxUnitCubeGenerationData::empty());
 							unit_cube_from_texture_id.insert(part_face.texture,unit_cube_id);
+							unit_cube_generation_data_list[unit_cube_id].color=part_face.color;
 							unit_cube_generation_data_list[unit_cube_id].texture=Some(part_face.texture);
 							unit_cube_id
 						};
@@ -258,7 +301,7 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 								None=>None,
 							}
 						});
-						let mut new_modeldatas=crate::model::generate_modeldatas(primitives::generate_partial_unit_cube(unit_cube_generation_data),ModelData::COLOR_FLOATS_WHITE);
+						let mut new_modeldatas=crate::model::generate_modeldatas(primitives::generate_partial_unit_cube(unit_cube_generation_data),*roblox_unit_cube_generation_data.color.as_ref());
 						new_modeldatas[0].texture=roblox_unit_cube_generation_data.texture;
 						let model_id=modeldatas.len();
 						modeldatas.append(&mut new_modeldatas);
