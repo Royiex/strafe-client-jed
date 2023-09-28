@@ -140,13 +140,13 @@ impl GraphicsData {
 		let uniform_buffer_binding_size=<GraphicsData as framework::Example>::required_limits().max_uniform_buffer_binding_size as usize;
 		let chunk_size=uniform_buffer_binding_size/MODEL_BUFFER_SIZE_BYTES;
 		self.models.reserve(modeldatas.len());
-		for (i,modeldata) in modeldatas.drain(..).enumerate() {
+		for modeldata in modeldatas.drain(..) {
 			let n_instances=modeldata.instances.len();
-			instance_count+=n_instances;
 			for instances_chunk in modeldata.instances.rchunks(chunk_size){
+				instance_count+=1;
 				let model_uniforms = get_instances_buffer_data(instances_chunk);
 				let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-					label: Some(format!("Model{} Buf",i).as_str()),
+					label: Some(format!("Model{} Buf",instance_count).as_str()),
 					contents: bytemuck::cast_slice(&model_uniforms),
 					usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 				});
@@ -175,7 +175,7 @@ impl GraphicsData {
 							resource: wgpu::BindingResource::Sampler(&self.samplers.repeat),
 						},
 					],
-					label: Some(format!("Model{} Bind Group",i).as_str()),
+					label: Some(format!("Model{} Bind Group",instance_count).as_str()),
 				});
 				let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 					label: Some("Vertex"),
