@@ -70,23 +70,55 @@ impl std::hash::Hash for RobloxTextureTransform {
 		self.scale_v.to_ne_bytes().hash(state);
 	}
 }
-#[derive(Hash)]
+#[derive(Clone,Copy,PartialEq)]
+struct RobloxColorAndTextureTransform{
+	transform:RobloxTextureTransform,
+	color:glam::Vec4,
+}
+impl std::cmp::Eq for RobloxColorAndTextureTransform{}//????
+impl std::default::Default for RobloxColorAndTextureTransform{
+    fn default() -> Self {
+        Self{
+        	transform:RobloxTextureTransform::default(),
+        	color:glam::Vec4::ONE,
+        }
+    }
+}
+impl std::hash::Hash for RobloxColorAndTextureTransform {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.transform.hash(state);
+        for &el in self.color.as_ref().iter() {
+            el.to_ne_bytes().hash(state);
+        }
+    }
+}
 struct PartFaceTextureDescription{
 	texture:u32,
+	color:glam::Vec4,
 	transform:RobloxTextureTransform,
 }
 type PartTextureDescription=[Option<PartFaceTextureDescription>;6];
-#[derive(Hash,Eq,PartialEq)]
+#[derive(PartialEq)]
 struct RobloxUnitCubeGenerationData{
 	texture:Option<u32>,
-	faces:[Option<RobloxTextureTransform>;6],
+	faces:[Option<RobloxColorAndTextureTransform>;6],
 }
+impl std::cmp::Eq for RobloxUnitCubeGenerationData{}//????
 impl std::default::Default for RobloxUnitCubeGenerationData{
     fn default() -> Self {
     	Self{
 			texture:None,
-			faces:[Some(RobloxTextureTransform::default());6],
+			faces:[Some(RobloxColorAndTextureTransform::default());6],
 		}
+    }
+}
+impl std::hash::Hash for RobloxUnitCubeGenerationData {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.texture.hash(state);
+        for &el in self.color.as_ref().iter() {
+            el.to_ne_bytes().hash(state);
+        }
+        self.faces.hash(state);
     }
 }
 impl RobloxUnitCubeGenerationData{
@@ -156,9 +188,13 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 						if let (
 							Some(rbx_dom_weak::types::Variant::Content(content)),
 							Some(rbx_dom_weak::types::Variant::Enum(normalid)),
+							Some(rbx_dom_weak::types::Variant::Color3(decal_color3)),
+							Some(rbx_dom_weak::types::Variant::Float32(decal_transparency)),
 						) = (
 							decal.properties.get("Texture"),
 							decal.properties.get("Face"),
+							decal.properties.get("Color3"),
+							decal.properties.get("Transparency"),
 						) {
 							if let Ok(asset_id)=content.clone().into_string().parse::<RobloxAssetId>(){
 								let texture_id=if let Some(&texture_id)=texture_id_from_asset_id.get(&asset_id.0){
@@ -172,6 +208,7 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 								let face=normalid.to_u32();
 								if face<6{
 									let mut roblox_texture_transform=RobloxTextureTransform::default();
+									let mut roblox_texture_color=glam::Vec4::ONE;
 									if decal.class=="Texture"{
 										//generate tranform
 										if let (
@@ -199,11 +236,12 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 												offset_u:*ox/(*sx),offset_v:*oy/(*sy),
 												scale_u:size_u/(*sx),scale_v:size_v/(*sy),
 											};
+											roblox_texture_color=glam::vec4(decal_color3.r,decal_color3.g,decal_color3.b,1.0-*decal_transparency);
 										}
 									}
-									//I can alos put the color into here and generate the vertices with the color
 									part_texture_description[face as usize]=Some(PartFaceTextureDescription{
 										texture:texture_id,
+										color:roblox_texture_color,
 										transform:roblox_texture_transform,
 									});
 								}else{
@@ -214,22 +252,22 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 					}
 				}
 				let mut unit_cube_generation_data_list=Vec::new();
-				let mut unit_cube_from_texture_id=std::collections::HashMap::<u32,usize>::new();
+				let mut unit_cube_from_face_description=std::collections::HashMap::<u32,usize>::new();
 				//use part_texture_description to extract unique texture faces
 				let mut add_negative_cube=false;
 				let mut negative_cube=RobloxUnitCubeGenerationData::empty();
 				for (i,maybe_part_face) in part_texture_description.iter().enumerate(){
 					if let Some(part_face)=maybe_part_face{
-						let unit_cube_id=if let Some(&unit_cube_id)=unit_cube_from_texture_id.get(&part_face.texture){
+						let unit_cube_id=if let Some(&unit_cube_id)=unit_cube_from_face_description.get(&part_face.texture){
 							unit_cube_id
 						}else{
 							let unit_cube_id=unit_cube_generation_data_list.len();
 							unit_cube_generation_data_list.push(RobloxUnitCubeGenerationData::empty());
-							unit_cube_from_texture_id.insert(part_face.texture,unit_cube_id);
+							unit_cube_from_face_description.insert(texture_with_color,unit_cube_id);
 							unit_cube_generation_data_list[unit_cube_id].texture=Some(part_face.texture);
 							unit_cube_id
 						};
-						unit_cube_generation_data_list[unit_cube_id].faces[i]=Some(part_face.transform);
+						unit_cube_generation_data_list[unit_cube_id].faces[i]=Some(part_face.transform_color);
 					}else{
 						add_negative_cube=true;
 						negative_cube.faces[i]=Some(RobloxTextureTransform::default());
@@ -258,7 +296,7 @@ pub fn generate_modeldatas_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Vec<Mode
 								None=>None,
 							}
 						});
-						let mut new_modeldatas=crate::model::generate_modeldatas(primitives::generate_partial_unit_cube(unit_cube_generation_data),ModelData::COLOR_FLOATS_WHITE);
+						let mut new_modeldatas=crate::model::generate_modeldatas(primitives::generate_partial_unit_cube(unit_cube_generation_data),*roblox_unit_cube_generation_data.color.as_ref());
 						new_modeldatas[0].texture=roblox_unit_cube_generation_data.texture;
 						let model_id=modeldatas.len();
 						modeldatas.append(&mut new_modeldatas);
