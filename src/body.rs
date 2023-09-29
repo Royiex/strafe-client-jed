@@ -195,7 +195,7 @@ impl Camera {
 	}
 	fn simulate_move_angles(&self, delta: glam::IVec2) -> glam::DVec2 {
 		let mut a=self.angles-self.sensitivity*delta.as_dvec2();
-		a.y=a.y.clamp(-std::f64::consts::PI, std::f64::consts::PI);
+		a.y=a.y.clamp(-std::f64::consts::FRAC_PI_2, std::f64::consts::FRAC_PI_2);
 		return a
 	}
 	fn simulate_move_rotation_y(&self, delta_x: i32) -> glam::Mat3 {
