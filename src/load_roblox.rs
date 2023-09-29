@@ -151,12 +151,12 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 						if let (
 							Some(rbx_dom_weak::types::Variant::Content(content)),
 							Some(rbx_dom_weak::types::Variant::Enum(normalid)),
-							Some(rbx_dom_weak::types::Variant::Color3uint8(decal_color3)),
+							Some(rbx_dom_weak::types::Variant::Color3(decal_color3)),
 							Some(rbx_dom_weak::types::Variant::Float32(decal_transparency)),
 						) = (
 							decal.properties.get("Texture"),
 							decal.properties.get("Face"),
-							decal.properties.get("Color"),
+							decal.properties.get("Color3"),
 							decal.properties.get("Transparency"),
 						) {
 							if let Ok(asset_id)=content.clone().into_string().parse::<RobloxAssetId>(){
@@ -199,7 +199,7 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 												offset_u:*ox/(*sx),offset_v:*oy/(*sy),
 												scale_u:size_u/(*sx),scale_v:size_v/(*sy),
 											};
-											roblox_texture_color=glam::vec4(decal_color3.r as f32/255f32, decal_color3.g as f32/255f32, decal_color3.b as f32/255f32, 1.0-*decal_transparency);
+											roblox_texture_color=glam::vec4(decal_color3.r,decal_color3.g,decal_color3.b,1.0-*decal_transparency);
 										}
 									}
 									part_texture_description[face as usize]=Some(RobloxFaceTextureDescription{
