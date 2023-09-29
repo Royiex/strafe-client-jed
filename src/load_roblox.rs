@@ -239,7 +239,7 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 											color:roblox_texture_transform.color,
 										}
 									),
-									None=>None,
+									None=>Some(primitives::FaceDescription::default()),
 								}
 							});
 							let indexed_model=primitives::generate_partial_unit_cube(unit_cube_faces);
