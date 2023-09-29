@@ -525,11 +525,19 @@ impl framework::Example for GraphicsData {
 			})
 		};
 
-		let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+		let model_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 			label: None,
 			bind_group_layouts: &[
 				&camera_bind_group_layout,
+				&skybox_texture_bind_group_layout,
 				&model_bind_group_layout,
+			],
+			push_constant_ranges: &[],
+		});
+		let sky_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+			label: None,
+			bind_group_layouts: &[
+				&camera_bind_group_layout,
 				&skybox_texture_bind_group_layout,
 			],
 			push_constant_ranges: &[],
@@ -538,7 +546,7 @@ impl framework::Example for GraphicsData {
 		// Create the render pipelines
 		let sky_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: Some("Sky Pipeline"),
-			layout: Some(&pipeline_layout),
+			layout: Some(&sky_pipeline_layout),
 			vertex: wgpu::VertexState {
 				module: &shader,
 				entry_point: "vs_sky",
@@ -565,7 +573,7 @@ impl framework::Example for GraphicsData {
 		});
 		let model_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: Some("Model Pipeline"),
-			layout: Some(&pipeline_layout),
+			layout: Some(&model_pipeline_layout),
 			vertex: wgpu::VertexState {
 				module: &shader,
 				entry_point: "vs_entity_texture",
@@ -859,11 +867,11 @@ impl framework::Example for GraphicsData {
 			});
 
 			rpass.set_bind_group(0, &self.bind_groups.camera, &[]);
-			rpass.set_bind_group(2, &self.bind_groups.skybox_texture, &[]);
+			rpass.set_bind_group(1, &self.bind_groups.skybox_texture, &[]);
 
 			rpass.set_pipeline(&self.pipelines.model);
 			for model in self.models.iter() {
-				rpass.set_bind_group(1, &model.bind_group, &[]);
+				rpass.set_bind_group(2, &model.bind_group, &[]);
 				rpass.set_vertex_buffer(0, model.vertex_buf.slice(..));
 
 				for entity in model.entities.iter() {
