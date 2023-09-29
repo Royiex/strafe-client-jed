@@ -87,7 +87,7 @@ impl std::hash::Hash for RobloxFaceTextureDescription {
     }
 }
 type RobloxPartDescription=[Option<RobloxFaceTextureDescription>;6];
-type RobloxWedgeDescription=[Option<RobloxFaceTextureDescription>;5];
+//type RobloxWedgeDescription=[Option<RobloxFaceTextureDescription>;5];
 #[derive(Clone,Eq,Hash,PartialEq)]
 enum RobloxBasePartDescription{
 	Part(RobloxPartDescription),
