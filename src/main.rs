@@ -137,6 +137,7 @@ impl GraphicsData {
 				}));
 			}
 		}
+		let indexed_models_len=indexed_models.models.len();
 		//split groups with different textures into separate models
 		//the models received here are supposed to be tightly packed, i.e. no code needs to check if two models are using the same groups.
 		let mut unique_texture_models=Vec::with_capacity(indexed_models.models.len());
@@ -275,6 +276,9 @@ impl GraphicsData {
 				});
 			}
 		}
+		println!("Texture References={}",indexed_models.textures.len());
+		println!("Textures Loaded={}",texture_views.len());
+		println!("Indexed Models={}",indexed_models_len);
 		println!("Graphics Objects: {}",self.models.len());
 		println!("Graphics Instances: {}",instance_count);
 	}
