@@ -106,5 +106,5 @@ fn fs_entity_texture(vertex: EntityOutputTexture) -> @location(0) vec4<f32> {
 
 	let fragment_color = textureSample(model_texture, model_sampler, vertex.texture)*vertex.color;
 	let reflected_color = textureSample(cube_texture, cube_sampler, reflected).rgb;
-	return mix(vec4<f32>(vec3<f32>(0.1) + 0.5 * reflected_color,1.0),fragment_color,1.0-pow(1.0-abs(d),2.0));
+	return mix(vec4<f32>(vec3<f32>(0.05) + 0.2 * reflected_color,1.0),fragment_color,1.0-pow(1.0-abs(d),2.0));
 }
