@@ -78,7 +78,7 @@ impl std::default::Default for FaceDescription{
 		Self{
 			texture:None,
 			transform:glam::Affine2::IDENTITY,
-			color:glam::Vec4::ONE,
+			color:glam::vec4(1.0,1.0,1.0,0.0),//zero alpha to hide the default texture
 		}
 	}
 }
