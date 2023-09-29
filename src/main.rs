@@ -210,7 +210,7 @@ impl GraphicsData {
 		let mut instance_count=0;
 		let uniform_buffer_binding_size=<GraphicsData as framework::Example>::required_limits().max_uniform_buffer_binding_size as usize;
 		let chunk_size=uniform_buffer_binding_size/MODEL_BUFFER_SIZE_BYTES;
-		self.models.reserve(unique_texture_models.len());
+		self.models.reserve(models.len());
 		for model in models.drain(..) {
 			for instances_chunk in model.instances.rchunks(chunk_size){
 				instance_count+=1;
