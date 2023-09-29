@@ -7,7 +7,7 @@ pub struct Vertex {
 	pub normal: [f32; 3],
 	pub color: [f32; 4],
 }
-#[derive(Hash,PartialEq,Eq)]
+#[derive(Clone,Hash,PartialEq,Eq)]
 pub struct IndexedVertex{
 	pub pos:u32,
 	pub tex:u32,
@@ -28,21 +28,39 @@ pub struct IndexedModel{
 	pub unique_color:Vec<[f32; 4]>,
 	pub unique_vertices:Vec<IndexedVertex>,
 	pub groups: Vec<IndexedGroup>,
+	pub instances:Vec<ModelInstance>,
+}
+pub struct IndexedGroupFixedTexture{
+	pub polys:Vec<IndexedPolygon>,
+}
+pub struct IndexedModelSingleTexture{
+	pub unique_pos:Vec<[f32; 3]>,
+	pub unique_tex:Vec<[f32; 2]>,
+	pub unique_normal:Vec<[f32; 3]>,
+	pub unique_color:Vec<[f32; 4]>,
+	pub unique_vertices:Vec<IndexedVertex>,
+	pub texture:Option<u32>,//RenderPattern? material/texture/shader/flat color
+	pub groups: Vec<IndexedGroupFixedTexture>,
+	pub instances:Vec<ModelInstance>,
+}
+pub struct ModelSingleTexture{
+	pub instances: Vec<ModelInstance>,
+	pub vertices: Vec<Vertex>,
+	pub entities: Vec<Vec<u16>>,
+	pub texture: Option<u32>,
 }
 #[derive(Clone)]
 pub struct ModelInstance{
-	pub model:u32,
 	pub model_transform:glam::Affine3A,
 	pub color:glam::Vec4,
 }
 pub struct IndexedModelInstances{
 	pub textures:Vec<String>,//RenderPattern
 	pub models:Vec<IndexedModel>,
-	pub instances:Vec<ModelInstance>,
 	//object_index for spawns, triggers etc?
 }
 
-pub fn generate_indexed_model_from_obj(data:obj::ObjData,color:[f32;4]) -> Vec<IndexedModel>{
+pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:[f32;4]) -> Vec<IndexedModel>{
 	let mut unique_vertex_index = std::collections::HashMap::<obj::IndexTuple,u32>::new();
 	return data.objects.iter().map(|object|{
 		unique_vertex_index.clear();
@@ -78,6 +96,7 @@ pub fn generate_indexed_model_from_obj(data:obj::ObjData,color:[f32;4]) -> Vec<I
 			unique_color: vec![color],
 			unique_vertices,
 			groups,
+			instances:Vec::new(),
 		}
 	}).collect()
 }

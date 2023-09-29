@@ -1,6 +1,6 @@
 use std::{borrow::Cow, time::Instant};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
-use model::{Vertex,ModelData,ModelInstance};
+use model::{Vertex,ModelInstance};
 use body::{InputInstruction, PhysicsInstruction};
 use instruction::{TimedInstruction, InstructionConsumer};
 
@@ -17,12 +17,8 @@ struct Entity {
 	index_buf: wgpu::Buffer,
 }
 
-struct ModelGraphicsInstance {
-	model_transform: glam::Affine3A,
-	color: glam::Vec4,
-}
 struct ModelGraphics {
-	instances: Vec<ModelGraphicsInstance>,
+	instances: Vec<ModelInstance>,
 	vertex_buf: wgpu::Buffer,
 	entities: Vec<Entity>,
 	bind_group: wgpu::BindGroup,
@@ -139,15 +135,85 @@ impl GraphicsData {
 				}));
 			}
 		}
+		//split groups with different textures into separate models
+		//the models received here are supposed to be tightly packed, i.e. no code needs to check if two models are using the same groups.
+		let mut unique_texture_models=Vec::with_capacity(indexed_models.models.len());
+		for mut model in indexed_models.models.drain(..){
+			//check each group, if it's using a new texture then make a new clone of the model
+			let id=unique_texture_models.len();
+			let mut unique_textures=Vec::new();
+			for group in model.groups.drain(..){
+				//ignore zero coppy optimization for now
+				let texture_index=if let Some(texture_index)=unique_textures.iter().position(|&texture|texture==group.texture){
+					texture_index
+				}else{
+					//create new texture_index
+					let texture_index=unique_textures.len();
+					unique_textures.push(group.texture);
+					unique_texture_models.push(model::IndexedModelSingleTexture{
+						unique_pos:model.unique_pos.clone(),
+						unique_tex:model.unique_tex.clone(),
+						unique_normal:model.unique_normal.clone(),
+						unique_color:model.unique_color.clone(),
+						unique_vertices:model.unique_vertices.clone(),
+						texture:group.texture,
+						groups:Vec::new(),
+						instances:model.instances.clone(),
+					});
+					texture_index
+				};
+				unique_texture_models[id+texture_index].groups.push(model::IndexedGroupFixedTexture{
+					polys:group.polys,
+				});
+			}
+		}
+		//de-index models
+		let mut models=Vec::with_capacity(unique_texture_models.len());
+		for model in unique_texture_models.drain(..){
+			let mut vertices = Vec::new();
+			let mut index_from_vertex = std::collections::HashMap::new();//::<IndexedVertex,usize>
+			let mut entities = Vec::new();
+			for group in model.groups {
+				let mut indices = Vec::new();
+				for poly in group.polys {
+					for end_index in 2..poly.vertices.len() {
+						for &index in &[0, end_index - 1, end_index] {
+							let vertex_index = poly.vertices[index];
+							if let Some(&i)=index_from_vertex.get(&vertex_index){
+								indices.push(i);
+							}else{
+								let i=vertices.len() as u16;
+								let vertex=&model.unique_vertices[vertex_index as usize];
+								vertices.push(Vertex {
+									pos: model.unique_pos[vertex.pos as usize],
+									tex: model.unique_tex[vertex.tex as usize],
+									normal: model.unique_normal[vertex.normal as usize],
+									color:model.unique_color[vertex.color as usize],
+								});
+								index_from_vertex.insert(vertex_index,i);
+								indices.push(i);
+							}
+						}
+					}
+				}
+				entities.push(indices);
+			}
+			models.push(model::ModelSingleTexture{
+				instances:model.instances,
+				vertices,
+				entities,
+				texture:model.texture,
+			});
+		}
 		//drain the modeldata vec so entities can be /moved/ to models.entities
 		let mut model_count=0;
 		let mut instance_count=0;
 		let uniform_buffer_binding_size=<GraphicsData as framework::Example>::required_limits().max_uniform_buffer_binding_size as usize;
 		let chunk_size=uniform_buffer_binding_size/MODEL_BUFFER_SIZE_BYTES;
-		self.models.reserve(modeldatas.len());
-		for modeldata in modeldatas.drain(..) {
+		self.models.reserve(models.len());
+		for model in models.drain(..) {
 			instance_count+=model.instances.len();
-			for instances_chunk in modeldata.instances.rchunks(chunk_size){
+			for instances_chunk in model.instances.rchunks(chunk_size){
 				model_count+=1;
 				let model_uniforms = get_instances_buffer_data(instances_chunk);
 				let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -155,7 +221,7 @@ impl GraphicsData {
 					contents: bytemuck::cast_slice(&model_uniforms),
 					usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 				});
-				let texture_view=match modeldata.texture{
+				let texture_view=match model.texture{
 					Some(texture_id)=>{
 						match double_map.get(&texture_id){
 							Some(&mapped_texture_id)=>&texture_views[mapped_texture_id as usize],
@@ -184,14 +250,14 @@ impl GraphicsData {
 				});
 				let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 					label: Some("Vertex"),
-					contents: bytemuck::cast_slice(&modeldata.vertices),
+					contents: bytemuck::cast_slice(&model.vertices),
 					usage: wgpu::BufferUsages::VERTEX,
 				});
 				//all of these are being moved here
 				self.models.push(ModelGraphics{
 					instances:instances_chunk.to_vec(),
 					vertex_buf,
-					entities: modeldata.entities.iter().map(|indices|{
+					entities: model.entities.iter().map(|indices|{
 						let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 							label: Some("Index"),
 							contents: bytemuck::cast_slice(&indices),
@@ -258,42 +324,42 @@ impl framework::Example for GraphicsData {
 		device: &wgpu::Device,
 		queue: &wgpu::Queue,
 	) -> Self {
-		let mut modeldatas = Vec::<ModelData>::new();
-		modeldatas.append(&mut model::generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
-		modeldatas.append(&mut model::generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
-		modeldatas.append(&mut model::generate_modeldatas(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap(),ModelData::COLOR_FLOATS_WHITE));
-		modeldatas.push(primitives::the_unit_cube_lol());
-		println!("models.len = {:?}", modeldatas.len());
-		modeldatas[0].instances.push(ModelInstance{
+		let mut indexed_models = Vec::new();
+		indexed_models.append(&mut model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap(),*glam::Vec4::ONE.as_ref()));
+		indexed_models.append(&mut model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap(),*glam::Vec4::ONE.as_ref()));
+		indexed_models.append(&mut model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap(),*glam::Vec4::ONE.as_ref()));
+		indexed_models.push(primitives::the_unit_cube_lol());
+		println!("models.len = {:?}", indexed_models.len());
+		indexed_models[0].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(10.,0.,-10.)),
-			color:ModelData::COLOR_VEC4_WHITE,
+			color:glam::Vec4::ONE,
 		});
 		//quad monkeys
-		modeldatas[1].instances.push(ModelInstance{
+		indexed_models[1].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,10.)),
-			color:ModelData::COLOR_VEC4_WHITE,
+			color:glam::Vec4::ONE,
 		});
-		modeldatas[1].instances.push(ModelInstance{
+		indexed_models[1].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,10.)),
 			color:glam::vec4(1.0,0.0,0.0,1.0),
 		});
-		modeldatas[1].instances.push(ModelInstance{
+		indexed_models[1].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,20.)),
 			color:glam::vec4(0.0,1.0,0.0,1.0),
 		});
-		modeldatas[1].instances.push(ModelInstance{
+		indexed_models[1].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,20.)),
 			color:glam::vec4(0.0,0.0,1.0,1.0),
 		});
 		//teapot
-		modeldatas[2].instances.push(ModelInstance{
+		indexed_models[2].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(-10.,5.,10.)),
-			color:ModelData::COLOR_VEC4_WHITE,
+			color:glam::Vec4::ONE,
 		});
 		//ground
-		modeldatas[3].instances.push(ModelInstance{
+		indexed_models[3].instances.push(ModelInstance{
 			model_transform:glam::Affine3A::from_translation(glam::vec3(0.,0.,0.))*glam::Affine3A::from_scale(glam::vec3(160.0, 1.0, 160.0)),
-			color:ModelData::COLOR_VEC4_WHITE,
+			color:glam::Vec4::ONE,
 		});
 
 		let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -661,8 +727,12 @@ impl framework::Example for GraphicsData {
 			temp_squid_texture_view: squid_texture_view,
 		};
 
-		graphics.generate_model_physics(&modeldatas);
-		graphics.generate_model_graphics(&device,&queue,modeldatas,Vec::new());
+		let indexed_model_instances=model::IndexedModelInstances{
+			textures:Vec::new(),
+			models:indexed_models,
+		};
+		graphics.generate_model_physics(&indexed_model_instances);
+		graphics.generate_model_graphics(&device,&queue,indexed_model_instances);
 
 		return graphics;
 	}
@@ -685,30 +755,30 @@ impl framework::Example for GraphicsData {
 					//.snf = "SNBF"
 					if let (Ok(()),Ok(()))=(std::io::Read::read_exact(&mut input, &mut first_8),std::io::Seek::rewind(&mut input)){
 						//
-						if let Some(Ok((modeldatas,textures,spawn_point)))={
+						if let Some(Ok((indexed_model_instances,spawn_point)))={
 							if &first_8==b"<roblox!"{
 								if let Ok(dom) = rbx_binary::from_reader(input){
-									Some(load_roblox::generate_modeldatas_roblox(dom))
+									Some(load_roblox::generate_indexed_models_roblox(dom))
 								}else{
 									None
 								}
 							}else if &first_8==b"<roblox "{
 								if let Ok(dom) = rbx_xml::from_reader(input,rbx_xml::DecodeOptions::default()){
-									Some(load_roblox::generate_modeldatas_roblox(dom))
+									Some(load_roblox::generate_indexed_models_roblox(dom))
 								}else{
 									None
 								}
 							//}else if &first_8[0..4]==b"VBSP"{
-							//	self.generate_modeldatas_valve(input)
+							//	self.generate_indexed_models_valve(input)
 							}else{
 								None
 							}
 						}{
-							//if generate_modeldatas succeeds, clear the previous ones
+							//if generate_indexed_models succeeds, clear the previous ones
 							self.models.clear();
 							self.physics.models.clear();
-							self.generate_model_physics(&modeldatas);
-							self.generate_model_graphics(device,queue,modeldatas,textures);
+							self.generate_model_physics(&indexed_model_instances);
+							self.generate_model_graphics(device,queue,indexed_model_instances);
 							//manual reset
 							let time=self.physics.time;
 							instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
