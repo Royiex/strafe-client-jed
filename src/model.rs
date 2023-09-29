@@ -30,6 +30,25 @@ pub struct IndexedModel{
 	pub groups: Vec<IndexedGroup>,
 	pub instances:Vec<ModelInstance>,
 }
+pub struct IndexedGroupFixedTexture{
+	pub polys:Vec<IndexedPolygon>,
+}
+pub struct IndexedModelSingleTexture{
+	pub unique_pos:Vec<[f32; 3]>,
+	pub unique_tex:Vec<[f32; 2]>,
+	pub unique_normal:Vec<[f32; 3]>,
+	pub unique_color:Vec<[f32; 4]>,
+	pub unique_vertices:Vec<IndexedVertex>,
+	pub texture:Option<u32>,//RenderPattern? material/texture/shader/flat color
+	pub groups: Vec<IndexedGroupFixedTexture>,
+	pub instances:Vec<ModelInstance>,
+}
+pub struct ModelSingleTexture{
+	pub instances: Vec<ModelInstance>,
+	pub vertices: Vec<Vertex>,
+	pub entities: Vec<Vec<u16>>,
+	pub texture: Option<u32>,
+}
 #[derive(Clone)]
 pub struct ModelInstance{
 	pub model_transform:glam::Affine3A,

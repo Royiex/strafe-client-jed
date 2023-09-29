@@ -152,27 +152,66 @@ impl GraphicsData {
 					//create new texture_index
 					let texture_index=unique_textures.len();
 					unique_textures.push(group.texture);
-					unique_texture_models.push(model::IndexedModel{
+					unique_texture_models.push(model::IndexedModelSingleTexture{
 						unique_pos:model.unique_pos.clone(),
 						unique_tex:model.unique_tex.clone(),
 						unique_normal:model.unique_normal.clone(),
 						unique_color:model.unique_color.clone(),
 						unique_vertices:model.unique_vertices.clone(),
+						texture:group.texture,
 						groups:Vec::new(),
 						instances:model.instances.clone(),
 					});
 					texture_index
 				};
-				unique_texture_models[id+texture_index].groups.push(group);
+				unique_texture_models[id+texture_index].groups.push(model::IndexedGroupFixedTexture{
+					polys:group.polys,
+				});
 			}
+		}
+		let mut models=Vec::with_capacity(unique_texture_models.len());
+		for model in unique_texture_models.drain(..){
+			let mut vertices = Vec::new();
+			let mut index_from_vertex = std::collections::HashMap::new();//::<IndexedVertex,usize>
+			let mut entities = Vec::new();
+			for group in model.groups {
+				let mut indices = Vec::new();
+				for poly in group.polys {
+					for end_index in 2..poly.vertices.len() {
+						for &index in &[0, end_index - 1, end_index] {
+							let vertex_index = poly.vertices[index];
+							if let Some(&i)=index_from_vertex.get(&vertex_index){
+								indices.push(i);
+							}else{
+								let i=vertices.len() as u16;
+								let vertex=&model.unique_vertices[vertex_index as usize];
+								vertices.push(Vertex {
+									pos: model.unique_pos[vertex.pos as usize],
+									tex: model.unique_tex[vertex.tex as usize],
+									normal: model.unique_normal[vertex.normal as usize],
+									color:model.unique_color[vertex.color as usize],
+								});
+								index_from_vertex.insert(vertex_index,i);
+								indices.push(i);
+							}
+						}
+					}
+				}
+				entities.push(indices);
+			}
+			models.push(model::ModelSingleTexture{
+				instances:model.instances,
+				vertices,
+				entities,
+				texture:model.texture,
+			});
 		}
 		//drain the modeldata vec so entities can be /moved/ to models.entities
 		let mut instance_count=0;
 		let uniform_buffer_binding_size=<GraphicsData as framework::Example>::required_limits().max_uniform_buffer_binding_size as usize;
 		let chunk_size=uniform_buffer_binding_size/MODEL_BUFFER_SIZE_BYTES;
 		self.models.reserve(unique_texture_models.len());
-		for model in unique_texture_models.drain(..) {
-			let n_instances=model.instances.len();
+		for model in models.drain(..) {
 			for instances_chunk in model.instances.rchunks(chunk_size){
 				instance_count+=1;
 				let model_uniforms = get_instances_buffer_data(instances_chunk);
