@@ -95,6 +95,7 @@ impl FaceDescription{
 	}
 }
 //TODO: it's probably better to use a shared vertex buffer between all primitives and use indexed rendering instead of generating a unique vertex buffer for each primitive.
+//implementation: put all roblox primitives into one model.groups
 pub fn generate_partial_unit_cube(face_descriptions:[Option<FaceDescription>;6]) -> crate::model::IndexedModel{
 	let mut generated_pos=Vec::<[f32;3]>::new();
 	let mut generated_tex=Vec::new();
