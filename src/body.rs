@@ -284,7 +284,7 @@ pub enum AabbFace{
 	Bottom,
 	Front,
 }
-
+#[derive(Clone)]
 pub struct Aabb {
 	min: glam::Vec3,
 	max: glam::Vec3,
@@ -393,7 +393,7 @@ pub struct ModelPhysics {
 impl ModelPhysics {
 	pub fn from_model(model:&crate::model::IndexedModel,model_transform:glam::Affine3A) -> Self {
 		let mut aabb=Aabb::new();
-		for &indexed_vertex in &model.unique_vertices {
+		for indexed_vertex in &model.unique_vertices {
 			aabb.grow(model_transform.transform_point3(glam::Vec3::from_array(model.unique_pos[indexed_vertex.pos as usize])));
 		}
 		Self{
@@ -403,14 +403,14 @@ impl ModelPhysics {
 	pub fn unit_vertices(&self) -> [glam::Vec3;8] {
 		Aabb::unit_vertices()
 	}
-	pub fn mesh(&self) -> TreyMesh {
-		return self.mesh;
+	pub fn mesh(&self) -> &TreyMesh {
+		return &self.mesh;
 	}
 	pub fn unit_face_vertices(&self,face:TreyMeshFace) -> [glam::Vec3;4] {
 		Aabb::unit_face_vertices(face)
 	}
 	pub fn face_mesh(&self,face:TreyMeshFace) -> TreyMesh {
-		let mut aabb=self.mesh;
+		let mut aabb=self.mesh.clone();
 		//in this implementation face = worldspace aabb face
 		match face {
 			AabbFace::Right => aabb.min.x=aabb.max.x,
@@ -437,7 +437,7 @@ pub struct RelativeCollision {
 
 impl RelativeCollision {
 	pub fn mesh(&self,models:&Vec<ModelPhysics>) -> TreyMesh {
-		return models.get(self.model as usize).unwrap().face_mesh(self.face)
+		return models.get(self.model as usize).unwrap().face_mesh(self.face).clone()
 	}
 	pub fn normal(&self,models:&Vec<ModelPhysics>) -> glam::Vec3 {
 		return models.get(self.model as usize).unwrap().face_normal(self.face)

@@ -62,13 +62,13 @@ pub struct IndexedModelInstances{
 
 pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:[f32;4]) -> Vec<IndexedModel>{
 	let mut unique_vertex_index = std::collections::HashMap::<obj::IndexTuple,u32>::new();
-	return data.objects.iter().map(|&object|{
+	return data.objects.iter().map(|object|{
 		unique_vertex_index.clear();
 		let mut unique_vertices = Vec::new();
-		let groups = object.groups.iter().map(|&group|{
+		let groups = object.groups.iter().map(|group|{
 			IndexedGroup{
 				texture:None,
-				polys:group.polys.iter().map(|&poly|{
+				polys:group.polys.iter().map(|poly|{
 					IndexedPolygon{
 						vertices:poly.0.iter().map(|&tup|{
 							if let Some(&i)=unique_vertex_index.get(&tup){
@@ -90,9 +90,9 @@ pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:[f32;4]) -> 
 			}
 		}).collect();
 		IndexedModel{
-			unique_pos: data.position,
-			unique_tex: data.texture,
-			unique_normal: data.normal,
+			unique_pos: data.position.clone(),
+			unique_tex: data.texture.clone(),
+			unique_normal: data.normal.clone(),
 			unique_color: vec![color],
 			unique_vertices,
 			groups,

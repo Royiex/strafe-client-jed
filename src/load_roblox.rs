@@ -70,7 +70,7 @@ impl std::hash::Hash for RobloxTextureTransform {
 		self.scale_v.to_ne_bytes().hash(state);
 	}
 }
-#[derive(PartialEq)]
+#[derive(Clone,PartialEq)]
 struct RobloxFaceTextureDescription{
 	texture:u32,
 	color:glam::Vec4,
@@ -88,10 +88,10 @@ impl std::hash::Hash for RobloxFaceTextureDescription {
 }
 type RobloxPartDescription=[Option<RobloxFaceTextureDescription>;6];
 type RobloxWedgeDescription=[Option<RobloxFaceTextureDescription>;5];
-#[derive(Eq, Hash, PartialEq)]
+#[derive(Clone,Eq,Hash,PartialEq)]
 enum RobloxBasePartDescription{
 	Part(RobloxPartDescription),
-	Wedge(RobloxWedgeDescription),
+	//Wedge(RobloxWedgeDescription),
 }
 pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(IndexedModelInstances,glam::Vec3), Box<dyn std::error::Error>>{
 	//IndexedModelInstances includes textures
@@ -221,28 +221,32 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 					//push to existing texture model
 					model_id
 				}else{
-					let unit_cube_faces=part_texture_description.map(|face|{
-						match face{
-							Some(roblox_texture_transform)=>Some(
-								primitives::FaceDescription{
-									texture:Some(roblox_texture_transform.texture),
-									transform:glam::Affine2::from_translation(
-										glam::vec2(roblox_texture_transform.transform.offset_u,roblox_texture_transform.transform.offset_v)
-									)
-									*glam::Affine2::from_scale(
-										glam::vec2(roblox_texture_transform.transform.scale_u,roblox_texture_transform.transform.scale_v)
-									),
-									color:roblox_texture_transform.color,
-								}
-							),
-							None=>None,
-						}
-					});
-					let mut indexed_model=primitives::generate_partial_unit_cube(unit_cube_faces);
 					let model_id=indexed_models.len();
-					indexed_models.push(indexed_model);
-					model_id_from_description.insert(basepart_texture_description,model_id);
-					model_id
+					model_id_from_description.insert(basepart_texture_description.clone(),model_id);//borrow checker going crazy
+					match basepart_texture_description{
+						RobloxBasePartDescription::Part(part_texture_description)=>{
+							let unit_cube_faces=part_texture_description.map(|face|{
+								match face{
+									Some(roblox_texture_transform)=>Some(
+										primitives::FaceDescription{
+											texture:Some(roblox_texture_transform.texture),
+											transform:glam::Affine2::from_translation(
+												glam::vec2(roblox_texture_transform.transform.offset_u,roblox_texture_transform.transform.offset_v)
+											)
+											*glam::Affine2::from_scale(
+												glam::vec2(roblox_texture_transform.transform.scale_u,roblox_texture_transform.transform.scale_v)
+											),
+											color:roblox_texture_transform.color,
+										}
+									),
+									None=>None,
+								}
+							});
+							let indexed_model=primitives::generate_partial_unit_cube(unit_cube_faces);
+							indexed_models.push(indexed_model);
+							model_id
+						},
+					}
 				};
 				indexed_models[model_id].instances.push(ModelInstance {
 					model_transform,

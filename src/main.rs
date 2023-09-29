@@ -84,9 +84,9 @@ impl GraphicsData {
 	}
 
 	fn generate_model_physics(&mut self,indexed_models:&model::IndexedModelInstances){
-		for model in indexed_models.models{
+		for model in &indexed_models.models{
 			//make aabb and run vertices to get realistic bounds
-			for model_instance in model.instances{
+			for model_instance in &model.instances{
 				self.physics.models.push(body::ModelPhysics::from_model(&model,model_instance.model_transform));
 			}
 		}
@@ -140,7 +140,7 @@ impl GraphicsData {
 		//de-index models and split groups with different textures into separate models
 		//the models received here are supposed to be tightly packed, i.e. no code needs to check if two models are using the same groups.
 		let mut unique_texture_models=Vec::with_capacity(indexed_models.models.len());
-		for model in indexed_models.models.drain(..){
+		for mut model in indexed_models.models.drain(..){
 			//check each group, if it's using a new texture then make a new clone of the model
 			let id=unique_texture_models.len();
 			let mut unique_textures=Vec::new();

@@ -69,9 +69,9 @@ pub fn the_unit_cube_lol() -> crate::model::IndexedModel{
 
 #[derive(Copy,Clone)]
 pub struct FaceDescription{
-	texture:Option<u32>,
-	transform:glam::Affine2,
-	color:glam::Vec4,
+	pub texture:Option<u32>,
+	pub transform:glam::Affine2,
+	pub color:glam::Vec4,
 }
 impl std::default::Default for FaceDescription{
 	fn default() -> Self {
