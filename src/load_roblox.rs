@@ -98,13 +98,13 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 	let mut spawn_point=glam::Vec3::ZERO;
 
 	let mut indexed_models=Vec::new();
+	let mut model_id_from_description=std::collections::HashMap::<RobloxBasePartDescription,usize>::new();
 
 	let mut texture_id_from_asset_id=std::collections::HashMap::<u64,u32>::new();
 	let mut asset_id_from_texture_id=Vec::new();
 
 	let mut object_refs=Vec::new();
 	let mut temp_objects=Vec::new();
-	let mut model_id_from_description=std::collections::HashMap::<RobloxBasePartDescription,usize>::new();
 	recursive_collect_superclass(&mut object_refs, &dom, dom.root(),"BasePart");
 	for object_ref in object_refs {
 		if let Some(object)=dom.get_by_ref(object_ref){
