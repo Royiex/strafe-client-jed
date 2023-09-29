@@ -121,7 +121,7 @@ impl GraphicsData {
 						mip_level_count: max_mips,
 						sample_count: 1,
 						dimension: wgpu::TextureDimension::D2,
-						format: wgpu::TextureFormat::Bc7RgbaUnorm,
+						format: wgpu::TextureFormat::Bc7RgbaUnormSrgb,
 						usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
 						label: Some(format!("Texture{}",i).as_str()),
 						view_formats: &[],
