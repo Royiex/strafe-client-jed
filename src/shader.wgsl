@@ -65,6 +65,7 @@ struct EntityOutputTexture {
 	@location(2) normal: vec3<f32>,
 	@location(3) view: vec3<f32>,
 	@location(4) color: vec4<f32>,
+	@location(5) @interpolate(flat) model_color: vec4<f32>,
 };
 @vertex
 fn vs_entity_texture(
@@ -78,7 +79,8 @@ fn vs_entity_texture(
 	var result: EntityOutputTexture;
 	result.normal = (model_instances[instance].model_transform * vec4<f32>(normal, 0.0)).xyz;
 	result.texture = texture;
-	result.color = model_instances[instance].color * color;
+	result.color = color;
+	result.model_color = model_instances[instance].color;
 	result.view = position.xyz - camera.cam_pos.xyz;
 	result.position = camera.proj * camera.view * position;
 	return result;
@@ -106,5 +108,5 @@ fn fs_entity_texture(vertex: EntityOutputTexture) -> @location(0) vec4<f32> {
 
 	let fragment_color = textureSample(model_texture, model_sampler, vertex.texture)*vertex.color;
 	let reflected_color = textureSample(cube_texture, cube_sampler, reflected).rgb;
-	return mix(vec4<f32>(vec3<f32>(0.05) + 0.2 * reflected_color,1.0),fragment_color,1.0-pow(1.0-abs(d),2.0));
+	return mix(vec4<f32>(vec3<f32>(0.05) + 0.2 * reflected_color,1.0),mix(vertex.model_color,vec4<f32>(fragment_color.rgb,1.0),fragment_color.a),1.0-pow(1.0-abs(d),2.0));
 }
