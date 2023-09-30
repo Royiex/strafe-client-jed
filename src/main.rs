@@ -102,9 +102,22 @@ impl GraphicsData {
 			if let Ok(mut file) = std::fs::File::open(std::path::Path::new(&format!("textures/{}.dds",t))){
 				let image = ddsfile::Dds::read(&mut file).unwrap();
 
+				let (mut width,mut height)=(image.get_width(),image.get_height());
+
+				let format=match image.header10.unwrap().dxgi_format{
+					ddsfile::DxgiFormat::R8G8B8A8_UNorm_sRGB => wgpu::TextureFormat::Rgba8UnormSrgb,
+					ddsfile::DxgiFormat::BC7_UNorm_sRGB => {
+						//floor(w,4), should be ceil(w,4)
+						width=width/4*4;
+						height=height/4*4;
+						wgpu::TextureFormat::Bc7RgbaUnormSrgb
+					},
+					other=>panic!("unsupported format {:?}",other),
+				};
+
 				let size = wgpu::Extent3d {
-					width: image.get_width()/4*4,//floor(w,4), should be ceil(w,4)
-					height: image.get_height()/4*4,
+					width,
+					height,
 					depth_or_array_layers: 1,
 				};
 
@@ -121,7 +134,7 @@ impl GraphicsData {
 						mip_level_count: max_mips,
 						sample_count: 1,
 						dimension: wgpu::TextureDimension::D2,
-						format: wgpu::TextureFormat::Bc7RgbaUnormSrgb,
+						format,
 						usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
 						label: Some(format!("Texture{}",i).as_str()),
 						view_formats: &[],
