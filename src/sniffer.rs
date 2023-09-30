@@ -48,6 +48,7 @@ for block_id in 1..num_spacial_blocks{
 BLOCK_MAP_RESOURCE:
 //an individual one of the following:
 	- model (IndexedModel)
+	- shader (compiled SPIR-V)
 	- image (JpegXL)
 	- sound (Opus)
 	- video (AV1)
