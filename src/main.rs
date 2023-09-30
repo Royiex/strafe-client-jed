@@ -814,7 +814,7 @@ impl framework::Example for GraphicsData {
 							println!("No modeldatas were generated");
 						}
 					}else{
-						println!("Failed ro read first 8 bytes and seek back to beginning of file.");
+						println!("Failed to read first 8 bytes and seek back to beginning of file.");
 					}
 				}else{
 					println!("Could not open file");
