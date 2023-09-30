@@ -63,10 +63,11 @@ BLOCK_BOT_HEADER:
 u128 map_resource_uuid //which map is this bot running
 u128 time_resource_uuid //resource database time
 //don't include style info in bot header because it's in the physics state
-//blocks are not necessarily laid out in chronological order.
-//the timestamps should be sorted, keeping track of which block_id it refers to
-for block_id in 1..num_blocks{ //note that the header block id is skipped
+//blocks are laid out in chronological order, but indices may jump around.
+u64 num_segments
+for _ in 0..num_segments{
 	i64 time //physics_state timestamp
+	u64 block_id
 }
 
 BLOCK_BOT_SEGMENT:
