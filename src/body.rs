@@ -29,6 +29,10 @@ pub enum InputInstruction {
 	Jump(bool),
 	Zoom(bool),
 	Reset,
+	Idle,
+		//Idle: there were no input events, but the simulation is safe to advance to this timestep
+		//for interpolation / networking / playback reasons, most playback heads will always want
+		//to be 1 instruction ahead to generate the next state for interpolation.
 }
 
 pub struct Body {
@@ -1022,6 +1026,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						self.walk.state=WalkEnum::Reached;
 						self.grounded=false;
 					},
+					InputInstruction::Idle => (),//literally idle!
 				}
 				//calculate control dir
 				let camera_mat=self.camera.simulate_move_rotation_y(self.mouse_interpolation.interpolated_position(self.time).x-self.mouse_interpolation.mouse0.x);
