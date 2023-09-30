@@ -197,6 +197,7 @@ impl GraphicsData {
 			let mut vertices = Vec::new();
 			let mut index_from_vertex = std::collections::HashMap::new();//::<IndexedVertex,usize>
 			let mut entities = Vec::new();
+			//TODO: combine groups using the same render pattern
 			for group in model.groups {
 				let mut indices = Vec::new();
 				for poly in group.polys {
@@ -355,9 +356,9 @@ impl framework::Example for GraphicsData {
 	) -> Self {
 		let mut indexed_models = Vec::new();
 		indexed_models.append(&mut model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap(),*glam::Vec4::ONE.as_ref()));
-		indexed_models.append(&mut model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap(),*glam::Vec4::ONE.as_ref()));
-		indexed_models.append(&mut model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap(),*glam::Vec4::ONE.as_ref()));
-		indexed_models.push(primitives::the_unit_cube_lol());
+		indexed_models.push(primitives::unit_sphere());
+		indexed_models.push(primitives::unit_cylinder());
+		indexed_models.push(primitives::unit_cube());
 		println!("models.len = {:?}", indexed_models.len());
 		indexed_models[0].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(10.,0.,-10.)),
@@ -382,7 +383,7 @@ impl framework::Example for GraphicsData {
 		});
 		//teapot
 		indexed_models[2].instances.push(ModelInstance{
-			transform:glam::Affine3A::from_translation(glam::vec3(-10.,5.,10.)),
+			transform:glam::Affine3A::from_scale_rotation_translation(glam::vec3(0.5, 1.0, 0.2),glam::quat(-0.22248298016985793,-0.839457167990537,-0.05603504040830783,-0.49261857546227916),glam::vec3(-10.,7.,10.)),
 			color:glam::Vec4::ONE,
 		});
 		//ground

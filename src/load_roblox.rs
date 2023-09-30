@@ -86,12 +86,30 @@ impl std::hash::Hash for RobloxFaceTextureDescription {
         }
     }
 }
+impl RobloxFaceTextureDescription{
+	fn to_face_description(&self)->primitives::FaceDescription{
+		primitives::FaceDescription{
+			texture:Some(self.texture),
+			transform:glam::Affine2::from_translation(
+				glam::vec2(self.transform.offset_u,self.transform.offset_v)
+			)
+			*glam::Affine2::from_scale(
+				glam::vec2(self.transform.scale_u,self.transform.scale_v)
+			),
+			color:self.color,
+		}
+	}
+}
 type RobloxPartDescription=[Option<RobloxFaceTextureDescription>;6];
-//type RobloxWedgeDescription=[Option<RobloxFaceTextureDescription>;5];
+type RobloxWedgeDescription=[Option<RobloxFaceTextureDescription>;5];
+type RobloxCornerWedgeDescription=[Option<RobloxFaceTextureDescription>;4];
 #[derive(Clone,Eq,Hash,PartialEq)]
 enum RobloxBasePartDescription{
+	Sphere,
 	Part(RobloxPartDescription),
-	//Wedge(RobloxWedgeDescription),
+	Cylinder,
+	Wedge(RobloxWedgeDescription),
+	CornerWedge(RobloxCornerWedgeDescription),
 }
 pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(IndexedModelInstances,glam::Vec3), Box<dyn std::error::Error>>{
 	//IndexedModelInstances includes textures
@@ -139,13 +157,55 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 					spawn_point=model_transform.transform_point3(glam::Vec3::Y)+glam::vec3(0.0,2.5,0.0);
 					println!("Found MapStart{:?}",spawn_point);
 				}
-				if *transparency==1.0||shape.to_u32()!=1 {
+				if *transparency==1.0 {
 					continue;
 				}
+
+				let shape=match shape.to_u32(){
+					0=>primitives::Primitives::Sphere,
+					1=>primitives::Primitives::Cube,
+					2=>primitives::Primitives::Cylinder,
+					3=>primitives::Primitives::Wedge,
+					4=>primitives::Primitives::CornerWedge,
+					_=>panic!("funky roblox PartType={}",shape.to_u32()),
+				};
+
+				//TODO: also detect "CylinderMesh" etc here
+				let mut face_map=std::collections::HashMap::new();
+				match shape{
+					primitives::Primitives::Cube => {
+						face_map.insert(0,0);//Right
+						face_map.insert(1,1);//Top
+						face_map.insert(2,2);//Back
+						face_map.insert(3,3);//Left
+						face_map.insert(4,4);//Bottom
+						face_map.insert(5,5);//Front
+					},
+					primitives::Primitives::Wedge => {
+						face_map.insert(0,0);//Right
+						face_map.insert(1,1);//Top -> TopFront (some surf maps put surf textures on the Top face)
+						face_map.insert(2,1);//Front -> TopFront
+						face_map.insert(3,2);//Back
+						face_map.insert(4,3);//Left
+						face_map.insert(5,4);//Bottom
+					},
+					primitives::Primitives::CornerWedge => {
+						//Right -> None
+						face_map.insert(1,0);//Top
+						//Back -> None
+						face_map.insert(3,1);//Right
+						face_map.insert(4,2);//Bottom
+						face_map.insert(5,3);//Front
+					},
+					//do not support textured spheres/cylinders imported from roblox
+					//this can be added later, there are some maps that use it
+					primitives::Primitives::Sphere
+					|primitives::Primitives::Cylinder => (),
+				}
+				//use the biggest one and cut it down later...
+				let mut part_texture_description:RobloxPartDescription=[None,None,None,None,None,None];
 				temp_objects.clear();
 				recursive_collect_superclass(&mut temp_objects, &dom, object,"Decal");
-
-				let mut part_texture_description:RobloxPartDescription=[None,None,None,None,None,None];
 				for &decal_ref in &temp_objects{
 					if let Some(decal)=dom.get_by_ref(decal_ref){
 						if let (
@@ -168,8 +228,8 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 									asset_id_from_texture_id.push(asset_id.0);
 									texture_id
 								};
-								let face=normalid.to_u32();
-								if face<6{
+								let normal_id=normalid.to_u32();
+								if let Some(&face)=face_map.get(&normal_id){
 									let mut roblox_texture_transform=RobloxTextureTransform::default();
 									let mut roblox_texture_color=glam::Vec4::ONE;
 									if decal.class=="Texture"{
@@ -186,7 +246,7 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 												decal.properties.get("StudsPerTileV"),
 											)
 										{
-											let (size_u,size_v)=match face{
+											let (size_u,size_v)=match normal_id{
 												0=>(size.z,size.y),//right
 												1=>(size.x,size.z),//top
 												2=>(size.x,size.y),//back
@@ -202,20 +262,28 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 											roblox_texture_color=glam::vec4(decal_color3.r,decal_color3.g,decal_color3.b,1.0-*decal_transparency);
 										}
 									}
-									part_texture_description[face as usize]=Some(RobloxFaceTextureDescription{
+									part_texture_description[face]=Some(RobloxFaceTextureDescription{
 										texture:texture_id,
 										color:roblox_texture_color,
 										transform:roblox_texture_transform,
 									});
 								}else{
-									println!("goofy ahh roblox gave NormalId {}", face);
+									println!("NormalId={} unsupported for shape={:?}",normal_id,shape);
 								}
 							}
 						}
 					}
 				}
-				//TODO: generate unit Block, Wedge, etc. based on part shape lists
-				let basepart_texture_description=RobloxBasePartDescription::Part(part_texture_description);
+				//obscure rust syntax "slice pattern"
+				let [f0,f1,f2,f3,f4,f5]=part_texture_description;
+				let basepart_texture_description=match shape{
+					primitives::Primitives::Sphere=>RobloxBasePartDescription::Sphere,
+					primitives::Primitives::Cube=>RobloxBasePartDescription::Part([f0,f1,f2,f3,f4,f5]),
+					primitives::Primitives::Cylinder=>RobloxBasePartDescription::Cylinder,
+					//HAHAHA
+					primitives::Primitives::Wedge=>RobloxBasePartDescription::Wedge([f0,f1,f2,f3,f4]),
+					primitives::Primitives::CornerWedge=>RobloxBasePartDescription::CornerWedge([f0,f1,f2,f3]),
+				};
 				//make new model if unit cube has not been crated before
 				let model_id=if let Some(&model_id)=model_id_from_description.get(&basepart_texture_description){
 					//push to existing texture model
@@ -223,30 +291,68 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 				}else{
 					let model_id=indexed_models.len();
 					model_id_from_description.insert(basepart_texture_description.clone(),model_id);//borrow checker going crazy
-					match basepart_texture_description{
+					indexed_models.push(match basepart_texture_description{
+						RobloxBasePartDescription::Sphere=>primitives::unit_sphere(),
 						RobloxBasePartDescription::Part(part_texture_description)=>{
-							let unit_cube_faces=part_texture_description.map(|face|{
-								match face{
-									Some(roblox_texture_transform)=>Some(
-										primitives::FaceDescription{
-											texture:Some(roblox_texture_transform.texture),
-											transform:glam::Affine2::from_translation(
-												glam::vec2(roblox_texture_transform.transform.offset_u,roblox_texture_transform.transform.offset_v)
-											)
-											*glam::Affine2::from_scale(
-												glam::vec2(roblox_texture_transform.transform.scale_u,roblox_texture_transform.transform.scale_v)
-											),
-											color:roblox_texture_transform.color,
-										}
-									),
-									None=>Some(primitives::FaceDescription::default()),
-								}
-							});
-							let indexed_model=primitives::generate_partial_unit_cube(unit_cube_faces);
-							indexed_models.push(indexed_model);
-							model_id
+							let mut cube_face_description=primitives::CubeFaceDescription::new();
+							for (face_id,roblox_face_description) in part_texture_description.iter().enumerate(){
+								cube_face_description.insert(
+								match face_id{
+									0=>primitives::CubeFace::Right,
+									1=>primitives::CubeFace::Top,
+									2=>primitives::CubeFace::Back,
+									3=>primitives::CubeFace::Left,
+									4=>primitives::CubeFace::Bottom,
+									5=>primitives::CubeFace::Front,
+									_=>panic!("unreachable"),
+								},
+								match roblox_face_description{
+									Some(roblox_texture_transform)=>roblox_texture_transform.to_face_description(),
+									None=>primitives::FaceDescription::default(),
+								});
+							}
+							primitives::generate_partial_unit_cube(cube_face_description)
 						},
-					}
+						RobloxBasePartDescription::Cylinder=>primitives::unit_cylinder(),
+						RobloxBasePartDescription::Wedge(wedge_texture_description)=>{
+							let mut wedge_face_description=primitives::WedgeFaceDescription::new();
+							for (face_id,roblox_face_description) in wedge_texture_description.iter().enumerate(){
+								wedge_face_description.insert(
+								match face_id{
+									0=>primitives::WedgeFace::Right,
+									1=>primitives::WedgeFace::TopFront,
+									2=>primitives::WedgeFace::Back,
+									3=>primitives::WedgeFace::Left,
+									4=>primitives::WedgeFace::Bottom,
+									_=>panic!("unreachable"),
+								},
+								match roblox_face_description{
+									Some(roblox_texture_transform)=>roblox_texture_transform.to_face_description(),
+									None=>primitives::FaceDescription::default(),
+								});
+							}
+							primitives::generate_partial_unit_wedge(wedge_face_description)
+						},
+						RobloxBasePartDescription::CornerWedge(cornerwedge_texture_description)=>{
+							let mut cornerwedge_face_description=primitives::CornerWedgeFaceDescription::new();
+							for (face_id,roblox_face_description) in cornerwedge_texture_description.iter().enumerate(){
+								cornerwedge_face_description.insert(
+								match face_id{
+									0=>primitives::CornerWedgeFace::Top,
+									1=>primitives::CornerWedgeFace::Right,
+									2=>primitives::CornerWedgeFace::Bottom,
+									3=>primitives::CornerWedgeFace::Front,
+									_=>panic!("unreachable"),
+								},
+								match roblox_face_description{
+									Some(roblox_texture_transform)=>roblox_texture_transform.to_face_description(),
+									None=>primitives::FaceDescription::default(),
+								});
+							}
+							primitives::generate_partial_unit_cornerwedge(cornerwedge_face_description)
+						},
+					});
+					model_id
 				};
 				indexed_models[model_id].instances.push(ModelInstance {
 					transform:model_transform,
