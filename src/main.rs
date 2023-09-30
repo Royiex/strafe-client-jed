@@ -7,6 +7,7 @@ mod worker;
 mod zeroes;
 mod integer;
 mod physics;
+mod sniffer;
 mod graphics;
 mod settings;
 mod primitives;
