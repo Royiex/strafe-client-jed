@@ -11,6 +11,7 @@ mod model_graphics;
 mod zeroes;
 mod worker;
 mod physics;
+mod sniffer;
 mod settings;
 mod framework;
 mod primitives;
