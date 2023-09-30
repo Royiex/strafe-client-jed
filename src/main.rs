@@ -775,22 +775,24 @@ impl framework::Example for GraphicsData {
 					if let (Ok(()),Ok(()))=(std::io::Read::read_exact(&mut input, &mut first_8),std::io::Seek::rewind(&mut input)){
 						//
 						if let Some(Ok((indexed_model_instances,spawn_point)))={
-							if &first_8==b"<roblox!"{
-								if let Ok(dom) = rbx_binary::from_reader(input){
-									Some(load_roblox::generate_indexed_models_roblox(dom))
-								}else{
-									None
-								}
-							}else if &first_8==b"<roblox "{
-								if let Ok(dom) = rbx_xml::from_reader(input,rbx_xml::DecodeOptions::default()){
-									Some(load_roblox::generate_indexed_models_roblox(dom))
-								}else{
-									None
-								}
-							//}else if &first_8[0..4]==b"VBSP"{
-							//	self.generate_indexed_models_valve(input)
-							}else{
-								None
+							match &first_8[0..4]{
+								b"<rob"=>{
+									match match &first_8[4..8]{
+										b"lox!"=>rbx_binary::from_reader(input).map_err(|e|format!("{:?}",e)),
+										b"lox "=>rbx_xml::from_reader(input,rbx_xml::DecodeOptions::default()).map_err(|e|format!("{:?}",e)),
+										other=>Err(format!("Unknown Roblox file type {:?}",other)),
+									}{
+										Ok(dom)=>Some(load_roblox::generate_indexed_models_roblox(dom)),
+										Err(e)=>{
+											println!("Error loading roblox file:{:?}",e);
+											None
+										},
+									}
+								},
+								//b"VBSP"=>load_valve::generate_indexed_models_valve(input),
+								//b"SNFM"=>sniffer::generate_indexed_models(input),
+								//b"SNFB"=>sniffer::load_bot(input),
+								_=>None,
 							}
 						}{
 							//if generate_indexed_models succeeds, clear the previous ones
