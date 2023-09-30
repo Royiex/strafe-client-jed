@@ -42,7 +42,8 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
 }
 
 struct ModelInstance{
-	model_transform:mat4x4<f32>,
+	transform:mat4x4<f32>,
+	normal_transform:mat4x4<f32>,
 	color:vec4<f32>,
 }
 //my fancy idea is to create a megatexture for each model that includes all the textures each intance will need
@@ -75,9 +76,9 @@ fn vs_entity_texture(
 	@location(2) normal: vec3<f32>,
 	@location(3) color: vec4<f32>,
 ) -> EntityOutputTexture {
-	var position: vec4<f32> = model_instances[instance].model_transform * vec4<f32>(pos, 1.0);
+	var position: vec4<f32> = model_instances[instance].transform * vec4<f32>(pos, 1.0);
 	var result: EntityOutputTexture;
-	result.normal = (model_instances[instance].model_transform * vec4<f32>(normal, 0.0)).xyz;
+	result.normal = (model_instances[instance].normal_transform * vec4<f32>(normal, 1.0)).xyz;
 	result.texture = texture;
 	result.color = color;
 	result.model_color = model_instances[instance].color;

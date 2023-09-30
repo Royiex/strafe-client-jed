@@ -1,6 +1,6 @@
 use std::{borrow::Cow, time::Instant};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
-use model::{Vertex,ModelInstance};
+use model::{Vertex,ModelInstance,ModelGraphicsInstance};
 use body::{InputInstruction, PhysicsInstruction};
 use instruction::{TimedInstruction, InstructionConsumer};
 
@@ -18,7 +18,7 @@ struct Entity {
 }
 
 struct ModelGraphics {
-	instances: Vec<ModelInstance>,
+	instances: Vec<ModelGraphicsInstance>,
 	vertex_buf: wgpu::Buffer,
 	entities: Vec<Entity>,
 	bind_group: wgpu::BindGroup,
@@ -87,7 +87,7 @@ impl GraphicsData {
 		for model in &indexed_models.models{
 			//make aabb and run vertices to get realistic bounds
 			for model_instance in &model.instances{
-				self.physics.models.push(body::ModelPhysics::from_model(&model,model_instance.model_transform));
+				self.physics.models.push(body::ModelPhysics::from_model(&model,model_instance.transform));
 			}
 		}
 		println!("Physics Objects: {}",self.physics.models.len());
@@ -155,6 +155,14 @@ impl GraphicsData {
 		//the models received here are supposed to be tightly packed, i.e. no code needs to check if two models are using the same groups.
 		let mut unique_texture_models=Vec::with_capacity(indexed_models.models.len());
 		for mut model in indexed_models.models.drain(..){
+			//convert ModelInstance into ModelGraphicsInstance
+			let instances:Vec<ModelGraphicsInstance>=model.instances.iter().map(|instance|{
+				ModelGraphicsInstance{
+					transform: glam::Mat4::from(instance.transform),
+					normal_transform: glam::Mat4::from(instance.transform.inverse()).transpose(),
+					color: instance.color,
+				}
+			}).collect();
 			//check each group, if it's using a new texture then make a new clone of the model
 			let id=unique_texture_models.len();
 			let mut unique_textures=Vec::new();
@@ -174,7 +182,7 @@ impl GraphicsData {
 						unique_vertices:model.unique_vertices.clone(),
 						texture:group.texture,
 						groups:Vec::new(),
-						instances:model.instances.clone(),
+						instances:instances.clone(),
 					});
 					texture_index
 				};
@@ -297,14 +305,16 @@ impl GraphicsData {
 	}
 }
 
-const MODEL_BUFFER_SIZE:usize=4*4 + 4;//let size=std::mem::size_of::<ModelInstance>();
+const MODEL_BUFFER_SIZE:usize=4*4 + 4*4 + 4;//let size=std::mem::size_of::<ModelInstance>();
 const MODEL_BUFFER_SIZE_BYTES:usize=MODEL_BUFFER_SIZE*4;
-fn get_instances_buffer_data(instances:&[ModelInstance]) -> Vec<f32> {
+fn get_instances_buffer_data(instances:&[ModelGraphicsInstance]) -> Vec<f32> {
 	let mut raw = Vec::with_capacity(MODEL_BUFFER_SIZE*instances.len());
 	for (i,mi) in instances.iter().enumerate(){
     	let mut v = raw.split_off(MODEL_BUFFER_SIZE*i);
-    	//model_transform
-    	raw.extend_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&glam::Mat4::from(mi.model_transform))[..]);
+    	//model transform
+    	raw.extend_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&mi.transform)[..]);
+    	//normal transform
+    	raw.extend_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&mi.normal_transform)[..]);
     	//color
     	raw.extend_from_slice(AsRef::<[f32; 4]>::as_ref(&mi.color));
     	raw.append(&mut v);
@@ -350,34 +360,34 @@ impl framework::Example for GraphicsData {
 		indexed_models.push(primitives::the_unit_cube_lol());
 		println!("models.len = {:?}", indexed_models.len());
 		indexed_models[0].instances.push(ModelInstance{
-			model_transform:glam::Affine3A::from_translation(glam::vec3(10.,0.,-10.)),
+			transform:glam::Affine3A::from_translation(glam::vec3(10.,0.,-10.)),
 			color:glam::Vec4::ONE,
 		});
 		//quad monkeys
 		indexed_models[1].instances.push(ModelInstance{
-			model_transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,10.)),
+			transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,10.)),
 			color:glam::Vec4::ONE,
 		});
 		indexed_models[1].instances.push(ModelInstance{
-			model_transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,10.)),
+			transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,10.)),
 			color:glam::vec4(1.0,0.0,0.0,1.0),
 		});
 		indexed_models[1].instances.push(ModelInstance{
-			model_transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,20.)),
+			transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,20.)),
 			color:glam::vec4(0.0,1.0,0.0,1.0),
 		});
 		indexed_models[1].instances.push(ModelInstance{
-			model_transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,20.)),
+			transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,20.)),
 			color:glam::vec4(0.0,0.0,1.0,1.0),
 		});
 		//teapot
 		indexed_models[2].instances.push(ModelInstance{
-			model_transform:glam::Affine3A::from_translation(glam::vec3(-10.,5.,10.)),
+			transform:glam::Affine3A::from_translation(glam::vec3(-10.,5.,10.)),
 			color:glam::Vec4::ONE,
 		});
 		//ground
 		indexed_models[3].instances.push(ModelInstance{
-			model_transform:glam::Affine3A::from_translation(glam::vec3(0.,0.,0.))*glam::Affine3A::from_scale(glam::vec3(160.0, 1.0, 160.0)),
+			transform:glam::Affine3A::from_translation(glam::vec3(0.,0.,0.))*glam::Affine3A::from_scale(glam::vec3(160.0, 1.0, 160.0)),
 			color:glam::Vec4::ONE,
 		});
 

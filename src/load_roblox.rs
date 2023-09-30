@@ -249,7 +249,7 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 					}
 				};
 				indexed_models[model_id].instances.push(ModelInstance {
-					model_transform,
+					transform:model_transform,
 					color:glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
 				});
 			}

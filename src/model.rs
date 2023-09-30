@@ -41,17 +41,22 @@ pub struct IndexedModelSingleTexture{
 	pub unique_vertices:Vec<IndexedVertex>,
 	pub texture:Option<u32>,//RenderPattern? material/texture/shader/flat color
 	pub groups: Vec<IndexedGroupFixedTexture>,
-	pub instances:Vec<ModelInstance>,
+	pub instances:Vec<ModelGraphicsInstance>,
 }
 pub struct ModelSingleTexture{
-	pub instances: Vec<ModelInstance>,
+	pub instances: Vec<ModelGraphicsInstance>,
 	pub vertices: Vec<Vertex>,
 	pub entities: Vec<Vec<u16>>,
 	pub texture: Option<u32>,
 }
 #[derive(Clone)]
+pub struct ModelGraphicsInstance{
+	pub transform:glam::Mat4,
+	pub normal_transform:glam::Mat4,
+	pub color:glam::Vec4,
+}
 pub struct ModelInstance{
-	pub model_transform:glam::Affine3A,
+	pub transform:glam::Affine3A,
 	pub color:glam::Vec4,
 }
 pub struct IndexedModelInstances{
