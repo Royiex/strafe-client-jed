@@ -131,13 +131,11 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 					Some(rbx_dom_weak::types::Variant::Vector3(size)),
 					Some(rbx_dom_weak::types::Variant::Float32(transparency)),
 					Some(rbx_dom_weak::types::Variant::Color3uint8(color3)),
-					Some(rbx_dom_weak::types::Variant::Enum(shape)),
 				) = (
 					object.properties.get("CFrame"),
 					object.properties.get("Size"),
 					object.properties.get("Transparency"),
 					object.properties.get("Color"),
-					object.properties.get("Shape"),//this will also skip unions
 				)
 			{
 				let model_transform=glam::Affine3A::from_translation(
@@ -161,13 +159,31 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 					continue;
 				}
 
-				let shape=match shape.to_u32(){
-					0=>primitives::Primitives::Sphere,
-					1=>primitives::Primitives::Cube,
-					2=>primitives::Primitives::Cylinder,
-					3=>primitives::Primitives::Wedge,
-					4=>primitives::Primitives::CornerWedge,
-					_=>panic!("funky roblox PartType={}",shape.to_u32()),
+				let shape=match &object.class[..]{
+					"Part"=>{
+						if let Some(rbx_dom_weak::types::Variant::Enum(shape))=object.properties.get("Shape"){
+							match shape.to_u32(){
+								0=>primitives::Primitives::Sphere,
+								1=>primitives::Primitives::Cube,
+								2=>primitives::Primitives::Cylinder,
+								3=>primitives::Primitives::Wedge,
+								4=>primitives::Primitives::CornerWedge,
+								_=>{
+									println!("Funky roblox PartType={}; defaulting to cube",shape.to_u32());
+									primitives::Primitives::Cube
+								},
+							}
+						}else{
+							println!("Part has no Shape! defaulting to cube");
+							primitives::Primitives::Cube
+						}
+					},
+					"WedgePart"=>primitives::Primitives::Wedge,
+					"CornerWedgePart"=>primitives::Primitives::CornerWedge,
+					_=>{
+						println!("Unsupported BasePart ClassName={}; defaulting to cube",object.class);
+						primitives::Primitives::Cube
+					}
 				};
 
 				//TODO: also detect "CylinderMesh" etc here
