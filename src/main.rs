@@ -98,17 +98,18 @@ impl GraphicsData {
 		//idk how to do this gooder lol
 		let mut double_map=std::collections::HashMap::<u32,u32>::new();
 		let mut texture_loading_threads=Vec::new();
-		for (i,t) in indexed_models.textures.iter().enumerate(){
-			if let Ok(mut file) = std::fs::File::open(std::path::Path::new(&format!("textures/{}.dds",t))){
+		let num_textures=indexed_models.textures.len();
+		for (i,texture_id) in indexed_models.textures.into_iter().enumerate(){
+			if let Ok(mut file) = std::fs::File::open(std::path::Path::new(&format!("textures/{}.dds",texture_id))){
 				double_map.insert(i as u32, texture_loading_threads.len() as u32);
-				texture_loading_threads.push(std::thread::spawn(move ||{
-					(i,ddsfile::Dds::read(&mut file).unwrap())
-				}));
+				texture_loading_threads.push((texture_id,std::thread::spawn(move ||{
+					ddsfile::Dds::read(&mut file).unwrap()
+				})));
 			}
 		}
 
-		let texture_views:Vec<wgpu::TextureView>=texture_loading_threads.into_iter().map(|t|{
-			let (i,image)=t.join().unwrap();
+		let texture_views:Vec<wgpu::TextureView>=texture_loading_threads.into_iter().map(|(texture_id,thread)|{
+			let image=thread.join().unwrap();
 
 			let (mut width,mut height)=(image.get_width(),image.get_height());
 
@@ -144,13 +145,13 @@ impl GraphicsData {
 					dimension: wgpu::TextureDimension::D2,
 					format,
 					usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-					label: Some(format!("Texture{}",i).as_str()),
+					label: Some(format!("Texture{}",texture_id).as_str()),
 					view_formats: &[],
 				},
 				&image.data,
 			);
 			texture.create_view(&wgpu::TextureViewDescriptor {
-				label: Some(format!("Texture{} View",i).as_str()),
+				label: Some(format!("Texture{} View",texture_id).as_str()),
 				dimension: Some(wgpu::TextureViewDimension::D2),
 				..wgpu::TextureViewDescriptor::default()
 			})
@@ -304,7 +305,7 @@ impl GraphicsData {
 				});
 			}
 		}
-		println!("Texture References={}",indexed_models.textures.len());
+		println!("Texture References={}",num_textures);
 		println!("Textures Loaded={}",texture_views.len());
 		println!("Indexed Models={}",indexed_models_len);
 		println!("Graphics Objects: {}",self.models.len());
