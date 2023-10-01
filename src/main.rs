@@ -921,7 +921,8 @@ impl framework::Example for GraphicsData {
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
 		// update rotation
-		let camera_uniforms = to_uniform_data(&self.physics.camera,self.physics.body.extrapolated_position(time));
+		let position=self.physics.body.extrapolated_position(time);
+		let camera_uniforms = to_uniform_data(&self.physics.camera,position);
 		self.staging_belt
 			.write_buffer(
 				&mut encoder,
@@ -932,7 +933,12 @@ impl framework::Example for GraphicsData {
 			)
 			.copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
 		//This code only needs to run when the uniforms change
-		for model in self.models.iter() {
+		for model in self.models.iter_mut() {
+			for instance in model.instances.iter_mut(){
+				let model_pos=glam::Vec4Swizzles::xyz(instance.transform.col(3));
+				let model_look=glam::Affine3A::look_at_rh(model_pos, position, glam::Vec3::Y);
+				instance.transform=glam::Mat4::from(model_look);
+			}
 			let model_uniforms = get_instances_buffer_data(&model.instances);
 			self.staging_belt
 				.write_buffer(
