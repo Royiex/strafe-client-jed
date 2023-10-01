@@ -775,8 +775,7 @@ impl framework::Example for GraphicsData {
 	}
 
 	#[allow(clippy::single_match)]
-	fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, event: winit::event::WindowEvent) {
-		//nothing atm
+	fn update(&mut self, window: &winit::window::Window, device: &wgpu::Device, queue: &wgpu::Queue, event: winit::event::WindowEvent) {
 		match event {
 			winit::event::WindowEvent::DroppedFile(path) => {
 				println!("opening file: {:?}", &path);
@@ -836,6 +835,29 @@ impl framework::Example for GraphicsData {
 					}
 				}else{
 					println!("Could not open file");
+				}
+			},
+			winit::event::WindowEvent::KeyboardInput {
+				input:winit::event::KeyboardInput{state, virtual_keycode,..},
+				..
+			}=>{
+				let s=match state {
+					winit::event::ElementState::Pressed => true,
+					winit::event::ElementState::Released => false,
+				};
+				match virtual_keycode{
+					Some(winit::event::VirtualKeyCode::Tab)=>{
+						if s{
+							if let Ok(())=window.set_cursor_grab(winit::window::CursorGrabMode::None){
+								window.set_cursor_visible(true);
+							}
+						}else{
+							if let Ok(())=window.set_cursor_grab(winit::window::CursorGrabMode::Locked){
+								window.set_cursor_visible(false);
+							}
+						}
+					},
+					_=>(),
 				}
 			},
 			_=>(),
