@@ -918,61 +918,23 @@ impl framework::Example for GlobalState {
 
 	#[allow(clippy::single_match)]
 	fn update(&mut self, window: &winit::window::Window, device: &wgpu::Device, queue: &wgpu::Queue, event: winit::event::WindowEvent) {
+		let time=self.start_time.elapsed().as_nanos() as i64;
 		match event {
 			winit::event::WindowEvent::DroppedFile(path) => self.load_file(path,device,queue),
 			winit::event::WindowEvent::Focused(state)=>{
 				//pause unpause
 				//recalculate pressed keys on focus
-			}
-			_=>(),
-		}
-	}
-
-	fn device_event(&mut self, window: &winit::window::Window, event: winit::event::DeviceEvent) {
-		//there's no way this is the best way get a timestamp.
-		let time=self.start_time.elapsed().as_nanos() as i64;
-		match event {
-			winit::event::DeviceEvent::Key(winit::event::KeyboardInput {
-				state,
-				scancode: keycode,
+			},
+			winit::event::WindowEvent::KeyboardInput {
+				input:winit::event::KeyboardInput{state, virtual_keycode,..},
 				..
-			}) => {
+			}=>{
 				let s=match state {
 					winit::event::ElementState::Pressed => true,
 					winit::event::ElementState::Released => false,
 				};
-				if let Some(input_instruction)=match keycode {
-					17=>Some(InputInstruction::MoveForward(s)),//W
-					30=>Some(InputInstruction::MoveLeft(s)),//A
-					31=>Some(InputInstruction::MoveBack(s)),//S
-					32=>Some(InputInstruction::MoveRight(s)),//D
-					18=>Some(InputInstruction::MoveUp(s)),//E
-					16=>Some(InputInstruction::MoveDown(s)),//Q
-					57=>Some(InputInstruction::Jump(s)),//Space
-					44=>Some(InputInstruction::Zoom(s)),//Z
-					19=>if s{Some(InputInstruction::Reset)}else{None},//R
-					87=>{//F11
-						if s{
-							if window.fullscreen().is_some(){
-								window.set_fullscreen(None);
-							}else{
-								window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
-							}
-						}
-						None
-					},
-					01=>{//Esc
-						if s{
-							self.manual_mouse_lock=false;
-							match window.set_cursor_grab(winit::window::CursorGrabMode::None){
-								Ok(())=>(),
-								Err(e)=>println!("Could not release cursor: {:?}",e),
-							}
-							window.set_cursor_visible(true);
-						}
-						None
-					},
-					15=>{//Tab
+				match virtual_keycode{
+					Some(winit::event::VirtualKeyCode::Tab)=>{
 						if s{
 							self.manual_mouse_lock=false;
 							match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.graphics.camera.screen_size.x as f32/2.0, self.graphics.camera.screen_size.y as f32/2.0)){
@@ -1000,16 +962,56 @@ impl framework::Example for GlobalState {
 							}
 						}
 						window.set_cursor_visible(s);
-						None
 					},
-					_ => {println!("scancode {}",keycode);None},
-				}{
-					self.physics_thread.send(TimedInstruction{
-						time,
-						instruction:input_instruction,
-					}).unwrap();
+					Some(winit::event::VirtualKeyCode::F11)=>{
+						if s{
+							if window.fullscreen().is_some(){
+								window.set_fullscreen(None);
+							}else{
+								window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
+							}
+						}
+					},
+					Some(winit::event::VirtualKeyCode::Escape)=>{
+						if s{
+							self.manual_mouse_lock=false;
+							match window.set_cursor_grab(winit::window::CursorGrabMode::None){
+								Ok(())=>(),
+								Err(e)=>println!("Could not release cursor: {:?}",e),
+							}
+							window.set_cursor_visible(true);
+						}
+					},
+					Some(keycode)=>{
+						if let Some(input_instruction)=match keycode {
+							winit::event::VirtualKeyCode::W => Some(InputInstruction::MoveForward(s)),
+							winit::event::VirtualKeyCode::A => Some(InputInstruction::MoveLeft(s)),
+							winit::event::VirtualKeyCode::S => Some(InputInstruction::MoveBack(s)),
+							winit::event::VirtualKeyCode::D => Some(InputInstruction::MoveRight(s)),
+							winit::event::VirtualKeyCode::E => Some(InputInstruction::MoveUp(s)),
+							winit::event::VirtualKeyCode::Q => Some(InputInstruction::MoveDown(s)),
+							winit::event::VirtualKeyCode::Space => Some(InputInstruction::Jump(s)),
+							winit::event::VirtualKeyCode::Z => Some(InputInstruction::Zoom(s)),
+							winit::event::VirtualKeyCode::R => if s{Some(InputInstruction::Reset)}else{None},
+							_ => None,
+						}{
+							self.physics_thread.send(TimedInstruction{
+								time,
+								instruction:input_instruction,
+							}).unwrap();
+						}
+					},
+					_=>(),
 				}
 			},
+			_=>(),
+		}
+	}
+
+	fn device_event(&mut self, window: &winit::window::Window, event: winit::event::DeviceEvent) {
+		//there's no way this is the best way get a timestamp.
+		let time=self.start_time.elapsed().as_nanos() as i64;
+		match event {
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine
 			} => {
