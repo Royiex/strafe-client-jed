@@ -842,6 +842,7 @@ impl framework::Example for GraphicsData {
 
 	#[allow(clippy::single_match)]
 	fn update(&mut self, window: &winit::window::Window, device: &wgpu::Device, queue: &wgpu::Queue, event: winit::event::WindowEvent) {
+		let time=self.start_time.elapsed().as_nanos() as i64;
 		match event {
 			winit::event::WindowEvent::DroppedFile(path) => self.load_file(path,device,queue),
 			winit::event::WindowEvent::KeyboardInput {
@@ -864,6 +865,27 @@ impl framework::Example for GraphicsData {
 							}
 						}
 					},
+					Some(keycode)=>{
+						if let Some(input_instruction)=match keycode {
+							winit::event::VirtualKeyCode::W => Some(InputInstruction::MoveForward(s)),
+							winit::event::VirtualKeyCode::A => Some(InputInstruction::MoveLeft(s)),
+							winit::event::VirtualKeyCode::S => Some(InputInstruction::MoveBack(s)),
+							winit::event::VirtualKeyCode::D => Some(InputInstruction::MoveRight(s)),
+							winit::event::VirtualKeyCode::E => Some(InputInstruction::MoveUp(s)),
+							winit::event::VirtualKeyCode::Q => Some(InputInstruction::MoveDown(s)),
+							winit::event::VirtualKeyCode::Space => Some(InputInstruction::Jump(s)),
+							winit::event::VirtualKeyCode::Z => Some(InputInstruction::Zoom(s)),
+							winit::event::VirtualKeyCode::R => if s{Some(InputInstruction::Reset)}else{None},
+							_ => None,
+						}
+						{
+							self.physics.run(time);
+							self.physics.process_instruction(TimedInstruction{
+								time,
+								instruction:PhysicsInstruction::Input(input_instruction),
+							})
+						}
+					},
 					_=>(),
 				}
 			},
@@ -875,6 +897,7 @@ impl framework::Example for GraphicsData {
 		//there's no way this is the best way get a timestamp.
 		let time=self.start_time.elapsed().as_nanos() as i64;
 		match event {
+			/* use WindowEvent for input for now because DeviceEvent doesn't work on wayland
 			winit::event::DeviceEvent::Key(winit::event::KeyboardInput {
 				state,
 				scancode: keycode,
@@ -904,6 +927,7 @@ impl framework::Example for GraphicsData {
 					})
 				}
 			},
+			*/
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine
 			} => {
