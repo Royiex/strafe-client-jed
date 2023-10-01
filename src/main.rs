@@ -157,10 +157,10 @@ impl GraphicsData {
 			})
 		}).collect();
 
-		let indexed_models_len=indexed_models.models.len();
 		//split groups with different textures into separate models
 		//the models received here are supposed to be tightly packed, i.e. no code needs to check if two models are using the same groups.
-		let mut unique_texture_models=Vec::with_capacity(indexed_models.models.len());
+		let indexed_models_len=indexed_models.models.len();
+		let mut unique_texture_models=Vec::with_capacity(indexed_models_len);
 		for mut model in indexed_models.models.drain(..){
 			//convert ModelInstance into ModelGraphicsInstance
 			let instances:Vec<ModelGraphicsInstance>=model.instances.iter().map(|instance|{
