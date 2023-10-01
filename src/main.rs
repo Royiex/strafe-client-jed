@@ -98,65 +98,64 @@ impl GraphicsData {
 		//idk how to do this gooder lol
 		let mut double_map=std::collections::HashMap::<u32,u32>::new();
 		let mut texture_loading_threads=Vec::new();
-		let the_device=std::sync::Arc::new(device);
-		let the_queue=std::sync::Arc::new(queue);
 		for (i,t) in indexed_models.textures.iter().enumerate(){
 			if let Ok(mut file) = std::fs::File::open(std::path::Path::new(&format!("textures/{}.dds",t))){
 				double_map.insert(i as u32, texture_loading_threads.len() as u32);
-				let thread_device=the_device.clone();
-				let thread_queue=the_queue.clone();
 				texture_loading_threads.push(std::thread::spawn(move ||{
-					let image = ddsfile::Dds::read(&mut file).unwrap();
-
-					let (mut width,mut height)=(image.get_width(),image.get_height());
-
-					let format=match image.header10.unwrap().dxgi_format{
-						ddsfile::DxgiFormat::R8G8B8A8_UNorm_sRGB => wgpu::TextureFormat::Rgba8UnormSrgb,
-						ddsfile::DxgiFormat::BC7_UNorm_sRGB => {
-							//floor(w,4), should be ceil(w,4)
-							width=width/4*4;
-							height=height/4*4;
-							wgpu::TextureFormat::Bc7RgbaUnormSrgb
-						},
-						other=>panic!("unsupported format {:?}",other),
-					};
-
-					let size = wgpu::Extent3d {
-						width,
-						height,
-						depth_or_array_layers: 1,
-					};
-
-					let layer_size = wgpu::Extent3d {
-						depth_or_array_layers: 1,
-						..size
-					};
-					let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
-
-					let texture = thread_device.create_texture_with_data(
-						&thread_queue,
-						&wgpu::TextureDescriptor {
-							size,
-							mip_level_count: max_mips,
-							sample_count: 1,
-							dimension: wgpu::TextureDimension::D2,
-							format,
-							usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-							label: Some(format!("Texture{}",i).as_str()),
-							view_formats: &[],
-						},
-						&image.data,
-					);
-					texture.create_view(&wgpu::TextureViewDescriptor {
-						label: Some(format!("Texture{} View",i).as_str()),
-						dimension: Some(wgpu::TextureViewDimension::D2),
-						..wgpu::TextureViewDescriptor::default()
-					})
+					(i,ddsfile::Dds::read(&mut file).unwrap())
 				}));
 			}
 		}
 
-		let texture_views:Vec<wgpu::TextureView>=texture_loading_threads.iter().map(|t|{t.join().unwrap()}).collect();
+		let texture_views:Vec<wgpu::TextureView>=texture_loading_threads.into_iter().map(|t|{
+			let (i,image)=t.join().unwrap();
+
+			let (mut width,mut height)=(image.get_width(),image.get_height());
+
+			let format=match image.header10.unwrap().dxgi_format{
+				ddsfile::DxgiFormat::R8G8B8A8_UNorm_sRGB => wgpu::TextureFormat::Rgba8UnormSrgb,
+				ddsfile::DxgiFormat::BC7_UNorm_sRGB => {
+					//floor(w,4), should be ceil(w,4)
+					width=width/4*4;
+					height=height/4*4;
+					wgpu::TextureFormat::Bc7RgbaUnormSrgb
+				},
+				other=>panic!("unsupported format {:?}",other),
+			};
+
+			let size = wgpu::Extent3d {
+				width,
+				height,
+				depth_or_array_layers: 1,
+			};
+
+			let layer_size = wgpu::Extent3d {
+				depth_or_array_layers: 1,
+				..size
+			};
+			let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
+
+			let texture = device.create_texture_with_data(
+				queue,
+				&wgpu::TextureDescriptor {
+					size,
+					mip_level_count: max_mips,
+					sample_count: 1,
+					dimension: wgpu::TextureDimension::D2,
+					format,
+					usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+					label: Some(format!("Texture{}",i).as_str()),
+					view_formats: &[],
+				},
+				&image.data,
+			);
+			texture.create_view(&wgpu::TextureViewDescriptor {
+				label: Some(format!("Texture{} View",i).as_str()),
+				dimension: Some(wgpu::TextureViewDimension::D2),
+				..wgpu::TextureViewDescriptor::default()
+			})
+		}).collect();
+
 		let indexed_models_len=indexed_models.models.len();
 		//split groups with different textures into separate models
 		//the models received here are supposed to be tightly packed, i.e. no code needs to check if two models are using the same groups.
