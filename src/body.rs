@@ -206,7 +206,7 @@ impl Camera {
 		mat3_from_rotation_y_f64(self.angles.x-self.sensitivity.x*(delta_x as f64))
 	}
 	pub fn proj(&self)->glam::Mat4{
-		perspective_rh(self.fov.x, self.fov.y, 0.5, 1000.0)
+		perspective_rh(self.fov.x, self.fov.y, 0.5, 2000.0)
 	}
 	pub fn view(&self,pos:glam::Vec3)->glam::Mat4{
 		//f32 good enough for view matrix
