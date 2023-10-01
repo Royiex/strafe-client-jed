@@ -140,12 +140,11 @@ pub fn unit_cube()->crate::model::IndexedModel{
 	t.insert(CubeFace::Front,FaceDescription::default());
 	generate_partial_unit_cube(t)
 }
+const TEAPOT_TRANSFORM:glam::Mat3=glam::mat3(glam::vec3(0.0,0.1,0.0),glam::vec3(-0.1,0.0,0.0),glam::vec3(0.0,0.0,0.1));
 pub fn unit_cylinder()->crate::model::IndexedModel{
 	let mut indexed_model=crate::model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap(),*glam::Vec4::ONE.as_ref()).remove(0);
 	for pos in indexed_model.unique_pos.iter_mut(){
-		pos[0]=pos[0]*0.1;
-		pos[1]=pos[1]*0.1;
-		pos[2]=pos[2]*0.1;
+		[pos[0],pos[1],pos[2]]=*(TEAPOT_TRANSFORM*glam::Vec3::from_array(*pos)).as_ref();
 	}
 	indexed_model
 }
