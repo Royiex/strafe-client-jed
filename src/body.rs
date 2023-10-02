@@ -976,64 +976,50 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				self.walk.state=WalkEnum::Reached;
 			},
 			PhysicsInstruction::Input(input_instruction) => {
-				let mut refresh_walk_target=false;
+				let mut refresh_walk_target=true;
+				let mut refresh_walk_target_velocity=true;
 				match input_instruction{
 					InputInstruction::MoveMouse(m) => {
 						self.camera.angles=self.camera.simulate_move_angles(self.mouse_interpolation.mouse1-self.mouse_interpolation.mouse0);
 						self.mouse_interpolation.move_mouse(self.time,m);
-						refresh_walk_target=true;
 					},
-					InputInstruction::MoveForward(s) => {
-						self.set_control(CONTROL_MOVEFORWARD,s);
-						refresh_walk_target=true;
-					},
-					InputInstruction::MoveLeft(s) => {
-						self.set_control(CONTROL_MOVELEFT,s);
-						refresh_walk_target=true;
-					},
-					InputInstruction::MoveBack(s) => {
-						self.set_control(CONTROL_MOVEBACK,s);
-						refresh_walk_target=true;
-					},
-					InputInstruction::MoveRight(s) => {
-						self.set_control(CONTROL_MOVERIGHT,s);
-						refresh_walk_target=true;
-					},
-					InputInstruction::MoveUp(s) => {
-						self.set_control(CONTROL_MOVEUP,s);
-						refresh_walk_target=true;
-					},
-					InputInstruction::MoveDown(s) => {
-						self.set_control(CONTROL_MOVEDOWN,s);
-						refresh_walk_target=true;
-					},
+					InputInstruction::MoveForward(s) => self.set_control(CONTROL_MOVEFORWARD,s),
+					InputInstruction::MoveLeft(s) => self.set_control(CONTROL_MOVELEFT,s),
+					InputInstruction::MoveBack(s) => self.set_control(CONTROL_MOVEBACK,s),
+					InputInstruction::MoveRight(s) => self.set_control(CONTROL_MOVERIGHT,s),
+					InputInstruction::MoveUp(s) => self.set_control(CONTROL_MOVEUP,s),
+					InputInstruction::MoveDown(s) => self.set_control(CONTROL_MOVEDOWN,s),
 					InputInstruction::Jump(s) => {
 						self.set_control(CONTROL_JUMP,s);
-						refresh_walk_target=true;
 						if self.grounded{
 							self.jump();
 						}
+						refresh_walk_target_velocity=false;
 					},
 					InputInstruction::Zoom(s) => {
 						self.set_control(CONTROL_ZOOM,s);
+						refresh_walk_target=false;
 					},
 					InputInstruction::Reset => {
 						//temp
 						self.body.position=self.spawn_point;
+						self.body.velocity=glam::Vec3::ZERO;
 						//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
 						self.contacts.clear();
 						self.body.acceleration=self.gravity;
 						self.walk.state=WalkEnum::Reached;
 						self.grounded=false;
+						refresh_walk_target=false;
 					},
-					InputInstruction::Idle => (),//literally idle!
+					InputInstruction::Idle => {refresh_walk_target=false;},//literally idle!
 				}
-				//calculate control dir
-				let camera_mat=self.camera.simulate_move_rotation_y(self.mouse_interpolation.interpolated_position(self.time).x-self.mouse_interpolation.mouse0.x);
-				let control_dir=camera_mat*get_control_dir(self.controls);
-				//calculate walk target velocity
 				if refresh_walk_target{
-					self.walk.target_velocity=self.walkspeed*control_dir;
+					//calculate walk target velocity
+					if refresh_walk_target_velocity{
+						let camera_mat=self.camera.simulate_move_rotation_y(self.mouse_interpolation.interpolated_position(self.time).x-self.mouse_interpolation.mouse0.x);
+						let control_dir=camera_mat*get_control_dir(self.controls);
+						self.walk.target_velocity=self.walkspeed*control_dir;
+					}
 					self.refresh_walk_target();
 				}
 			},

@@ -854,14 +854,8 @@ impl framework::Example for GraphicsData {
 				};
 				match virtual_keycode{
 					Some(winit::event::VirtualKeyCode::Tab)=>{
-						if s{
-							if let Ok(())=window.set_cursor_grab(winit::window::CursorGrabMode::None){
-								window.set_cursor_visible(true);
-							}
-						}else{
-							if let Ok(())=window.set_cursor_grab(winit::window::CursorGrabMode::Locked){
-								window.set_cursor_visible(false);
-							}
+						if let Ok(())=window.set_cursor_grab(if s{winit::window::CursorGrabMode::None}else{winit::window::CursorGrabMode::Locked}){
+							window.set_cursor_visible(s);
 						}
 					},
 					_=>(),
