@@ -169,14 +169,10 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 								2=>primitives::Primitives::Cylinder,
 								3=>primitives::Primitives::Wedge,
 								4=>primitives::Primitives::CornerWedge,
-								_=>{
-									println!("Funky roblox PartType={}; defaulting to cube",shape.to_u32());
-									primitives::Primitives::Cube
-								},
+								_=>panic!("Funky roblox PartType={};",shape.to_u32()),
 							}
 						}else{
-							println!("Part has no Shape! defaulting to cube");
-							primitives::Primitives::Cube
+							panic!("Part has no Shape!");
 						}
 					},
 					"WedgePart"=>primitives::Primitives::Wedge,
