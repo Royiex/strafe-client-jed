@@ -265,7 +265,7 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 					primitives::Primitives::Wedge=>RobloxBasePartDescription::Wedge([f0,if f2.is_some(){f2}else{f1},f3,f4,f5]),
 					primitives::Primitives::CornerWedge=>RobloxBasePartDescription::CornerWedge([f1,f3,f4,f5]),
 				};
-				//make new model if unit cube has not been crated before
+				//make new model if unit cube has not been created before
 				let model_id=if let Some(&model_id)=model_id_from_description.get(&basepart_texture_description){
 					//push to existing texture model
 					model_id
