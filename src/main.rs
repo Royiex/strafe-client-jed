@@ -46,6 +46,7 @@ pub struct GraphicsPipelines {
 pub struct GraphicsData {
 	start_time: std::time::Instant,
 	screen_size: (u32, u32),
+	manual_mouse_lock:bool,
 	physics: body::PhysicsState,
 	pipelines: GraphicsPipelines,
 	bind_groups: GraphicsBindGroups,
@@ -744,6 +745,7 @@ impl framework::Example for GraphicsData {
 		let depth_view = Self::create_depth_texture(config, device);
 
 		let mut graphics=GraphicsData {
+			manual_mouse_lock:false,
 			start_time: Instant::now(),
 			screen_size: (config.width,config.height),
 			physics,
@@ -844,23 +846,6 @@ impl framework::Example for GraphicsData {
 	fn update(&mut self, window: &winit::window::Window, device: &wgpu::Device, queue: &wgpu::Queue, event: winit::event::WindowEvent) {
 		match event {
 			winit::event::WindowEvent::DroppedFile(path) => self.load_file(path,device,queue),
-			winit::event::WindowEvent::KeyboardInput {
-				input:winit::event::KeyboardInput{state, virtual_keycode,..},
-				..
-			}=>{
-				let s=match state {
-					winit::event::ElementState::Pressed => true,
-					winit::event::ElementState::Released => false,
-				};
-				match virtual_keycode{
-					Some(winit::event::VirtualKeyCode::Tab)=>{
-						if let Ok(())=window.set_cursor_grab(if s{winit::window::CursorGrabMode::None}else{winit::window::CursorGrabMode::Locked}){
-							window.set_cursor_visible(s);
-						}
-					},
-					_=>(),
-				}
-			},
 			winit::event::WindowEvent::Focused(state)=>{
 				//pause unpause
 				//recalculate pressed keys on focus
@@ -869,7 +854,7 @@ impl framework::Example for GraphicsData {
 		}
 	}
 
-	fn device_event(&mut self, event: winit::event::DeviceEvent) {
+	fn device_event(&mut self, window: &winit::window::Window, event: winit::event::DeviceEvent) {
 		//there's no way this is the best way get a timestamp.
 		let time=self.start_time.elapsed().as_nanos() as i64;
 		match event {
@@ -892,7 +877,48 @@ impl framework::Example for GraphicsData {
 					57 => Some(InputInstruction::Jump(s)),//Space
 					44 => Some(InputInstruction::Zoom(s)),//Z
 					19 => if s{Some(InputInstruction::Reset)}else{None},//R
-					_ => None,
+					1  => {
+						if s{
+							self.manual_mouse_lock=false;
+							match window.set_cursor_grab(winit::window::CursorGrabMode::None){
+								Ok(())=>(),
+								Err(e)=>println!("Could not release cursor: {:?}",e),
+							}
+							window.set_cursor_visible(true);
+						}
+						None
+					},
+					15=>{//Tab
+						if s{
+							self.manual_mouse_lock=false;
+							match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.screen_size.0 as f32/2.0, self.screen_size.1 as f32/2.0)){
+								Ok(())=>(),
+								Err(e)=>println!("Could not set cursor position: {:?}",e),
+							}
+							match window.set_cursor_grab(winit::window::CursorGrabMode::None){
+								Ok(())=>(),
+								Err(e)=>println!("Could not release cursor: {:?}",e),
+							}
+						}else{
+							//if cursor is outside window don't lock but apparently there's no get pos function
+							//let pos=window.get_cursor_pos();
+							match window.set_cursor_grab(winit::window::CursorGrabMode::Locked){
+								Ok(())=>(),
+								Err(_)=>{
+									match window.set_cursor_grab(winit::window::CursorGrabMode::Confined){
+										Ok(())=>(),
+										Err(e)=>{
+											self.manual_mouse_lock=true;
+											println!("Could not confine cursor: {:?}",e)
+										},
+									}
+								}
+							}
+						}
+						window.set_cursor_visible(s);
+						None
+					},
+					_ => {println!("scancode {}",keycode);None},
 				}
 				{
 					self.physics.run(time);
@@ -905,6 +931,12 @@ impl framework::Example for GraphicsData {
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine
 			} => {
+				if self.manual_mouse_lock{
+					match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.screen_size.0 as f32/2.0, self.screen_size.1 as f32/2.0)){
+						Ok(())=>(),
+						Err(e)=>println!("Could not set cursor position: {:?}",e),
+					}
+				}
 				//do not step the physics because the mouse polling rate is higher than the physics can run.
 				//essentially the previous input will be overwritten until a true step runs
 				//which is fine because they run all the time.
