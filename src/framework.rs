@@ -53,6 +53,7 @@ pub trait Example: 'static + Sized {
 	);
 	fn update(&mut self, window: &winit::window::Window, device: &wgpu::Device, queue: &wgpu::Queue, event: WindowEvent);
 	fn device_event(&mut self, event: DeviceEvent);
+	fn load_file(&mut self, path:std::path::PathBuf, device: &wgpu::Device, queue: &wgpu::Queue);
 	fn render(
 		&mut self,
 		view: &wgpu::TextureView,

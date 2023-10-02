@@ -774,69 +774,71 @@ impl framework::Example for GraphicsData {
 		return graphics;
 	}
 
+	fn load_file(&mut self,path: std::path::PathBuf, device: &wgpu::Device, queue: &wgpu::Queue){
+		println!("Loading file: {:?}", &path);
+		//oh boy! let's load the map!
+		if let Ok(file)=std::fs::File::open(path){
+			let mut input = std::io::BufReader::new(file);
+			let mut first_8=[0u8;8];
+			//.rbxm roblox binary = "<roblox!"
+			//.rbxmx roblox xml = "<roblox "
+			//.bsp = "VBSP"
+			//.vmf = 
+			//.snf = "SNMF"
+			//.snf = "SNBF"
+			if let (Ok(()),Ok(()))=(std::io::Read::read_exact(&mut input, &mut first_8),std::io::Seek::rewind(&mut input)){
+				//
+				if let Some(Ok((indexed_model_instances,spawn_point)))={
+					match &first_8[0..4]{
+						b"<rob"=>{
+							match match &first_8[4..8]{
+								b"lox!"=>rbx_binary::from_reader(input).map_err(|e|format!("{:?}",e)),
+								b"lox "=>rbx_xml::from_reader(input,rbx_xml::DecodeOptions::default()).map_err(|e|format!("{:?}",e)),
+								other=>Err(format!("Unknown Roblox file type {:?}",other)),
+							}{
+								Ok(dom)=>Some(load_roblox::generate_indexed_models_roblox(dom)),
+								Err(e)=>{
+									println!("Error loading roblox file:{:?}",e);
+									None
+								},
+							}
+						},
+						//b"VBSP"=>load_valve::generate_indexed_models_valve(input),
+						//b"SNFM"=>sniffer::generate_indexed_models(input),
+						//b"SNFB"=>sniffer::load_bot(input),
+						_=>None,
+					}
+				}{
+					//if generate_indexed_models succeeds, clear the previous ones
+					self.models.clear();
+					self.physics.models.clear();
+					self.generate_model_physics(&indexed_model_instances);
+					self.generate_model_graphics(device,queue,indexed_model_instances);
+					//manual reset
+					let time=self.physics.time;
+					instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
+						time,
+						instruction: body::PhysicsInstruction::SetSpawnPosition(spawn_point),
+					});
+					instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
+						time,
+						instruction: body::PhysicsInstruction::Input(body::InputInstruction::Reset),
+					});
+				}else{
+					println!("No modeldatas were generated");
+				}
+			}else{
+				println!("Failed to read first 8 bytes and seek back to beginning of file.");
+			}
+		}else{
+			println!("Could not open file");
+		}
+	}
+
 	#[allow(clippy::single_match)]
 	fn update(&mut self, window: &winit::window::Window, device: &wgpu::Device, queue: &wgpu::Queue, event: winit::event::WindowEvent) {
 		match event {
-			winit::event::WindowEvent::DroppedFile(path) => {
-				println!("opening file: {:?}", &path);
-				//oh boy! let's load the map!
-				if let Ok(file)=std::fs::File::open(path){
-					let mut input = std::io::BufReader::new(file);
-					let mut first_8=[0u8;8];
-					//.rbxm roblox binary = "<roblox!"
-					//.rbxmx roblox xml = "<roblox "
-					//.bsp = "VBSP"
-					//.vmf = 
-					//.snf = "SNMF"
-					//.snf = "SNBF"
-					if let (Ok(()),Ok(()))=(std::io::Read::read_exact(&mut input, &mut first_8),std::io::Seek::rewind(&mut input)){
-						//
-						if let Some(Ok((indexed_model_instances,spawn_point)))={
-							match &first_8[0..4]{
-								b"<rob"=>{
-									match match &first_8[4..8]{
-										b"lox!"=>rbx_binary::from_reader(input).map_err(|e|format!("{:?}",e)),
-										b"lox "=>rbx_xml::from_reader(input,rbx_xml::DecodeOptions::default()).map_err(|e|format!("{:?}",e)),
-										other=>Err(format!("Unknown Roblox file type {:?}",other)),
-									}{
-										Ok(dom)=>Some(load_roblox::generate_indexed_models_roblox(dom)),
-										Err(e)=>{
-											println!("Error loading roblox file:{:?}",e);
-											None
-										},
-									}
-								},
-								//b"VBSP"=>load_valve::generate_indexed_models_valve(input),
-								//b"SNFM"=>sniffer::generate_indexed_models(input),
-								//b"SNFB"=>sniffer::load_bot(input),
-								_=>None,
-							}
-						}{
-							//if generate_indexed_models succeeds, clear the previous ones
-							self.models.clear();
-							self.physics.models.clear();
-							self.generate_model_physics(&indexed_model_instances);
-							self.generate_model_graphics(device,queue,indexed_model_instances);
-							//manual reset
-							let time=self.physics.time;
-							instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
-								time,
-								instruction: body::PhysicsInstruction::SetSpawnPosition(spawn_point),
-							});
-							instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
-								time,
-								instruction: body::PhysicsInstruction::Input(body::InputInstruction::Reset),
-							});
-						}else{
-							println!("No modeldatas were generated");
-						}
-					}else{
-						println!("Failed to read first 8 bytes and seek back to beginning of file.");
-					}
-				}else{
-					println!("Could not open file");
-				}
-			},
+			winit::event::WindowEvent::DroppedFile(path) => self.load_file(path,device,queue),
 			winit::event::WindowEvent::KeyboardInput {
 				input:winit::event::KeyboardInput{state, virtual_keycode,..},
 				..
