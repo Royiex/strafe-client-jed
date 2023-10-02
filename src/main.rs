@@ -161,7 +161,7 @@ impl GraphicsData {
 		//the models received here are supposed to be tightly packed, i.e. no code needs to check if two models are using the same groups.
 		let indexed_models_len=indexed_models.models.len();
 		let mut unique_texture_models=Vec::with_capacity(indexed_models_len);
-		for mut model in indexed_models.models.drain(..){
+		for mut model in indexed_models.models.into_iter(){
 			//convert ModelInstance into ModelGraphicsInstance
 			let instances:Vec<ModelGraphicsInstance>=model.instances.iter().map(|instance|{
 				ModelGraphicsInstance{
@@ -200,7 +200,7 @@ impl GraphicsData {
 		}
 		//de-index models
 		let mut models=Vec::with_capacity(unique_texture_models.len());
-		for model in unique_texture_models.drain(..){
+		for model in unique_texture_models.into_iter(){
 			let mut vertices = Vec::new();
 			let mut index_from_vertex = std::collections::HashMap::new();//::<IndexedVertex,usize>
 			let mut entities = Vec::new();
@@ -243,7 +243,7 @@ impl GraphicsData {
 		let uniform_buffer_binding_size=<GraphicsData as framework::Example>::required_limits().max_uniform_buffer_binding_size as usize;
 		let chunk_size=uniform_buffer_binding_size/MODEL_BUFFER_SIZE_BYTES;
 		self.models.reserve(models.len());
-		for model in models.drain(..) {
+		for model in models.into_iter() {
 			instance_count+=model.instances.len();
 			for instances_chunk in model.instances.rchunks(chunk_size){
 				model_count+=1;

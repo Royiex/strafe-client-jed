@@ -206,7 +206,7 @@ pub fn generate_partial_unit_cube(face_descriptions:CubeFaceDescription)->crate:
 	let mut groups=Vec::new();
 	let mut transforms=Vec::new();
 	//note that on a cube every vertex is guaranteed to be unique, so there's no need to hash them against existing vertices.
-	for (face,face_description) in face_descriptions.iter(){
+	for (face,face_description) in face_descriptions.into_iter(){
 		//assume that scanning short lists is faster than hashing.
 		let transform_index=if let Some(transform_index)=transforms.iter().position(|&transform|transform==face_description.transform){
 			transform_index
@@ -321,7 +321,7 @@ pub fn generate_partial_unit_wedge(face_descriptions:WedgeFaceDescription)->crat
 	let mut groups=Vec::new();
 	let mut transforms=Vec::new();
 	//note that on a cube every vertex is guaranteed to be unique, so there's no need to hash them against existing vertices.
-	for (face,face_description) in face_descriptions.iter(){
+	for (face,face_description) in face_descriptions.into_iter(){
 		//assume that scanning short lists is faster than hashing.
 		let transform_index=if let Some(transform_index)=transforms.iter().position(|&transform|transform==face_description.transform){
 			transform_index
@@ -433,7 +433,7 @@ pub fn generate_partial_unit_cornerwedge(face_descriptions:CornerWedgeFaceDescri
 	let mut groups=Vec::new();
 	let mut transforms=Vec::new();
 	//note that on a cube every vertex is guaranteed to be unique, so there's no need to hash them against existing vertices.
-	for (face,face_description) in face_descriptions.iter(){
+	for (face,face_description) in face_descriptions.into_iter(){
 		//assume that scanning short lists is faster than hashing.
 		let transform_index=if let Some(transform_index)=transforms.iter().position(|&transform|transform==face_description.transform){
 			transform_index
