@@ -159,6 +159,7 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 					continue;
 				}
 
+				//TODO: also detect "CylinderMesh" etc here
 				let shape=match &object.class[..]{
 					"Part"=>{
 						if let Some(rbx_dom_weak::types::Variant::Enum(shape))=object.properties.get("Shape"){
@@ -186,38 +187,6 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 					}
 				};
 
-				//TODO: also detect "CylinderMesh" etc here
-				let mut face_map=std::collections::HashMap::new();
-				match shape{
-					primitives::Primitives::Cube => {
-						face_map.insert(0,0);//Right
-						face_map.insert(1,1);//Top
-						face_map.insert(2,2);//Back
-						face_map.insert(3,3);//Left
-						face_map.insert(4,4);//Bottom
-						face_map.insert(5,5);//Front
-					},
-					primitives::Primitives::Wedge => {
-						face_map.insert(0,0);//Right
-						face_map.insert(1,1);//Top -> TopFront (some surf maps put surf textures on the Top face)
-						face_map.insert(2,1);//Front -> TopFront
-						face_map.insert(3,2);//Back
-						face_map.insert(4,3);//Left
-						face_map.insert(5,4);//Bottom
-					},
-					primitives::Primitives::CornerWedge => {
-						//Right -> None
-						face_map.insert(1,0);//Top
-						//Back -> None
-						face_map.insert(3,1);//Right
-						face_map.insert(4,2);//Bottom
-						face_map.insert(5,3);//Front
-					},
-					//do not support textured spheres/cylinders imported from roblox
-					//this can be added later, there are some maps that use it
-					primitives::Primitives::Sphere
-					|primitives::Primitives::Cylinder => (),
-				}
 				//use the biggest one and cut it down later...
 				let mut part_texture_description:RobloxPartDescription=[None,None,None,None,None,None];
 				temp_objects.clear();
@@ -245,7 +214,7 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 									texture_id
 								};
 								let normal_id=normalid.to_u32();
-								if let Some(&face)=face_map.get(&normal_id){
+								if normal_id<6{
 									let mut roblox_texture_transform=RobloxTextureTransform::default();
 									let mut roblox_texture_color=glam::Vec4::ONE;
 									if decal.class=="Texture"{
@@ -269,7 +238,7 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 												3=>(size.z,size.y),//left
 												4=>(size.x,size.z),//bottom
 												5=>(size.x,size.y),//front
-												_=>(1.,1.),
+												_=>panic!("unreachable"),
 											};
 											roblox_texture_transform=RobloxTextureTransform{
 												offset_u:*ox/(*sx),offset_v:*oy/(*sy),
@@ -278,7 +247,7 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 											roblox_texture_color=glam::vec4(decal_color3.r,decal_color3.g,decal_color3.b,1.0-*decal_transparency);
 										}
 									}
-									part_texture_description[face]=Some(RobloxFaceTextureDescription{
+									part_texture_description[normal_id as usize]=Some(RobloxFaceTextureDescription{
 										texture:texture_id,
 										color:roblox_texture_color,
 										transform:roblox_texture_transform,
@@ -296,9 +265,9 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 					primitives::Primitives::Sphere=>RobloxBasePartDescription::Sphere,
 					primitives::Primitives::Cube=>RobloxBasePartDescription::Part([f0,f1,f2,f3,f4,f5]),
 					primitives::Primitives::Cylinder=>RobloxBasePartDescription::Cylinder,
-					//HAHAHA
-					primitives::Primitives::Wedge=>RobloxBasePartDescription::Wedge([f0,f1,f2,f3,f4]),
-					primitives::Primitives::CornerWedge=>RobloxBasePartDescription::CornerWedge([f0,f1,f2,f3]),
+					//use front face texture first and use top face texture as a fallback
+					primitives::Primitives::Wedge=>RobloxBasePartDescription::Wedge([f0,if f2.is_some(){f2}else{f1},f3,f4,f5]),
+					primitives::Primitives::CornerWedge=>RobloxBasePartDescription::CornerWedge([f1,f3,f4,f5]),
 				};
 				//make new model if unit cube has not been crated before
 				let model_id=if let Some(&model_id)=model_id_from_description.get(&basepart_texture_description){
