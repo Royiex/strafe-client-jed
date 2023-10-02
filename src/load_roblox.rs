@@ -1,5 +1,3 @@
-use crate::model::{IndexedModelInstances,ModelInstance};
-
 use crate::primitives;
 
 fn class_is_a(class: &str, superclass: &str) -> bool {
@@ -111,7 +109,7 @@ enum RobloxBasePartDescription{
 	Wedge(RobloxWedgeDescription),
 	CornerWedge(RobloxCornerWedgeDescription),
 }
-pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(IndexedModelInstances,glam::Vec3), Box<dyn std::error::Error>>{
+pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::IndexedModelInstances{
 	//IndexedModelInstances includes textures
 	let mut spawn_point=glam::Vec3::ZERO;
 
@@ -335,15 +333,16 @@ pub fn generate_indexed_models_roblox(dom:rbx_dom_weak::WeakDom) -> Result<(Inde
 					});
 					model_id
 				};
-				indexed_models[model_id].instances.push(ModelInstance {
+				indexed_models[model_id].instances.push(crate::model::ModelInstance {
 					transform:model_transform,
 					color:glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
 				});
 			}
 		}
 	}
-	Ok((IndexedModelInstances{
+	crate::model::IndexedModelInstances{
 		textures:asset_id_from_texture_id.iter().map(|t|t.to_string()).collect(),
 		models:indexed_models,
-	},spawn_point))
+		spawn_point,
+	}
 }

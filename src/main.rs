@@ -769,6 +769,7 @@ impl framework::Example for GraphicsData {
 		let indexed_model_instances=model::IndexedModelInstances{
 			textures:Vec::new(),
 			models:indexed_models,
+			spawn_point:glam::Vec3::Y*50.0,
 		};
 		graphics.generate_model_physics(&indexed_model_instances);
 		graphics.generate_model_graphics(&device,&queue,indexed_model_instances);
@@ -795,7 +796,7 @@ impl framework::Example for GraphicsData {
 			//.snf = "SNBF"
 			if let (Ok(()),Ok(()))=(std::io::Read::read_exact(&mut input, &mut first_8),std::io::Seek::rewind(&mut input)){
 				//
-				if let Some(Ok((indexed_model_instances,spawn_point)))={
+				if let Some(indexed_model_instances)={
 					match &first_8[0..4]{
 						b"<rob"=>{
 							match match &first_8[4..8]{
@@ -803,19 +804,23 @@ impl framework::Example for GraphicsData {
 								b"lox "=>rbx_xml::from_reader(input,rbx_xml::DecodeOptions::default()).map_err(|e|format!("{:?}",e)),
 								other=>Err(format!("Unknown Roblox file type {:?}",other)),
 							}{
-								Ok(dom)=>Some(load_roblox::generate_indexed_models_roblox(dom)),
+								Ok(dom)=>Some(load_roblox::generate_indexed_models(dom)),
 								Err(e)=>{
 									println!("Error loading roblox file:{:?}",e);
 									None
 								},
 							}
 						},
-						//b"VBSP"=>load_valve::generate_indexed_models_valve(input),
-						//b"SNFM"=>sniffer::generate_indexed_models(input),
-						//b"SNFB"=>sniffer::load_bot(input),
-						_=>None,
+						//b"VBSP"=>Some(load_bsp::generate_indexed_models(input)),
+						//b"SNFM"=>Some(sniffer::generate_indexed_models(input)),
+						//b"SNFB"=>Some(sniffer::load_bot(input)),
+						other=>{
+							println!("loser file {:?}",other);
+							None
+						},
 					}
 				}{
+					let spawn_point=indexed_model_instances.spawn_point;
 					//if generate_indexed_models succeeds, clear the previous ones
 					self.models.clear();
 					self.physics.models.clear();

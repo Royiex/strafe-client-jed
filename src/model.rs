@@ -63,6 +63,7 @@ pub struct IndexedModelInstances{
 	pub textures:Vec<String>,//RenderPattern
 	pub models:Vec<IndexedModel>,
 	//object_index for spawns, triggers etc?
+	pub spawn_point:glam::Vec3,
 }
 
 pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:[f32;4]) -> Vec<IndexedModel>{
