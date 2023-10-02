@@ -771,6 +771,11 @@ impl framework::Example for GraphicsData {
 		graphics.generate_model_physics(&indexed_model_instances);
 		graphics.generate_model_graphics(&device,&queue,indexed_model_instances);
 
+		let args:Vec<String>=std::env::args().collect();
+		if args.len()==2{
+			graphics.load_file(std::path::PathBuf::from(&args[1]), device, queue);
+		}
+
 		return graphics;
 	}
 
