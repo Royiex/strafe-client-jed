@@ -868,16 +868,16 @@ impl framework::Example for GraphicsData {
 					winit::event::ElementState::Released => false,
 				};
 				if let Some(input_instruction)=match keycode {
-					17 => Some(InputInstruction::MoveForward(s)),//W
-					30 => Some(InputInstruction::MoveLeft(s)),//A
-					31 => Some(InputInstruction::MoveBack(s)),//S
-					32 => Some(InputInstruction::MoveRight(s)),//D
-					18 => Some(InputInstruction::MoveUp(s)),//E
-					16 => Some(InputInstruction::MoveDown(s)),//Q
-					57 => Some(InputInstruction::Jump(s)),//Space
-					44 => Some(InputInstruction::Zoom(s)),//Z
-					19 => if s{Some(InputInstruction::Reset)}else{None},//R
-					1  => {
+					17=>Some(InputInstruction::MoveForward(s)),//W
+					30=>Some(InputInstruction::MoveLeft(s)),//A
+					31=>Some(InputInstruction::MoveBack(s)),//S
+					32=>Some(InputInstruction::MoveRight(s)),//D
+					18=>Some(InputInstruction::MoveUp(s)),//E
+					16=>Some(InputInstruction::MoveDown(s)),//Q
+					57=>Some(InputInstruction::Jump(s)),//Space
+					44=>Some(InputInstruction::Zoom(s)),//Z
+					19=>if s{Some(InputInstruction::Reset)}else{None},//R
+					01=>{//Esc
 						if s{
 							self.manual_mouse_lock=false;
 							match window.set_cursor_grab(winit::window::CursorGrabMode::None){
@@ -919,8 +919,7 @@ impl framework::Example for GraphicsData {
 						None
 					},
 					_ => {println!("scancode {}",keycode);None},
-				}
-				{
+				}{
 					self.physics.run(time);
 					self.physics.process_instruction(TimedInstruction{
 						time,
@@ -948,7 +947,7 @@ impl framework::Example for GraphicsData {
 			winit::event::DeviceEvent::MouseWheel {
 			    delta,
 			} => {
-				println!("mousewheel{:?}",delta);
+				println!("mousewheel {:?}",delta);
 				if false{//self.physics.style.use_scroll{
 					self.physics.run(time);
 					self.physics.process_instruction(TimedInstruction{
