@@ -10,6 +10,7 @@ mod zeroes;
 mod framework;
 mod primitives;
 mod instruction;
+mod load_bsp;
 mod load_roblox;
 
 struct Entity {
@@ -811,7 +812,7 @@ impl framework::Example for GraphicsData {
 								},
 							}
 						},
-						//b"VBSP"=>Some(load_bsp::generate_indexed_models(input)),
+						b"VBSP"=>Some(load_bsp::generate_indexed_models(input)),
 						//b"SNFM"=>Some(sniffer::generate_indexed_models(input)),
 						//b"SNFB"=>Some(sniffer::load_bot(input)),
 						other=>{
