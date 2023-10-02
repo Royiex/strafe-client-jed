@@ -861,6 +861,10 @@ impl framework::Example for GraphicsData {
 					_=>(),
 				}
 			},
+			winit::event::WindowEvent::Focused(state)=>{
+				//pause unpause
+				//recalculate pressed keys on focus
+			}
 			_=>(),
 		}
 	}
