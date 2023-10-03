@@ -257,28 +257,66 @@ fn get_control_dir(controls: u32) -> glam::Vec3{
 	return control_dir
 }
 
-pub struct PhysicsState {
-	pub body: Body,
-	pub hitbox_halfsize: glam::Vec3,
-	pub contacts: std::collections::HashSet::<RelativeCollision>,
+pub enum SetSpawnBehaviour{
+	None,
+	Trigger,
+	Teleport,
+}
+
+pub enum GameMechanicAttributes{
+	Platform{
+		spawn_id:u32,
+	},
+	SetSpawn{
+		spawn_id:u32,//which spawn to send to
+		force:bool,//allow setting to lower spawn id i.e. 7->3
+		behaviour:SetSpawnBehaviour
+	},
+	//Spawn(u32) NO! spawns are indexed in the map header instead of marked with attibutes
+}
+
+pub struct GameMechanicsState{
+	pub spawn_id:u32,
+	//jump_count:u32,
+}
+
+pub struct WorldState{
+	//all models
+	pub models:Vec<ModelPhysics>,
+	//indexed list spawns[mode][spawn_id]=model_id
+	pub spawns:Vec<Vec<u32>>,
+	//the spawn point is where you spawn when you load into the map.
+	//This is not the same as Reset which teleports you to Spawn0
+	pub spawn_point:glam::Vec3,
+}
+
+pub struct StyleModifiers{
+	pub keys_mask:u32,//keys which are unable to be activated
+	pub keys_held:u32,//keys which must be active to be able to strafe
+	pub mv:f32,
+	pub walk:WalkState,
+	pub walkspeed:f32,
+	pub friction:f32,
+	pub walk_accel:f32,
+	pub gravity:glam::Vec3,
+	pub strafe_tick_num:TIME,
+	pub strafe_tick_den:TIME,
+	pub hitbox_halfsize:glam::Vec3,
+}
+
+pub struct PhysicsState{
+	pub time:TIME,
+	pub body:Body,
+	pub world:WorldState,
+	pub game:GameMechanicsState,
+	pub style:StyleModifiers,
+	pub contacts:std::collections::HashSet::<RelativeCollision>,
 	//pub intersections: Vec<ModelId>,
-	pub models: Vec<ModelPhysics>,
 	//camera must exist in state because wormholes modify the camera, also camera punch
-	pub camera: Camera,
-	pub mouse_interpolation: MouseInterpolationState,
-	pub controls: u32,
-	pub time: TIME,
-	pub strafe_tick_num: TIME,
-	pub strafe_tick_den: TIME,
-	pub tick: u32,
-	pub mv: f32,
-	pub walk: WalkState,
-	pub walkspeed: f32,
-	pub friction: f32,
-	pub walk_accel:  f32,
-	pub gravity: glam::Vec3,
-	pub grounded: bool,
-	pub spawn_point: glam::Vec3,
+	pub camera:Camera,
+	pub mouse_interpolation:MouseInterpolationState,
+	pub controls:u32,
+	pub grounded:bool,
 }
 
 #[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
