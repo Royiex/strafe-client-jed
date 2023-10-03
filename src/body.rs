@@ -97,6 +97,8 @@ enum MouseInterpolation {
 	First,//just checks the last value
 	Lerp,//lerps between
 }
+
+//hey dumbass just use a delta
 pub struct MouseInterpolationState {
 	interpolation: MouseInterpolation,
 	time0: TIME,
