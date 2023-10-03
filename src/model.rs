@@ -56,13 +56,16 @@ pub struct ModelGraphicsInstance{
 	pub color:glam::Vec4,
 }
 pub struct ModelInstance{
+	//pub id:u64,//this does not actually help with map fixes resimulating bots, they must always be resimulated
 	pub transform:glam::Affine3A,
-	pub color:glam::Vec4,
+	pub color:glam::Vec4,//transparency is in here
+	pub attributes:CollisionAttributes,
 }
 pub struct IndexedModelInstances{
 	pub textures:Vec<String>,//RenderPattern
 	pub models:Vec<IndexedModel>,
-	//object_index for spawns, triggers etc?
+	//may make this into an object later.
+	pub stages:Vec<StageDescription>,
 	pub spawn_point:glam::Vec3,
 }
 //stage description referencing flattened ids is spooky, but the map loading is meant to be deterministic.
@@ -169,6 +172,14 @@ pub enum CollisionAttributes{
 		intersecting:IntersectingAttributes,
 		general:GameMechanicAttributes,
 	},
+}
+impl CollisionAttributes{
+	pub fn contact() -> Self {
+		Self::Contact{
+			contacting:ContactingAttributes::default(),
+			general:GameMechanicAttributes::default()
+		}
+	}
 }
 
 pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:[f32;4]) -> Vec<IndexedModel>{

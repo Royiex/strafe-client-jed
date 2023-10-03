@@ -451,13 +451,21 @@ pub struct ModelPhysics {
 }
 
 impl ModelPhysics {
-	pub fn from_model(model:&crate::model::IndexedModel,model_transform:glam::Affine3A) -> Self {
+	fn from_model_transform_attributes(model:&crate::model::IndexedModel,transform:&glam::Affine3A,attributes:PhysicsCollisionAttributes)->Self{
 		let mut aabb=Aabb::new();
 		for indexed_vertex in &model.unique_vertices {
-			aabb.grow(model_transform.transform_point3(glam::Vec3::from_array(model.unique_pos[indexed_vertex.pos as usize])));
+			aabb.grow(transform.transform_point3(glam::Vec3::from_array(model.unique_pos[indexed_vertex.pos as usize])));
 		}
 		Self{
 			mesh:aabb,
+			attributes,
+		}
+	}
+	pub fn from_model(model:&crate::model::IndexedModel,instance:&crate::model::ModelInstance) -> Option<Self> {
+		match &instance.attributes{
+			crate::model::CollisionAttributes::Decoration=>None,
+			crate::model::CollisionAttributes::Contact{contacting,general}=>Some(ModelPhysics::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Contact{contacting:contacting.clone(),general:general.clone()})),
+			crate::model::CollisionAttributes::Intersect{intersecting,general}=>None,//Some(ModelPhysics::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Intersecting{intersecting,general})),
 		}
 	}
 	pub fn unit_vertices(&self) -> [glam::Vec3;8] {

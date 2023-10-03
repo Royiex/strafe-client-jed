@@ -88,7 +88,9 @@ impl GraphicsData {
 		for model in &indexed_models.models{
 			//make aabb and run vertices to get realistic bounds
 			for model_instance in &model.instances{
-				self.physics.models.push(body::ModelPhysics::from_model(&model,model_instance.transform));
+				if let Some(model_physics)=body::ModelPhysics::from_model(model,model_instance){
+					self.physics.models.push(model_physics);
+				}
 			}
 		}
 		println!("Physics Objects: {}",self.physics.models.len());
@@ -375,33 +377,46 @@ impl framework::Example for GraphicsData {
 		indexed_models[0].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(10.,0.,-10.)),
 			color:glam::Vec4::ONE,
+			attributes:model::CollisionAttributes::contact(),
 		});
 		//quad monkeys
 		indexed_models[1].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,10.)),
 			color:glam::Vec4::ONE,
+			attributes:model::CollisionAttributes::contact(),
 		});
 		indexed_models[1].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,10.)),
 			color:glam::vec4(1.0,0.0,0.0,1.0),
+			attributes:model::CollisionAttributes::contact(),
 		});
 		indexed_models[1].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,20.)),
 			color:glam::vec4(0.0,1.0,0.0,1.0),
+			attributes:model::CollisionAttributes::contact(),
 		});
 		indexed_models[1].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,20.)),
 			color:glam::vec4(0.0,0.0,1.0,1.0),
+			attributes:model::CollisionAttributes::contact(),
+		});
+		//decorative monkey
+		indexed_models[1].instances.push(ModelInstance{
+			transform:glam::Affine3A::from_translation(glam::vec3(15.,10.,15.)),
+			color:glam::vec4(0.5,0.5,0.5,0.5),
+			attributes:model::CollisionAttributes::Decoration,
 		});
 		//teapot
 		indexed_models[2].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_scale_rotation_translation(glam::vec3(0.5, 1.0, 0.2),glam::quat(-0.22248298016985793,-0.839457167990537,-0.05603504040830783,-0.49261857546227916),glam::vec3(-10.,7.,10.)),
 			color:glam::Vec4::ONE,
+			attributes:model::CollisionAttributes::contact(),
 		});
 		//ground
 		indexed_models[3].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(0.,0.,0.))*glam::Affine3A::from_scale(glam::vec3(160.0, 1.0, 160.0)),
 			color:glam::Vec4::ONE,
+			attributes:model::CollisionAttributes::contact(),
 		});
 
 		let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -513,6 +528,7 @@ impl framework::Example for GraphicsData {
 			controls: 0,
 			world:body::WorldState{},
 			game:body::GameMechanicsState::default(),
+			stages:Vec::new(),
 		};
 
 		//load textures
@@ -768,6 +784,7 @@ impl framework::Example for GraphicsData {
 			textures:Vec::new(),
 			models:indexed_models,
 			spawn_point:glam::Vec3::Y*50.0,
+			stages:Vec::new(),
 		};
 		graphics.generate_model_physics(&indexed_model_instances);
 		graphics.generate_model_graphics(&device,&queue,indexed_model_instances);
