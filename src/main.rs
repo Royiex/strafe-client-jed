@@ -93,7 +93,7 @@ impl GraphicsData {
 		}
 		println!("Physics Objects: {}",self.physics.models.len());
 	}
-	fn generate_model_graphics(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,mut indexed_models:model::IndexedModelInstances){
+	fn generate_model_graphics(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,indexed_models:model::IndexedModelInstances){
 		//generate texture view per texture
 
 		//idk how to do this gooder lol
@@ -174,7 +174,7 @@ impl GraphicsData {
 			//check each group, if it's using a new texture then make a new clone of the model
 			let id=unique_texture_models.len();
 			let mut unique_textures=Vec::new();
-			for group in model.groups.drain(..){
+			for group in model.groups.into_iter(){
 				//ignore zero coppy optimization for now
 				let texture_index=if let Some(texture_index)=unique_textures.iter().position(|&texture|texture==group.texture){
 					texture_index
@@ -238,7 +238,7 @@ impl GraphicsData {
 				texture:model.texture,
 			});
 		}
-		//drain the modeldata vec so entities can be /moved/ to models.entities
+		//.into_iter() the modeldata vec so entities can be /moved/ to models.entities
 		let mut model_count=0;
 		let mut instance_count=0;
 		let uniform_buffer_binding_size=<GraphicsData as framework::Example>::required_limits().max_uniform_buffer_binding_size as usize;

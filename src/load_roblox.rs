@@ -150,7 +150,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 					glam::Vec3::new(size.x,size.y,size.z)/2.0
 				);
 				if object.name=="MapStart"{
-					spawn_point=model_transform.transform_point3(glam::Vec3::Y)+glam::vec3(0.0,2.5,0.0);
+					spawn_point=model_transform.transform_point3(-glam::Vec3::Y)+glam::vec3(0.0,2.5+0.1,0.0);
 					println!("Found MapStart{:?}",spawn_point);
 				}
 				if *transparency==1.0 {
