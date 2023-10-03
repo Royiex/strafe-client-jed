@@ -30,6 +30,64 @@ fn get_texture_refs(dom:&rbx_dom_weak::WeakDom) -> Vec<rbx_dom_weak::types::Ref>
 	//next class
 	objects
 }
+fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3)->crate::model::CollisionAttributes{
+	let mut general=crate::model::GameMechanicAttributes::default();
+	let mut intersecting=crate::model::IntersectingAttributes::default();
+	let mut contacting=crate::model::ContactingAttributes::default();
+	match name{
+		// "Water"=>intersecting.water=Some(crate::model::IntersectingWater::default()),
+		// "Accelerator"=>(),
+		// "MapFinish"=>(),
+		// "MapAnticheat"=>(),
+		"Platform"=>general.stage_element=Some(crate::model::GameMechanicStageElement{
+			mode_id:0,
+			stage_id:0,
+			force:false,
+			behaviour:crate::model::StageElementBehaviour::Platform,
+		}),
+		other=>{
+			let regman=lazy_regex::regex!(r"^(Force)?(SpawnAt|Trigger|Teleport|Platform)(\d+)$");
+			if let Some(captures) = regman.captures(other) {
+				general.stage_element=Some(crate::model::GameMechanicStageElement{
+					mode_id:0,
+					stage_id:captures[3].parse::<u32>().unwrap(),
+					force:match captures.get(1){
+						Some(m)=>m.as_str()=="Force",
+						None=>false,
+					},
+					behaviour:match &captures[2]{
+						"SpawnAt"=>crate::model::StageElementBehaviour::SpawnAt,
+						"Trigger"=>crate::model::StageElementBehaviour::Trigger,
+						"Teleport"=>crate::model::StageElementBehaviour::Teleport,
+						"Platform"=>crate::model::StageElementBehaviour::Platform,
+						_=>panic!("regex[2] messed up bad"),
+					}
+				})
+				
+			}
+		}
+	}
+	//need some way to skip this
+	if velocity!=glam::Vec3::ZERO{
+		general.booster=Some(crate::model::GameMechanicBooster{velocity});
+	}
+	match can_collide{
+		true=>{
+			match name{
+				//"Bounce"=>(),
+				"Surf"=>contacting.surf=Some(crate::model::ContactingSurf{}),
+				"Ladder"=>contacting.ladder=Some(crate::model::ContactingLadder{sticky:true}),
+				other=>{
+					//REGEX!!!!
+					//Jump#
+					//WormholeIn#
+				}
+			}
+			return crate::model::CollisionAttributes::Contact{contacting,general};
+		},
+		false=>return crate::model::CollisionAttributes::Decoration,
+	}
+}
 
 struct RobloxAssetId(u64);
 struct RobloxAssetIdParseErr;
@@ -113,6 +171,8 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 	//IndexedModelInstances includes textures
 	let mut spawn_point=glam::Vec3::ZERO;
 
+	let mut stages=Vec::new();
+
 	let mut indexed_models=Vec::new();
 	let mut model_id_from_description=std::collections::HashMap::<RobloxBasePartDescription,usize>::new();
 
@@ -127,13 +187,17 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 			if let (
 					Some(rbx_dom_weak::types::Variant::CFrame(cf)),
 					Some(rbx_dom_weak::types::Variant::Vector3(size)),
+					Some(rbx_dom_weak::types::Variant::Vector3(velocity)),
 					Some(rbx_dom_weak::types::Variant::Float32(transparency)),
 					Some(rbx_dom_weak::types::Variant::Color3uint8(color3)),
+					Some(rbx_dom_weak::types::Variant::Bool(can_collide)),
 				) = (
 					object.properties.get("CFrame"),
 					object.properties.get("Size"),
+					object.properties.get("Velocity"),
 					object.properties.get("Transparency"),
 					object.properties.get("Color"),
+					object.properties.get("CanCollide"),
 				)
 			{
 				let model_transform=glam::Affine3A::from_translation(
@@ -333,6 +397,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 				indexed_models[model_id].instances.push(crate::model::ModelInstance {
 					transform:model_transform,
 					color:glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
+					attributes:get_attributes(&object.name,*can_collide,glam::vec3(velocity.x,velocity.y,velocity.z)),
 				});
 			}
 		}
@@ -341,5 +406,6 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 		textures:asset_id_from_texture_id.iter().map(|t|t.to_string()).collect(),
 		models:indexed_models,
 		spawn_point,
+		stages,
 	}
 }
