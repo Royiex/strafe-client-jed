@@ -65,6 +65,111 @@ pub struct IndexedModelInstances{
 	//object_index for spawns, triggers etc?
 	pub spawn_point:glam::Vec3,
 }
+//stage description referencing flattened ids is spooky, but the map loading is meant to be deterministic.
+pub struct StageDescription{
+	pub start:u32,//start=model_id
+	pub spawns:Vec<u32>,//spawns[spawn_id]=model_id
+	pub ordered_checkpoints:Vec<u32>,//ordered_checkpoints[checkpoint_id]=model_id
+	pub unordered_checkpoints:Vec<u32>,//unordered_checkpoints[checkpoint_id]=model_id
+}
+
+//you have this effect while in contact
+#[derive(Clone)]
+pub struct ContactingSurf{}
+#[derive(Clone)]
+pub struct ContactingLadder{
+	pub sticky:bool
+}
+//you have this effect while intersecting
+#[derive(Clone)]
+pub struct IntersectingWater{
+	pub viscosity:i64,
+	pub density:i64,
+	pub current:glam::Vec3,
+}
+#[derive(Clone)]
+pub struct IntersectingAccelerator{
+	pub acceleration:glam::Vec3
+}
+//All models can be given these attributes
+#[derive(Clone)]
+pub struct GameMechanicJumpLimit{
+	pub count:u32,
+}
+#[derive(Clone)]
+pub struct GameMechanicBooster{
+	pub velocity:glam::Vec3,
+}
+#[derive(Clone)]
+pub enum ZoneBehaviour{
+	//Start is indexed
+	//Checkpoints are indexed
+	Finish,
+	Anitcheat,
+}
+#[derive(Clone)]
+pub struct GameMechanicZone{
+	pub mode_id:u32,
+	pub behaviour:ZoneBehaviour,
+}
+// enum TrapCondition{
+// 	FasterThan(i64),
+// 	SlowerThan(i64),
+// 	InRange(i64,i64),
+// 	OutsideRange(i64,i64),
+// }
+#[derive(Clone)]
+pub enum StageElementBehaviour{
+ 	//Spawn,//The behaviour of stepping on a spawn setting the spawnid
+ 	SpawnAt,
+ 	Trigger,
+ 	Teleport,
+ 	Platform,
+ 	//Speedtrap(TrapCondition),//Acts as a trigger with a speed condition
+}
+#[derive(Clone)]
+pub struct GameMechanicStageElement{
+	pub mode_id:u32,
+	pub stage_id:u32,//which spawn to send to
+	pub force:bool,//allow setting to lower spawn id i.e. 7->3
+	pub behaviour:StageElementBehaviour
+}
+#[derive(Clone)]
+pub struct GameMechanicWormhole{//(position,angles)*=origin.transform.inverse()*destination.transform
+	pub model_id:u32,
+}
+#[derive(Default,Clone)]
+pub struct GameMechanicAttributes{
+	pub jump_limit:Option<GameMechanicJumpLimit>,
+	pub booster:Option<GameMechanicBooster>,
+	pub zone:Option<GameMechanicZone>,
+	pub stage_element:Option<GameMechanicStageElement>,
+	pub wormhole:Option<GameMechanicWormhole>,//stage_element and wormhole are in conflict
+}
+#[derive(Default,Clone)]
+pub struct ContactingAttributes{
+	pub elasticity:Option<u32>,//[1/2^32,1] 0=None (elasticity+1)/2^32
+	//friction?
+	pub surf:Option<ContactingSurf>,
+	pub ladder:Option<ContactingLadder>,
+}
+#[derive(Default,Clone)]
+pub struct IntersectingAttributes{
+	pub water:Option<IntersectingWater>,
+	pub accelerator:Option<IntersectingAccelerator>,
+}
+//Spawn(u32) NO! spawns are indexed in the map header instead of marked with attibutes
+pub enum CollisionAttributes{
+	Decoration,//visual only
+	Contact{//track whether you are contacting the object
+		contacting:ContactingAttributes,
+		general:GameMechanicAttributes,
+	},
+	Intersect{//track whether you are intersecting the object
+		intersecting:IntersectingAttributes,
+		general:GameMechanicAttributes,
+	},
+}
 
 pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:[f32;4]) -> Vec<IndexedModel>{
 	let mut unique_vertex_index = std::collections::HashMap::<obj::IndexTuple,u32>::new();
