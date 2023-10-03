@@ -96,11 +96,18 @@ struct GameMechanicZone{
 	mode_id:u32,
 	behaviour:ZoneBehaviour
 }
+// enum TrapCondition{
+// 	FasterThan(i64),
+// 	SlowerThan(i64),
+// 	InRange(i64,i64),
+// 	OutsideRange(i64,i64),
+// }
 enum StageElementBehaviour{
 	SpawnAt,
 	Trigger,
 	Teleport,
 	Platform,
+	//Speedtrap(TrapCondition),//Acts as a trigger with a speed condition
 }
 struct GameMechanicStageElement{
 	mode_id:u32,
