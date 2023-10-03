@@ -220,43 +220,6 @@ impl Camera {
 	}
 }
 
-const CONTROL_MOVEFORWARD:u32 = 0b00000001;
-const CONTROL_MOVEBACK:u32 = 0b00000010;
-const CONTROL_MOVERIGHT:u32 = 0b00000100;
-const CONTROL_MOVELEFT:u32 = 0b00001000;
-const CONTROL_MOVEUP:u32 = 0b00010000;
-const CONTROL_MOVEDOWN:u32 = 0b00100000;
-const CONTROL_JUMP:u32 = 0b01000000;
-const CONTROL_ZOOM:u32 = 0b10000000;
-
-const FORWARD_DIR:glam::Vec3 = glam::Vec3::new(0.0,0.0,-1.0);
-const RIGHT_DIR:glam::Vec3 = glam::Vec3::new(1.0,0.0,0.0);
-const UP_DIR:glam::Vec3 = glam::Vec3::new(0.0,1.0,0.0);
-
-fn get_control_dir(controls: u32) -> glam::Vec3{
-	//don't get fancy just do it
-	let mut control_dir:glam::Vec3 = glam::Vec3::new(0.0,0.0,0.0);
-	if controls & CONTROL_MOVEFORWARD == CONTROL_MOVEFORWARD {
-		control_dir+=FORWARD_DIR;
-	}
-	if controls & CONTROL_MOVEBACK == CONTROL_MOVEBACK {
-		control_dir+=-FORWARD_DIR;
-	}
-	if controls & CONTROL_MOVELEFT == CONTROL_MOVELEFT {
-		control_dir+=-RIGHT_DIR;
-	}
-	if controls & CONTROL_MOVERIGHT == CONTROL_MOVERIGHT {
-		control_dir+=RIGHT_DIR;
-	}
-	if controls & CONTROL_MOVEUP == CONTROL_MOVEUP {
-		control_dir+=UP_DIR;
-	}
-	if controls & CONTROL_MOVEDOWN == CONTROL_MOVEDOWN {
-		control_dir+=-UP_DIR;
-	}
-	return control_dir
-}
-
 pub struct GameMechanicsState{
 	pub spawn_id:u32,
 	//jump_counts:HashMap<u32,u32>,
@@ -286,7 +249,7 @@ pub struct StyleModifiers{
 impl std::default::Default for StyleModifiers{
 	fn default() -> Self {
 		Self{
-			controls_mask: !0&!(CONTROL_MOVEUP|CONTROL_MOVEDOWN),
+			controls_mask: !0&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held: 0,
 			strafe_tick_num: 100,//100t
 			strafe_tick_den: 1_000_000_000,
@@ -297,6 +260,54 @@ impl std::default::Default for StyleModifiers{
 			walkspeed: 18.0,
 			hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
 		}
+	}
+}
+impl StyleModifiers{
+	const CONTROL_MOVEFORWARD:u32 = 0b00000001;
+	const CONTROL_MOVEBACK:u32 = 0b00000010;
+	const CONTROL_MOVERIGHT:u32 = 0b00000100;
+	const CONTROL_MOVELEFT:u32 = 0b00001000;
+	const CONTROL_MOVEUP:u32 = 0b00010000;
+	const CONTROL_MOVEDOWN:u32 = 0b00100000;
+	const CONTROL_JUMP:u32 = 0b01000000;
+	const CONTROL_ZOOM:u32 = 0b10000000;
+
+	const FORWARD_DIR:glam::Vec3 = glam::Vec3::NEG_Z;
+	const RIGHT_DIR:glam::Vec3 = glam::Vec3::X;
+	const UP_DIR:glam::Vec3 = glam::Vec3::Y;
+
+	fn get_control(&self,control:u32,controls:u32)->bool{
+		controls&self.controls_mask&control!=0
+	}
+
+	fn get_control_dir(&self,controls:u32)->glam::Vec3{
+		//don't get fancy just do it
+		let mut control_dir:glam::Vec3 = glam::Vec3::ZERO;
+		//Disallow strafing if held controls are not held
+		if controls&self.controls_held!=self.controls_held{
+			return control_dir;
+		}
+		//Apply mask after held check so you can require non-allowed keys to be held for some reason
+		let controls=controls&self.controls_mask;
+		if controls & Self::CONTROL_MOVEFORWARD == Self::CONTROL_MOVEFORWARD {
+			control_dir+=Self::FORWARD_DIR;
+		}
+		if controls & Self::CONTROL_MOVEBACK == Self::CONTROL_MOVEBACK {
+			control_dir+=-Self::FORWARD_DIR;
+		}
+		if controls & Self::CONTROL_MOVELEFT == Self::CONTROL_MOVELEFT {
+			control_dir+=-Self::RIGHT_DIR;
+		}
+		if controls & Self::CONTROL_MOVERIGHT == Self::CONTROL_MOVERIGHT {
+			control_dir+=Self::RIGHT_DIR;
+		}
+		if controls & Self::CONTROL_MOVEUP == Self::CONTROL_MOVEUP {
+			control_dir+=Self::UP_DIR;
+		}
+		if controls & Self::CONTROL_MOVEDOWN == Self::CONTROL_MOVEDOWN {
+			control_dir+=-Self::UP_DIR;
+		}
+		return control_dir
 	}
 }
 
@@ -1000,7 +1011,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				let mut v=self.body.velocity;
 				self.contact_constrain_velocity(&mut v);
 				self.body.velocity=v;
-				if self.grounded&&self.controls&CONTROL_JUMP!=0{
+				if self.grounded&&self.style.get_control(StyleModifiers::CONTROL_JUMP,self.controls){
 					self.jump();
 				}
 				self.refresh_walk_target();
@@ -1021,7 +1032,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			},
 			PhysicsInstruction::StrafeTick => {
 				let camera_mat=self.camera.simulate_move_rotation_y(self.mouse_interpolation.interpolated_position(self.time).x-self.mouse_interpolation.mouse0.x);
-				let control_dir=camera_mat*get_control_dir(self.controls);
+				let control_dir=camera_mat*self.style.get_control_dir(self.controls);
 				let d=self.body.velocity.dot(control_dir);
 				if d<self.style.mv {
 					let mut v=self.body.velocity+(self.style.mv-d)*control_dir;
@@ -1047,21 +1058,21 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						self.camera.angles=self.camera.simulate_move_angles(self.mouse_interpolation.mouse1-self.mouse_interpolation.mouse0);
 						self.mouse_interpolation.move_mouse(self.time,m);
 					},
-					InputInstruction::MoveForward(s) => self.set_control(CONTROL_MOVEFORWARD,s),
-					InputInstruction::MoveLeft(s) => self.set_control(CONTROL_MOVELEFT,s),
-					InputInstruction::MoveBack(s) => self.set_control(CONTROL_MOVEBACK,s),
-					InputInstruction::MoveRight(s) => self.set_control(CONTROL_MOVERIGHT,s),
-					InputInstruction::MoveUp(s) => self.set_control(CONTROL_MOVEUP,s),
-					InputInstruction::MoveDown(s) => self.set_control(CONTROL_MOVEDOWN,s),
+					InputInstruction::MoveForward(s) => self.set_control(StyleModifiers::CONTROL_MOVEFORWARD,s),
+					InputInstruction::MoveLeft(s) => self.set_control(StyleModifiers::CONTROL_MOVELEFT,s),
+					InputInstruction::MoveBack(s) => self.set_control(StyleModifiers::CONTROL_MOVEBACK,s),
+					InputInstruction::MoveRight(s) => self.set_control(StyleModifiers::CONTROL_MOVERIGHT,s),
+					InputInstruction::MoveUp(s) => self.set_control(StyleModifiers::CONTROL_MOVEUP,s),
+					InputInstruction::MoveDown(s) => self.set_control(StyleModifiers::CONTROL_MOVEDOWN,s),
 					InputInstruction::Jump(s) => {
-						self.set_control(CONTROL_JUMP,s);
+						self.set_control(StyleModifiers::CONTROL_JUMP,s);
 						if self.grounded{
 							self.jump();
 						}
 						refresh_walk_target_velocity=false;
 					},
 					InputInstruction::Zoom(s) => {
-						self.set_control(CONTROL_ZOOM,s);
+						self.set_control(StyleModifiers::CONTROL_ZOOM,s);
 						refresh_walk_target=false;
 					},
 					InputInstruction::Reset => {
@@ -1081,7 +1092,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					//calculate walk target velocity
 					if refresh_walk_target_velocity{
 						let camera_mat=self.camera.simulate_move_rotation_y(self.mouse_interpolation.interpolated_position(self.time).x-self.mouse_interpolation.mouse0.x);
-						let control_dir=camera_mat*get_control_dir(self.controls);
+						let control_dir=camera_mat*self.style.get_control_dir(self.controls);
 						self.walk.target_velocity=self.style.walkspeed*control_dir;
 					}
 					self.refresh_walk_target();
