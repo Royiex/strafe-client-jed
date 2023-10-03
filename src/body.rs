@@ -257,34 +257,23 @@ fn get_control_dir(controls: u32) -> glam::Vec3{
 	return control_dir
 }
 
-pub enum SetSpawnBehaviour{
-	None,
-	Trigger,
-	Teleport,
-}
-
-pub enum GameMechanicAttributes{
-	Platform{
-		spawn_id:u32,
-	},
-	SetSpawn{
-		spawn_id:u32,//which spawn to send to
-		force:bool,//allow setting to lower spawn id i.e. 7->3
-		behaviour:SetSpawnBehaviour
-	},
-	//Spawn(u32) NO! spawns are indexed in the map header instead of marked with attibutes
-}
-
 pub struct GameMechanicsState{
 	pub spawn_id:u32,
-	//jump_count:u32,
+	//jump_counts:HashMap<u32,u32>,
+}
+
+pub struct StageDescription{
+	pub start:u32,//start=model_id
+	pub spawns:Vec<u32>,//spawns[spawn_id]=model_id
+	pub ordered_checkpoints:Vec<u32>,//ordered_checkpoints[checkpoint_id]=model_id
+	pub unordered_checkpoints:Vec<u32>,//unordered_checkpoints[checkpoint_id]=model_id
 }
 
 pub struct WorldState{
 	//all models
 	pub models:Vec<ModelPhysics>,
-	//indexed list spawns[mode][spawn_id]=model_id
-	pub spawns:Vec<Vec<u32>>,
+	
+	pub stages:Vec<StageDescription>,
 	//the spawn point is where you spawn when you load into the map.
 	//This is not the same as Reset which teleports you to Spawn0
 	pub spawn_point:glam::Vec3,
@@ -432,6 +421,7 @@ pub struct ModelPhysics {
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
 	mesh: TreyMesh,
+	attributes:crate::model::CollisionAttributes,
 }
 
 impl ModelPhysics {

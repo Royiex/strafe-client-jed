@@ -66,6 +66,79 @@ pub struct IndexedModelInstances{
 	pub spawn_point:glam::Vec3,
 }
 
+//you have this effect while in contact
+struct ContactingSurf{}
+struct ContactingLadder{
+	sticky:bool
+}
+//you have this effect while intersecting
+struct IntersectingWater{
+	viscosity:i64,
+	density:i64,
+}
+struct IntersectingAccelerator{
+	acceleration:glam::I64Vec3
+}
+//All models can be given these attributes
+struct GameMechanicJumpLimit{
+	count:u32,
+}
+struct GameMechanicBooster{
+	velocity:glam::I64Vec3,
+}
+enum ZoneBehaviour{
+	//Start is indexed
+	//Checkpoints are indexed
+	Finish,
+	Anitcheat,
+}
+struct GameMechanicZone{
+	mode_id:u32,
+	behaviour:ZoneBehaviour
+}
+enum StageElementBehaviour{
+	SpawnAt,
+	Trigger,
+	Teleport,
+	Platform,
+}
+struct GameMechanicStageElement{
+	mode_id:u32,
+	stage_id:u32,//which spawn to send to
+	force:bool,//allow setting to lower spawn id i.e. 7->3
+	behaviour:StageElementBehaviour
+}
+struct GameMechanicWormhole{//(position,angles)*=origin.transform.inverse()*destination.transform
+	model_id:u32,
+}
+struct GameMechanicAttributes{
+	jump_limit:Option<GameMechanicJumpLimit>,
+	booster:Option<GameMechanicBooster>,
+	zone:Option<GameMechanicZone>,
+	stage_element:Option<GameMechanicStageElement>,
+	wormhole:Option<GameMechanicWormhole>,
+}
+struct ContactingAttributes{
+	surf:Option<ContactingSurf>,
+	ladder:Option<ContactingLadder>,
+}
+struct IntersectingAttibutes{
+	water:Option<IntersectingWater>,
+	accelerator:Option<IntersectingAccelerator>,
+}
+//Spawn(u32) NO! spawns are indexed in the map header instead of marked with attibutes
+pub enum CollisionAttributes{
+	Decoration,//visual only
+	Contact{//track whether you are contacting the object
+		contacting:ContactingAttributes,
+		general:GameMechanicAttributes,
+	},
+	Intersect{//track whether you are intersecting the object
+		intersecting:IntersectingAttibutes,
+		general:GameMechanicAttributes,
+	},
+}
+
 pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:[f32;4]) -> Vec<IndexedModel>{
 	let mut unique_vertex_index = std::collections::HashMap::<obj::IndexTuple,u32>::new();
 	return data.objects.iter().map(|object|{
