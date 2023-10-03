@@ -261,29 +261,20 @@ pub struct GameMechanicsState{
 	pub spawn_id:u32,
 	//jump_counts:HashMap<u32,u32>,
 }
-
-pub struct StageDescription{
-	pub start:u32,//start=model_id
-	pub spawns:Vec<u32>,//spawns[spawn_id]=model_id
-	pub ordered_checkpoints:Vec<u32>,//ordered_checkpoints[checkpoint_id]=model_id
-	pub unordered_checkpoints:Vec<u32>,//unordered_checkpoints[checkpoint_id]=model_id
+impl std::default::Default for GameMechanicsState{
+	fn default() -> Self {
+		Self{
+			spawn_id:0,
+		}
+	}
 }
 
-pub struct WorldState{
-	//all models
-	pub models:Vec<ModelPhysics>,
-	
-	pub stages:Vec<StageDescription>,
-	//the spawn point is where you spawn when you load into the map.
-	//This is not the same as Reset which teleports you to Spawn0
-	pub spawn_point:glam::Vec3,
-}
+pub struct WorldState{}
 
 pub struct StyleModifiers{
-	pub keys_mask:u32,//keys which are unable to be activated
-	pub keys_held:u32,//keys which must be active to be able to strafe
+	pub constrols_mask:u32,//constrols which are unable to be activated
+	pub constrols_held:u32,//constrols which must be active to be able to strafe
 	pub mv:f32,
-	pub walk:WalkState,
 	pub walkspeed:f32,
 	pub friction:f32,
 	pub walk_accel:f32,
@@ -292,11 +283,27 @@ pub struct StyleModifiers{
 	pub strafe_tick_den:TIME,
 	pub hitbox_halfsize:glam::Vec3,
 }
+impl std::default::Default for StyleModifiers{
+	fn default() -> Self {
+		Self{
+			constrols_mask: !0&!(CONTROL_MOVEUP|CONTROL_MOVEDOWN),
+			constrols_held: 0,
+			strafe_tick_num: 100,//100t
+			strafe_tick_den: 1_000_000_000,
+			gravity: glam::vec3(0.0,-100.0,0.0),
+			friction: 1.2,
+			walk_accel: 90.0,
+			mv: 2.7,
+			walkspeed: 18.0,
+			hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
+		}
+	}
+}
 
 pub struct PhysicsState{
 	pub time:TIME,
 	pub body:Body,
-	pub world:WorldState,
+	pub world:WorldState,//currently there is only one state the world can be in
 	pub game:GameMechanicsState,
 	pub style:StyleModifiers,
 	pub contacts:std::collections::HashSet::<RelativeCollision>,
@@ -305,7 +312,15 @@ pub struct PhysicsState{
 	pub camera:Camera,
 	pub mouse_interpolation:MouseInterpolationState,
 	pub controls:u32,
+	pub walk:WalkState,
 	pub grounded:bool,
+	//all models
+	pub models:Vec<ModelPhysics>,
+	
+	pub stages:Vec<crate::model::StageDescription>,
+	//the spawn point is where you spawn when you load into the map.
+	//This is not the same as Reset which teleports you to Spawn0
+	pub spawn_point:glam::Vec3,
 }
 
 #[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
@@ -417,11 +432,22 @@ impl Aabb {
 type TreyMeshFace = AabbFace;
 type TreyMesh = Aabb;
 
+enum PhysicsCollisionAttributes{
+	Contact{//track whether you are contacting the object
+		contacting:crate::model::ContactingAttributes,
+		general:crate::model::GameMechanicAttributes,
+	},
+	Intersect{//track whether you are intersecting the object
+		intersecting:crate::model::IntersectingAttributes,
+		general:crate::model::GameMechanicAttributes,
+	},
+}
+
 pub struct ModelPhysics {
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
 	mesh: TreyMesh,
-	attributes:crate::model::CollisionAttributes,
+	attributes:PhysicsCollisionAttributes,
 }
 
 impl ModelPhysics {
@@ -550,7 +576,7 @@ impl PhysicsState {
 	}
 	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		return Some(TimedInstruction{
-			time:(self.time*self.strafe_tick_num/self.strafe_tick_den+1)*self.strafe_tick_den/self.strafe_tick_num,
+			time:(self.time*self.style.strafe_tick_num/self.style.strafe_tick_den+1)*self.style.strafe_tick_den/self.style.strafe_tick_num,
 			//only poll the physics if there is a before and after mouse event
 			instruction:PhysicsInstruction::StrafeTick
 		});
@@ -600,7 +626,7 @@ impl PhysicsState {
 				self.body.acceleration=a;
 				self.walk.state=WalkEnum::Reached;
 			}else{
-				let accel=self.walk_accel.min(self.gravity.length()*self.friction);
+				let accel=self.style.walk_accel.min(self.style.gravity.length()*self.style.friction);
 				let time_delta=target_diff.length()/accel;
 				let mut a=target_diff/time_delta;
 				self.contact_constrain_acceleration(&mut a);
@@ -629,7 +655,7 @@ impl PhysicsState {
 	fn mesh(&self) -> TreyMesh {
 		let mut aabb=Aabb::new();
 		for vertex in Aabb::unit_vertices(){
-			aabb.grow(self.body.position+self.hitbox_halfsize*vertex);
+			aabb.grow(self.body.position+self.style.hitbox_halfsize*vertex);
 		}
 		aabb
 	}
@@ -973,7 +999,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			},
 			PhysicsInstruction::CollisionEnd(c) => {
 			    self.contacts.remove(&c);//remove contact before calling contact_constrain_acceleration
-				let mut a=self.gravity;
+				let mut a=self.style.gravity;
 				self.contact_constrain_acceleration(&mut a);
 				self.body.acceleration=a;
 				//check ground
@@ -989,8 +1015,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				let camera_mat=self.camera.simulate_move_rotation_y(self.mouse_interpolation.interpolated_position(self.time).x-self.mouse_interpolation.mouse0.x);
 				let control_dir=camera_mat*get_control_dir(self.controls);
 				let d=self.body.velocity.dot(control_dir);
-				if d<self.mv {
-					let mut v=self.body.velocity+(self.mv-d)*control_dir;
+				if d<self.style.mv {
+					let mut v=self.body.velocity+(self.style.mv-d)*control_dir;
 					self.contact_constrain_velocity(&mut v);
 					self.body.velocity=v;
 				}
@@ -1036,7 +1062,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						self.body.velocity=glam::Vec3::ZERO;
 						//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
 						self.contacts.clear();
-						self.body.acceleration=self.gravity;
+						self.body.acceleration=self.style.gravity;
 						self.walk.state=WalkEnum::Reached;
 						self.grounded=false;
 						refresh_walk_target=false;
@@ -1048,7 +1074,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					if refresh_walk_target_velocity{
 						let camera_mat=self.camera.simulate_move_rotation_y(self.mouse_interpolation.interpolated_position(self.time).x-self.mouse_interpolation.mouse0.x);
 						let control_dir=camera_mat*get_control_dir(self.controls);
-						self.walk.target_velocity=self.walkspeed*control_dir;
+						self.walk.target_velocity=self.style.walkspeed*control_dir;
 					}
 					self.refresh_walk_target();
 				}

@@ -503,22 +503,16 @@ impl framework::Example for GraphicsData {
 			spawn_point:glam::vec3(0.0,50.0,0.0),
 			body: body::Body::with_pva(glam::vec3(0.0,50.0,0.0),glam::vec3(0.0,0.0,0.0),glam::vec3(0.0,-100.0,0.0)),
 			time: 0,
-			tick: 0,
-			strafe_tick_num: 100,//100t
-			strafe_tick_den: 1_000_000_000,
-			gravity: glam::vec3(0.0,-100.0,0.0),
-			friction: 1.2,
-			walk_accel: 90.0,
-			mv: 2.7,
+			style:body::StyleModifiers::default(),
 			grounded: false,
-			walkspeed: 18.0,
 			contacts: std::collections::HashSet::new(),
 			models: Vec::new(),
 			walk: body::WalkState::new(),
-			hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
 			camera: body::Camera::from_offset(glam::vec3(0.0,4.5-2.5,0.0),(config.width as f32)/(config.height as f32)),
 			mouse_interpolation: body::MouseInterpolationState::new(),
 			controls: 0,
+			world:body::WorldState{},
+			game:body::GameMechanicsState::default(),
 		};
 
 		//load textures
