@@ -36,7 +36,7 @@ struct RobloxAssetIdParseErr;
 impl std::str::FromStr for RobloxAssetId {
 	type Err=RobloxAssetIdParseErr;
 	fn from_str(s: &str) -> Result<Self, Self::Err>{
-		let regman=regex::Regex::new(r"(\d+)$").unwrap();
+		let regman=lazy_regex::regex!(r"(\d+)$");
 		if let Some(captures) = regman.captures(s) {
 			if captures.len()==2{//captures[0] is all captures concatenated, and then each individual capture
 				if let Ok(id) = captures[0].parse::<u64>() {
