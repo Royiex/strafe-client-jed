@@ -812,7 +812,21 @@ impl framework::Example for GraphicsData {
 								},
 							}
 						},
-						b"VBSP"=>Some(load_bsp::generate_indexed_models(input)),
+						b"VBSP"=>{
+							let mut entire_file=Vec::new();
+							match std::io::Read::read_to_end(&mut input, &mut entire_file){
+								Ok(_)=>{
+									//haha yes this is a quake file what do you mean
+									entire_file[0]=b'I';
+									entire_file[4..8].copy_from_slice(&0x2ei32.to_le_bytes());
+									Some(load_bsp::generate_indexed_models(&mut std::io::Cursor::new(entire_file)))
+								},
+								Err(e)=>{
+									println!("Error loading \"valve\" file:{:?}",e);
+									None
+								},
+							}
+						},
 						//b"SNFM"=>Some(sniffer::generate_indexed_models(input)),
 						//b"SNFB"=>Some(sniffer::load_bot(input)),
 						other=>{
