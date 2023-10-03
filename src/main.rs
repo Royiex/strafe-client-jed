@@ -164,11 +164,15 @@ impl GraphicsData {
 		let mut unique_texture_models=Vec::with_capacity(indexed_models_len);
 		for mut model in indexed_models.models.into_iter(){
 			//convert ModelInstance into ModelGraphicsInstance
-			let instances:Vec<ModelGraphicsInstance>=model.instances.iter().map(|instance|{
-				ModelGraphicsInstance{
-					transform: glam::Mat4::from(instance.transform),
-					normal_transform: glam::Mat4::from(instance.transform.inverse()).transpose(),
-					color: instance.color,
+			let instances:Vec<ModelGraphicsInstance>=model.instances.into_iter().filter_map(|instance|{
+				if instance.color.w==0.0{
+					None
+				}else{
+					Some(ModelGraphicsInstance{
+						transform: glam::Mat4::from(instance.transform),
+						normal_transform: glam::Mat4::from(instance.transform.inverse()).transpose(),
+						color: instance.color,
+					})
 				}
 			}).collect();
 			//check each group, if it's using a new texture then make a new clone of the model

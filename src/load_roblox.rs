@@ -153,9 +153,6 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 					spawn_point=model_transform.transform_point3(-glam::Vec3::Y)+glam::vec3(0.0,2.5+0.1,0.0);
 					println!("Found MapStart{:?}",spawn_point);
 				}
-				if *transparency==1.0 {
-					continue;
-				}
 
 				//TODO: also detect "CylinderMesh" etc here
 				let shape=match &object.class[..]{
