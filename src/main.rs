@@ -11,6 +11,7 @@ mod framework;
 mod primitives;
 mod instruction;
 mod load_roblox;
+mod worker;
 
 struct Entity {
 	index_count: u32,

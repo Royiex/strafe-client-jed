@@ -1,21 +1,23 @@
 use std::thread;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc,Arc};
+use parking_lot::{Mutex,Condvar};
 
 struct Worker {
     id: usize,
-    receiver: Arc<Mutex<mpsc::Receiver<Task>>>,
+    receiver: Arc<(Mutex<mpsc::Receiver<Task>>, Condvar)>,
     is_active: Arc<Mutex<bool>>,
 }
 
 impl Worker {
-    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Task>>>, is_active: Arc<Mutex<bool>>) -> Worker {
+    fn new(id: usize, receiver: Arc<(Mutex<mpsc::Receiver<Task>>, Condvar)>, is_active: Arc<Mutex<bool>>) -> Worker {
         Worker { id, receiver, is_active }
     }
 
     fn start(self) {
         thread::spawn(move || {
             loop {
-                let task = self.receiver.lock().unwrap().recv();
+                let (ref lock, ref cvar) = &*self.receiver;
+                let task = lock.lock().unwrap().recv();
                 match task {
                     Ok(task) => {
                         println!("Worker {} got a task: {}", self.id, task);
@@ -29,7 +31,8 @@ impl Worker {
             }
 
             // Set is_active to false when the worker is done
-            *self.is_active.lock().unwrap() = false;
+            *self.is_active.lock() = false;
+            self.receiver.1.notify_all();
         });
     }
 }
@@ -38,7 +41,7 @@ type Task = String;
 
 fn main() {
     let (sender, receiver) = mpsc::channel::<Task>();
-    let receiver = Arc::new(Mutex::new(receiver));
+    let receiver = Arc::new((Mutex::new(receiver), Condvar::new()));
     let is_active = Arc::new(Mutex::new(true));
 
     // Create the first worker thread
@@ -60,7 +63,7 @@ fn main() {
     thread::sleep(std::time::Duration::from_secs(2));
 
     // Check if the first worker is still active
-    let is_first_worker_active = *is_active.lock().unwrap();
+    let is_first_worker_active = *is_active.lock();
 
     if !is_first_worker_active {
         // If the first worker is done, spawn a new worker
@@ -68,8 +71,8 @@ fn main() {
         new_worker.start();
         sender.send("New Task".to_string()).unwrap();
 
-        // Sleep to allow the new worker thread to process the task
-        thread::sleep(std::time::Duration::from_secs(2));
+        // Wait for the new worker to finish processing
+        let _ = receiver.1.wait_while(is_active.lock(), |&active| active);
     } else {
         println!("First worker is still active. Skipping new worker.");
     }
