@@ -1,17 +1,17 @@
 use std::{borrow::Cow, time::Instant};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 use model::{Vertex,ModelInstance,ModelGraphicsInstance};
-use body::{InputInstruction, PhysicsInstruction};
+use physics::{InputInstruction, PhysicsInstruction};
 use instruction::{TimedInstruction, InstructionConsumer};
 
-mod body;
 mod model;
 mod zeroes;
+mod worker;
+mod physics;
 mod framework;
 mod primitives;
 mod instruction;
 mod load_roblox;
-mod worker;
 
 struct Entity {
 	index_count: u32,
@@ -67,7 +67,7 @@ pub struct GlobalState{
 	start_time: std::time::Instant,
 	manual_mouse_lock:bool,
 	graphics:GraphicsState,
-	physics:body::PhysicsState,
+	physics:physics::PhysicsState,
 }
 
 impl GlobalState{
@@ -103,7 +103,7 @@ impl GlobalState{
 		for model in &indexed_models.models{
 			//make aabb and run vertices to get realistic bounds
 			for model_instance in &model.instances{
-				if let Some(model_physics)=body::ModelPhysics::from_model(model,model_instance){
+				if let Some(model_physics)=physics::ModelPhysics::from_model(model,model_instance){
 					let model_id=self.physics.models.len() as u32;
 					self.physics.models.push(model_physics);
 					for attr in &model_instance.temp_indexing{
@@ -408,7 +408,7 @@ fn get_instances_buffer_data(instances:&[ModelGraphicsInstance]) -> Vec<f32> {
 	raw
 }
 
-fn to_uniform_data(camera: &body::Camera, pos: glam::Vec3) -> [f32; 16 * 3 + 4] {
+fn to_uniform_data(camera: &physics::Camera, pos: glam::Vec3) -> [f32; 16 * 3 + 4] {
 	let proj=camera.proj();
 	let proj_inv = proj.inverse();
 	let view=camera.view(pos);
@@ -582,21 +582,21 @@ impl framework::Example for GlobalState {
 			source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
 		});
 
-		let physics = body::PhysicsState {
+		let physics = physics::PhysicsState {
 			spawn_point:glam::vec3(0.0,50.0,0.0),
-			body: body::Body::with_pva(glam::vec3(0.0,50.0,0.0),glam::vec3(0.0,0.0,0.0),glam::vec3(0.0,-100.0,0.0)),
+			body: physics::Body::with_pva(glam::vec3(0.0,50.0,0.0),glam::vec3(0.0,0.0,0.0),glam::vec3(0.0,-100.0,0.0)),
 			time: 0,
-			style:body::StyleModifiers::default(),
+			style:physics::StyleModifiers::default(),
 			grounded: false,
 			contacts: std::collections::HashMap::new(),
 			intersects: std::collections::HashMap::new(),
 			models: Vec::new(),
-			walk: body::WalkState::new(),
-			camera: body::Camera::from_offset(glam::vec3(0.0,4.5-2.5,0.0),(config.width as f32)/(config.height as f32)),
-			mouse_interpolation: body::MouseInterpolationState::new(),
+			walk: physics::WalkState::new(),
+			camera: physics::Camera::from_offset(glam::vec3(0.0,4.5-2.5,0.0),(config.width as f32)/(config.height as f32)),
+			mouse_interpolation: physics::MouseInterpolationState::new(),
 			controls: 0,
-			world:body::WorldState{},
-			game:body::GameMechanicsState::default(),
+			world:physics::WorldState{},
+			game:physics::GameMechanicsState::default(),
 			modes:Vec::new(),
 			mode_from_mode_id:std::collections::HashMap::new(),
 		};
@@ -921,7 +921,7 @@ impl framework::Example for GlobalState {
 					let time=self.physics.time;
 					instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
 						time,
-						instruction: body::PhysicsInstruction::Input(body::InputInstruction::Reset),
+						instruction: PhysicsInstruction::Input(InputInstruction::Reset),
 					});
 				}else{
 					println!("No modeldatas were generated");

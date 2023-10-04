@@ -1,11 +1,11 @@
 #[derive(Debug)]
 pub struct TimedInstruction<I> {
-	pub time: crate::body::TIME,
+	pub time: crate::physics::TIME,
 	pub instruction: I,
 }
 
 pub trait InstructionEmitter<I> {
-	fn next_instruction(&self, time_limit:crate::body::TIME) -> Option<TimedInstruction<I>>;
+	fn next_instruction(&self, time_limit:crate::physics::TIME) -> Option<TimedInstruction<I>>;
 }
 pub trait InstructionConsumer<I> {
 	fn process_instruction(&mut self, instruction:TimedInstruction<I>);
@@ -13,11 +13,11 @@ pub trait InstructionConsumer<I> {
 
 //PROPER PRIVATE FIELDS!!!
 pub struct InstructionCollector<I> {
-	time: crate::body::TIME,
+	time: crate::physics::TIME,
 	instruction: Option<I>,
 }
 impl<I> InstructionCollector<I> {
-	pub fn new(time:crate::body::TIME) -> Self {
+	pub fn new(time:crate::physics::TIME) -> Self {
 		Self{
 			time,
 			instruction:None
