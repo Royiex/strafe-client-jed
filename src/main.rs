@@ -914,14 +914,11 @@ impl framework::Example for GlobalState {
 					self.physics.clear();
 					self.graphics.clear();
 					self.physics.game.stage_id=0;
+					self.physics.spawn_point=spawn_point;
 					self.generate_model_physics(&indexed_model_instances);
 					self.generate_model_graphics(device,queue,indexed_model_instances);
 					//manual reset
 					let time=self.physics.time;
-					instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
-						time,
-						instruction: body::PhysicsInstruction::SetSpawnPosition(spawn_point),
-					});
 					instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
 						time,
 						instruction: body::PhysicsInstruction::Input(body::InputInstruction::Reset),

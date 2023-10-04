@@ -14,8 +14,6 @@ pub enum PhysicsInstruction {
 	// )
 	//InputInstructions conditionally activate RefreshWalkTarget (by doing what SetWalkTargetVelocity used to do and then flagging it)
 	Input(InputInstruction),
-	//temp
-	SetSpawnPosition(glam::Vec3),
 }
 #[derive(Debug)]
 pub enum InputInstruction {
@@ -1014,16 +1012,12 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		match &ins.instruction {
 			PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),//dodge time for mouse movement
 			PhysicsInstruction::Input(_)
-			|PhysicsInstruction::SetSpawnPosition(_)
 			|PhysicsInstruction::ReachWalkTargetVelocity
 			|PhysicsInstruction::CollisionStart(_)
 			|PhysicsInstruction::CollisionEnd(_)
 			|PhysicsInstruction::StrafeTick => self.advance_time(ins.time),
 		}
 		match ins.instruction {
-			PhysicsInstruction::SetSpawnPosition(position)=>{
-				self.spawn_point=position;
-			}
 			PhysicsInstruction::CollisionStart(c) => {
 				let model=c.model(&self.models).unwrap();
 				match &model.attributes{
