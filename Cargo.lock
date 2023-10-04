@@ -1692,6 +1692,7 @@ dependencies = [
  "lazy-regex",
  "log",
  "obj",
+ "parking_lot",
  "pollster",
  "rbx_binary",
  "rbx_dom_weak",
