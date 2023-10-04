@@ -1,6 +1,6 @@
 use std::thread;
 use std::sync::{mpsc,Arc};
-use parking_lot::{Mutex,Condvar};
+use parking_lot::Mutex;
 
 //The goal here is to have a worker thread that parks itself when it runs out of work.
 //The worker thread publishes the result of its work back to the worker object for every item in the work queue.
@@ -8,7 +8,7 @@ use parking_lot::{Mutex,Condvar};
 
 struct Worker<Task:Send,Value:Clone> {
     sender: mpsc::Sender<Task>,
-    receiver: Arc<(Mutex<mpsc::Receiver<Task>>,Condvar)>,
+    receiver: Arc<Mutex<mpsc::Receiver<Task>>>,
     value:Arc<Mutex<Value>>,
 }
 
@@ -17,36 +17,31 @@ impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
         let (sender, receiver) = mpsc::channel::<Task>();
         let ret=Self {
             sender,
-            receiver:Arc::new((Mutex::new(receiver),Condvar::new())),
+            receiver:Arc::new(Mutex::new(receiver)),
             value:Arc::new(Mutex::new(value)),
         };
         let receiver=ret.receiver.clone();
         let value=ret.value.clone();
         thread::spawn(move || {
-            loop{
-                loop {
-                    match receiver.0.lock().recv() {
-                        Ok(task) => {
-                            println!("Worker got a task");
-                            // Process the task
-                            *value.lock()=f(task);
-                        }
-                        Err(_) => {
-                            println!("Worker stopping.",);
-                            break;
-                        }
+            loop {
+                match receiver.lock().recv() {
+                    Ok(task) => {
+                        println!("Worker got a task");
+                        // Process the task
+                        *value.lock()=f(task);
+                    }
+                    Err(_) => {
+                        println!("Worker stopping.",);
+                        break;
                     }
                 }
-                receiver.1.wait(&mut receiver.0.lock());
             }
         });
         ret
     }
 
     fn send(&self,task:Task)->Result<(), mpsc::SendError<Task>>{
-        let ret=self.sender.send(task);
-        self.receiver.1.notify_one();
-        ret
+        self.sender.send(task)
     }
 
     fn grab_clone(&self)->Value{
@@ -54,7 +49,7 @@ impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
     }
 }
 
-#[test]
+#[test]//How to run this test with printing: cargo test --release -- --nocapture
 fn test_worker() {
     println!("hiiiii");
     // Create the worker thread
@@ -85,4 +80,7 @@ fn test_worker() {
     worker.send(task).unwrap();
 
     println!("value={:?}",worker.grab_clone());
+
+    // wait long enough to see print from final task
+    thread::sleep(std::time::Duration::from_secs(1));
 }
