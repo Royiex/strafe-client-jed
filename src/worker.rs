@@ -51,15 +51,15 @@ impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
 fn test_worker() {
 	println!("hiiiii");
 	// Create the worker thread
-	let worker = Worker::new(crate::body::Body::with_pva(glam::Vec3::ZERO,glam::Vec3::ZERO,glam::Vec3::ZERO),
-		|_|crate::body::Body::with_pva(glam::Vec3::ONE,glam::Vec3::ONE,glam::Vec3::ONE)
+	let worker = Worker::new(crate::physics::Body::with_pva(glam::Vec3::ZERO,glam::Vec3::ZERO,glam::Vec3::ZERO),
+		|_|crate::physics::Body::with_pva(glam::Vec3::ONE,glam::Vec3::ONE,glam::Vec3::ONE)
 	);
 
 	// Send tasks to the worker
 	for i in 0..5 {
 		let task = crate::instruction::TimedInstruction{
 			time:0,
-			instruction:crate::body::PhysicsInstruction::StrafeTick,
+			instruction:crate::physics::PhysicsInstruction::StrafeTick,
 		};
 		worker.send(task).unwrap();
 	}
@@ -73,7 +73,7 @@ fn test_worker() {
 	// Send a new task
 	let task = crate::instruction::TimedInstruction{
 		time:0,
-		instruction:crate::body::PhysicsInstruction::StrafeTick,
+		instruction:crate::physics::PhysicsInstruction::StrafeTick,
 	};
 	worker.send(task).unwrap();
 
