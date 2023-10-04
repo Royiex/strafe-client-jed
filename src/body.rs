@@ -45,20 +45,20 @@ trait MyHash{
 	fn hash(&self) -> u64;
 }
 impl MyHash for Body {
-    fn hash(&self) -> u64 {
+	fn hash(&self) -> u64 {
 		let mut hasher=std::collections::hash_map::DefaultHasher::new();
-        for &el in self.position.as_ref().iter() {
-            std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
-        }
-        for &el in self.velocity.as_ref().iter() {
-            std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
-        }
-        for &el in self.acceleration.as_ref().iter() {
-             std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
-        }
-        std::hash::Hasher::write(&mut hasher, self.time.to_ne_bytes().as_slice());
+		for &el in self.position.as_ref().iter() {
+			std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
+		}
+		for &el in self.velocity.as_ref().iter() {
+			std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
+		}
+		for &el in self.acceleration.as_ref().iter() {
+			 std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
+		}
+		std::hash::Hasher::write(&mut hasher, self.time.to_ne_bytes().as_slice());
 		return std::hash::Hasher::finish(&hasher);//hash check to see if walk target is valid
-    }
+	}
 }
 
 pub enum MoveRestriction {
@@ -80,9 +80,9 @@ impl InputState {
 }
 impl crate::instruction::InstructionEmitter<InputInstruction> for InputState{
 	fn next_instruction(&self, time_limit:crate::body::TIME) -> Option<TimedInstruction<InputInstruction>> {
-	    //this is polled by PhysicsState for actions like Jump
-	    //no, it has to be the other way around. physics is run up until the jump instruction, and then the jump instruction is pushed.
-	    self.queue.get(0)
+		//this is polled by PhysicsState for actions like Jump
+		//no, it has to be the other way around. physics is run up until the jump instruction, and then the jump instruction is pushed.
+		self.queue.get(0)
 	}
 }
 impl crate::instruction::InstructionConsumer<InputInstruction> for InputState{
@@ -171,12 +171,12 @@ pub struct Camera {
 
 #[inline]
 fn mat3_from_rotation_y_f64(angle: f64) -> glam::Mat3 {
-    let (sina, cosa) = angle.sin_cos();
-    glam::Mat3::from_cols(
-        glam::Vec3::new(cosa as f32, 0.0, -sina as f32),
-        glam::Vec3::Y,
-        glam::Vec3::new(sina as f32, 0.0, cosa as f32),
-    )
+	let (sina, cosa) = angle.sin_cos();
+	glam::Mat3::from_cols(
+		glam::Vec3::new(cosa as f32, 0.0, -sina as f32),
+		glam::Vec3::Y,
+		glam::Vec3::new(sina as f32, 0.0, cosa as f32),
+	)
 }
 #[inline]
 fn perspective_rh(fov_x_slope: f32, fov_y_slope: f32, z_near: f32, z_far: f32) -> glam::Mat4 {
@@ -192,11 +192,11 @@ fn perspective_rh(fov_x_slope: f32, fov_y_slope: f32, z_near: f32, z_far: f32) -
 impl Camera {
 	pub fn from_offset(offset:glam::Vec3,aspect:f32) -> Self {
 		Self{
-		    offset,
-		    angles: glam::DVec2::ZERO,
-		    fov: glam::vec2(aspect,1.0),
-		    sensitivity: glam::dvec2(1.0/6144.0,1.0/6144.0),
-    		time: 0,
+			offset,
+			angles: glam::DVec2::ZERO,
+			fov: glam::vec2(aspect,1.0),
+			sensitivity: glam::dvec2(1.0/16384.0,1.0/16384.0),
+			time: 0,
 		}
 	}
 	fn simulate_move_angles(&self, delta: glam::IVec2) -> glam::DVec2 {
@@ -221,13 +221,13 @@ impl Camera {
 }
 
 pub struct GameMechanicsState{
-	pub spawn_id:u32,
+	pub stage_id:u32,
 	//jump_counts:HashMap<u32,u32>,
 }
 impl std::default::Default for GameMechanicsState{
 	fn default() -> Self {
 		Self{
-			spawn_id:0,
+			stage_id:0,
 		}
 	}
 }
@@ -317,7 +317,8 @@ pub struct PhysicsState{
 	pub world:WorldState,//currently there is only one state the world can be in
 	pub game:GameMechanicsState,
 	pub style:StyleModifiers,
-	pub contacts:std::collections::HashSet::<RelativeCollision>,
+	pub contacts:std::collections::HashMap::<u32,RelativeCollision>,
+	pub intersects:std::collections::HashMap::<u32,RelativeCollision>,
 	//pub intersections: Vec<ModelId>,
 	//camera must exist in state because wormholes modify the camera, also camera punch
 	pub camera:Camera,
@@ -329,6 +330,7 @@ pub struct PhysicsState{
 	pub models:Vec<ModelPhysics>,
 	
 	pub modes:Vec<crate::model::ModeDescription>,
+	pub mode_from_mode_id:std::collections::HashMap::<u32,usize>,
 	//the spawn point is where you spawn when you load into the map.
 	//This is not the same as Reset which teleports you to Spawn0
 	pub spawn_point:glam::Vec3,
@@ -458,6 +460,7 @@ pub struct ModelPhysics {
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
 	mesh: TreyMesh,
+	transform:glam::Affine3A,
 	attributes:PhysicsCollisionAttributes,
 }
 
@@ -470,13 +473,14 @@ impl ModelPhysics {
 		Self{
 			mesh:aabb,
 			attributes,
+			transform:transform.clone(),
 		}
 	}
 	pub fn from_model(model:&crate::model::IndexedModel,instance:&crate::model::ModelInstance) -> Option<Self> {
 		match &instance.attributes{
-			crate::model::CollisionAttributes::Decoration=>None,
 			crate::model::CollisionAttributes::Contact{contacting,general}=>Some(ModelPhysics::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Contact{contacting:contacting.clone(),general:general.clone()})),
-			crate::model::CollisionAttributes::Intersect{intersecting,general}=>None,//Some(ModelPhysics::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Intersecting{intersecting,general})),
+			crate::model::CollisionAttributes::Intersect{intersecting,general}=>Some(ModelPhysics::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Intersect{intersecting:intersecting.clone(),general:general.clone()})),
+			crate::model::CollisionAttributes::Decoration=>None,
 		}
 	}
 	pub fn unit_vertices(&self) -> [glam::Vec3;8] {
@@ -556,6 +560,15 @@ impl PhysicsState {
 	pub fn clear(&mut self){
 		self.models.clear();
 		self.modes.clear();
+		self.contacts.clear();
+		self.intersects.clear();
+	}
+	pub fn get_mode(&self,mode_id:u32)->Option<&crate::model::ModeDescription>{
+		if let Some(&mode)=self.mode_from_mode_id.get(&mode_id){
+			self.modes.get(mode)
+		}else{
+			None
+		}
 	}
 	//tickless gaming
 	pub fn run(&mut self, time_limit:TIME){
@@ -583,7 +596,7 @@ impl PhysicsState {
 	}
 
 	fn contact_constrain_velocity(&self,velocity:&mut glam::Vec3){
-		for contact in self.contacts.iter() {
+		for (_,contact) in &self.contacts {
 			let n=contact.normal(&self.models);
 			let d=velocity.dot(n);
 			if d<0f32{
@@ -592,7 +605,7 @@ impl PhysicsState {
 		}
 	}
 	fn contact_constrain_acceleration(&self,acceleration:&mut glam::Vec3){
-		for contact in self.contacts.iter() {
+		for (_,contact) in &self.contacts {
 			let n=contact.normal(&self.models);
 			let d=acceleration.dot(n);
 			if d<0f32{
@@ -965,12 +978,19 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 		//JUST POLLING!!! NO MUTATION
 		let mut collector = crate::instruction::InstructionCollector::new(time_limit);
 		//check for collision stop instructions with curent contacts
-		for collision_data in self.contacts.iter() {
+		for (_,collision_data) in &self.contacts {
 			collector.collect(self.predict_collision_end(self.time,time_limit,collision_data));
 		}
+		// for collision_data in &self.intersects{
+		// 	collector.collect(self.predict_collision_end2(self.time,time_limit,collision_data));
+		// }
 		//check for collision start instructions (against every part in the game with no optimization!!)
 		for i in 0..self.models.len() {
-			collector.collect(self.predict_collision_start(self.time,time_limit,i as u32));
+			let i=i as u32;
+			if self.contacts.contains_key(&i)||self.intersects.contains_key(&i){
+				continue;
+			}
+			collector.collect(self.predict_collision_start(self.time,time_limit,i));
 		}
 		if self.grounded {
 			//walk maintenance
@@ -986,56 +1006,109 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 	fn process_instruction(&mut self, ins:TimedInstruction<PhysicsInstruction>) {
 		match &ins.instruction {
-		    PhysicsInstruction::StrafeTick => (),
-		    PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),
-		    _=>println!("{:?}",ins),
+			PhysicsInstruction::StrafeTick => (),
+			PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),
+			_=>println!("{:?}",ins),
 		}
 		//selectively update body
 		match &ins.instruction {
-		    PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),//dodge time for mouse movement
-    		PhysicsInstruction::Input(_)
-    		|PhysicsInstruction::SetSpawnPosition(_)
-		    |PhysicsInstruction::ReachWalkTargetVelocity
-		    |PhysicsInstruction::CollisionStart(_)
-		    |PhysicsInstruction::CollisionEnd(_)
-		    |PhysicsInstruction::StrafeTick => self.advance_time(ins.time),
+			PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),//dodge time for mouse movement
+			PhysicsInstruction::Input(_)
+			|PhysicsInstruction::SetSpawnPosition(_)
+			|PhysicsInstruction::ReachWalkTargetVelocity
+			|PhysicsInstruction::CollisionStart(_)
+			|PhysicsInstruction::CollisionEnd(_)
+			|PhysicsInstruction::StrafeTick => self.advance_time(ins.time),
 		}
 		match ins.instruction {
 			PhysicsInstruction::SetSpawnPosition(position)=>{
 				self.spawn_point=position;
 			}
 			PhysicsInstruction::CollisionStart(c) => {
-				//check ground
-				match &c.face {
-			        AabbFace::Top => {
-			        	//ground
-			        	self.grounded=true;
-			        },
-			        _ => (),
-			    }
-			    self.contacts.insert(c);
-				//flatten v
-				let mut v=self.body.velocity;
-				self.contact_constrain_velocity(&mut v);
-				self.body.velocity=v;
-				if self.grounded&&self.style.get_control(StyleModifiers::CONTROL_JUMP,self.controls){
-					self.jump();
+				let model=c.model(&self.models).unwrap();
+				match &model.attributes{
+					PhysicsCollisionAttributes::Contact{contacting,general}=>{
+						match &contacting.surf{
+							Some(surf)=>println!("I'm surfing!"),
+							None=>match &c.face {
+								AabbFace::Top => {
+									//ground
+									self.grounded=true;
+								},
+								_ => (),
+							},
+						}
+						match &general.booster{
+							Some(booster)=>self.body.velocity+=booster.velocity,
+							None=>(),
+						}
+						match &general.stage_element{
+							Some(stage_element)=>{
+								if stage_element.force||self.game.stage_id<stage_element.stage_id{
+									self.game.stage_id=stage_element.stage_id;
+								}
+								match stage_element.behaviour{
+									crate::model::StageElementBehaviour::SpawnAt=>(),
+									crate::model::StageElementBehaviour::Trigger
+									|crate::model::StageElementBehaviour::Teleport=>{
+										//TODO make good
+										if let Some(mode)=self.get_mode(stage_element.mode_id){
+											if let Some(&spawn)=mode.get_spawn_model_id(self.game.stage_id){
+												if let Some(model)=self.models.get(spawn as usize){
+													self.body.position=model.transform.transform_point3(glam::Vec3::Y)+glam::Vec3::Y*(self.style.hitbox_halfsize.y+0.1);
+													//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
+													self.contacts.clear();
+													self.intersects.clear();
+													self.body.acceleration=self.style.gravity;
+													self.walk.state=WalkEnum::Reached;
+													self.grounded=false;
+												}else{println!("bad1");}
+											}else{println!("bad2");}
+										}else{println!("bad3");}
+									},
+									crate::model::StageElementBehaviour::Platform=>(),
+								}
+							},
+							None=>(),
+						}
+						//check ground
+						self.contacts.insert(c.model,c);
+						//flatten v
+						let mut v=self.body.velocity;
+						self.contact_constrain_velocity(&mut v);
+						self.body.velocity=v;
+						if self.grounded&&self.style.get_control(StyleModifiers::CONTROL_JUMP,self.controls){
+							self.jump();
+						}
+						self.refresh_walk_target();
+					},
+					PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
+						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
+						self.intersects.insert(c.model,c);
+					},
 				}
-				self.refresh_walk_target();
 			},
 			PhysicsInstruction::CollisionEnd(c) => {
-			    self.contacts.remove(&c);//remove contact before calling contact_constrain_acceleration
-				let mut a=self.style.gravity;
-				self.contact_constrain_acceleration(&mut a);
-				self.body.acceleration=a;
-				//check ground
-				match &c.face {
-			        AabbFace::Top => {
-			        	self.grounded=false;
-			        },
-			        _ => (),
-			    }
-				self.refresh_walk_target();
+				let model=c.model(&self.models).unwrap();
+				match &model.attributes{
+					PhysicsCollisionAttributes::Contact{contacting,general}=>{
+						self.contacts.remove(&c.model);//remove contact before calling contact_constrain_acceleration
+						let mut a=self.style.gravity;
+						self.contact_constrain_acceleration(&mut a);
+						self.body.acceleration=a;
+						//check ground
+						match &c.face {
+							AabbFace::Top => {
+								self.grounded=false;
+							},
+							_ => (),
+						}
+						self.refresh_walk_target();
+					},
+					PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
+						self.intersects.remove(&c.model);
+					},
+				}
 			},
 			PhysicsInstruction::StrafeTick => {
 				let camera_mat=self.camera.simulate_move_rotation_y(self.mouse_interpolation.interpolated_position(self.time).x-self.mouse_interpolation.mouse0.x);

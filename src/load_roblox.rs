@@ -30,7 +30,7 @@ fn get_texture_refs(dom:&rbx_dom_weak::WeakDom) -> Vec<rbx_dom_weak::types::Ref>
 	//next class
 	objects
 }
-fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3)->crate::model::CollisionAttributes{
+fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3,force_intersecting:bool)->crate::model::CollisionAttributes{
 	let mut general=crate::model::GameMechanicAttributes::default();
 	let mut intersecting=crate::model::IntersectingAttributes::default();
 	let mut contacting=crate::model::ContactingAttributes::default();
@@ -46,7 +46,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3)->crate::model:
 			behaviour:crate::model::StageElementBehaviour::Platform,
 		}),
 		other=>{
-			if let Some(captures)=lazy_regex::regex!(r"^(Force)?(SpawnAt|Trigger|Teleport|Platform)(\d+)$")
+			if let Some(captures)=lazy_regex::regex!(r"^(Force)?(Spawn|SpawnAt|Trigger|Teleport|Platform)(\d+)$")
 			.captures(other){
 				general.stage_element=Some(crate::model::GameMechanicStageElement{
 					mode_id:0,
@@ -56,7 +56,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3)->crate::model:
 						None=>false,
 					},
 					behaviour:match &captures[2]{
-						"SpawnAt"=>crate::model::StageElementBehaviour::SpawnAt,
+						"Spawn"|"SpawnAt"=>crate::model::StageElementBehaviour::SpawnAt,
 						"Trigger"=>crate::model::StageElementBehaviour::Trigger,
 						"Teleport"=>crate::model::StageElementBehaviour::Teleport,
 						"Platform"=>crate::model::StageElementBehaviour::Platform,
@@ -89,9 +89,21 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3)->crate::model:
 					//WormholeIn#
 				}
 			}
-			return crate::model::CollisionAttributes::Contact{contacting,general};
+			crate::model::CollisionAttributes::Contact{contacting,general}
 		},
-		false=>return crate::model::CollisionAttributes::Decoration,
+		false=>if force_intersecting
+		||general.jump_limit.is_some()
+		||general.booster.is_some()
+		||general.zone.is_some()
+		||general.stage_element.is_some()
+		||general.wormhole.is_some()
+		||intersecting.water.is_some()
+		||intersecting.accelerator.is_some()
+		{
+			crate::model::CollisionAttributes::Intersect{intersecting,general}
+		}else{
+			crate::model::CollisionAttributes::Decoration
+		},
 	}
 }
 
@@ -219,6 +231,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 				);
 
 				//push TempIndexedAttributes
+				let mut force_intersecting=false;
 				let mut temp_indexing_attributes=Vec::new();
 				if let Some(attr)=match &object.name[..]{
 					"MapStart"=>{
@@ -227,11 +240,11 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 					},
 					"UnorderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::UnorderedCheckpoint{mode_id:0}),
 					other=>{
-						let regman=lazy_regex::regex!(r"^(BonusStart|Spawn|OrderedCheckpoint)(\d+)$");
+						let regman=lazy_regex::regex!(r"^(BonusStart|Spawn|ForceSpawn|OrderedCheckpoint)(\d+)$");
 						if let Some(captures) = regman.captures(other) {
 							match &captures[1]{
 								"BonusStart"=>Some(crate::model::TempIndexedAttributes::Start{mode_id:captures[2].parse::<u32>().unwrap()}),
-								"Spawn"=>Some(crate::model::TempIndexedAttributes::Spawn{mode_id:0,stage_id:captures[2].parse::<u32>().unwrap()}),
+								"Spawn"|"ForceSpawn"=>Some(crate::model::TempIndexedAttributes::Spawn{mode_id:0,stage_id:captures[2].parse::<u32>().unwrap()}),
 								"OrderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::OrderedCheckpoint{mode_id:0,checkpoint_id:captures[2].parse::<u32>().unwrap()}),
 								_=>None,
 							}
@@ -240,6 +253,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 						}
 					}
 				}{
+					force_intersecting=true;
 					temp_indexing_attributes.push(attr);
 				}
 
@@ -354,17 +368,17 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 					primitives::Primitives::Cylinder=>RobloxBasePartDescription::Cylinder,
 					//use front face texture first and use top face texture as a fallback
 					primitives::Primitives::Wedge=>RobloxBasePartDescription::Wedge([
-						f0,//Wedge::Right
-						if f5.is_some(){f5}else{f1},//Wedge::TopFront
-						f2,//Wedge::Back
-						f3,//Wedge::Left
-						f4,//Wedge::Bottom
+						f0,//Cube::Right->Wedge::Right
+						if f5.is_some(){f5}else{f1},//Cube::Front|Cube::Top->Wedge::TopFront
+						f2,//Cube::Back->Wedge::Back
+						f3,//Cube::Left->Wedge::Left
+						f4,//Cube::Bottom->Wedge::Bottom
 					]),
 					primitives::Primitives::CornerWedge=>RobloxBasePartDescription::CornerWedge([
-						f0,//CornerWedge::Right
-						f1,//CornerWedge::Top
-						f4,//CornerWedge::Bottom
-						f5,//CornerWedge::Front
+						f0,//Cube::Right->CornerWedge::Right
+						f1,//Cube::Top->CornerWedge::Top
+						f4,//Cube::Bottom->CornerWedge::Bottom
+						f5,//Cube::Front->CornerWedge::Front
 					]),
 				};
 				//make new model if unit cube has not been created before
@@ -440,7 +454,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 				indexed_models[model_id].instances.push(crate::model::ModelInstance {
 					transform:model_transform,
 					color:glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
-					attributes:get_attributes(&object.name,*can_collide,glam::vec3(velocity.x,velocity.y,velocity.z)),
+					attributes:get_attributes(&object.name,*can_collide,glam::vec3(velocity.x,velocity.y,velocity.z),force_intersecting),
 					temp_indexing:temp_indexing_attributes,
 				});
 			}

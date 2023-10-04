@@ -85,7 +85,26 @@ pub struct ModeDescription{
 	pub spawns:Vec<u32>,//spawns[spawn_id]=model_id
 	pub ordered_checkpoints:Vec<u32>,//ordered_checkpoints[checkpoint_id]=model_id
 	pub unordered_checkpoints:Vec<u32>,//unordered_checkpoints[checkpoint_id]=model_id
+	pub spawn_from_stage_id:std::collections::HashMap::<u32,usize>,
+	pub ordered_checkpoint_from_checkpoint_id:std::collections::HashMap::<u32,usize>,
 }
+impl ModeDescription{
+	pub fn get_spawn_model_id(&self,stage_id:u32)->Option<&u32>{
+		if let Some(&spawn)=self.spawn_from_stage_id.get(&stage_id){
+			self.spawns.get(spawn)
+		}else{
+			None
+		}
+	}
+	pub fn get_ordered_checkpoint_model_id(&self,checkpoint_id:u32)->Option<&u32>{
+		if let Some(&checkpoint)=self.ordered_checkpoint_from_checkpoint_id.get(&checkpoint_id){
+			self.ordered_checkpoints.get(checkpoint)
+		}else{
+			None
+		}
+	}
+}
+#[derive(Debug)]
 pub enum TempIndexedAttributes{
 	Start{
 		mode_id:u32,

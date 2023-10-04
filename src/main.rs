@@ -104,8 +104,8 @@ impl GlobalState{
 			for model_instance in &model.instances{
 				if let Some(model_physics)=body::ModelPhysics::from_model(model,model_instance){
 					let model_id=self.physics.models.len() as u32;
-					//snoop it before it gets stolen
-					for attr in model_instance.temp_indexing.iter(){
+					self.physics.models.push(model_physics);
+					for attr in &model_instance.temp_indexing{
 						match attr{
 							model::TempIndexedAttributes::Start{mode_id}=>starts.push((*mode_id,model_id)),
 							model::TempIndexedAttributes::Spawn{mode_id,stage_id}=>spawns.push((*mode_id,model_id,*stage_id)),
@@ -113,8 +113,6 @@ impl GlobalState{
 							model::TempIndexedAttributes::UnorderedCheckpoint{mode_id}=>unordered_checkpoints.push((*mode_id,model_id)),
 						}
 					}
-					//steal it
-					self.physics.models.push(model_physics);
 				}
 			}
 		}
@@ -147,14 +145,22 @@ impl GlobalState{
 				}
 			}
 		}
+		let num_modes=self.physics.modes.len();
+		for (mode_id,mode) in eshmep{
+			self.physics.mode_from_mode_id.insert(mode_id,num_modes+mode);
+		}
 		self.physics.modes.append(&mut modedatas.into_iter().map(|mut tup|{
 			tup.1.sort_by_key(|tup|tup.0);
 			tup.2.sort_by_key(|tup|tup.0);
+			let mut eshmep1=std::collections::HashMap::new();
+			let mut eshmep2=std::collections::HashMap::new();
 			model::ModeDescription{
 				start:tup.0,
-				spawns:tup.1.into_iter().map(|tup|tup.1).collect(),
-				ordered_checkpoints:tup.2.into_iter().map(|tup|tup.1).collect(),
+				spawns:tup.1.into_iter().enumerate().map(|(i,tup)|{eshmep1.insert(tup.0,i);tup.1}).collect(),
+				ordered_checkpoints:tup.2.into_iter().enumerate().map(|(i,tup)|{eshmep2.insert(tup.0,i);tup.1}).collect(),
 				unordered_checkpoints:tup.3,
+				spawn_from_stage_id:eshmep1,
+				ordered_checkpoint_from_checkpoint_id:eshmep2,
 			}
 		}).collect());
 		println!("Physics Objects: {}",self.physics.models.len());
@@ -228,7 +234,7 @@ impl GlobalState{
 		//the models received here are supposed to be tightly packed, i.e. no code needs to check if two models are using the same groups.
 		let indexed_models_len=indexed_models.models.len();
 		let mut unique_texture_models=Vec::with_capacity(indexed_models_len);
-		for mut model in indexed_models.models.into_iter(){
+		for model in indexed_models.models.into_iter(){
 			//convert ModelInstance into ModelGraphicsInstance
 			let instances:Vec<ModelGraphicsInstance>=model.instances.into_iter().filter_map(|instance|{
 				if instance.color.w==0.0{
@@ -581,7 +587,8 @@ impl framework::Example for GlobalState {
 			time: 0,
 			style:body::StyleModifiers::default(),
 			grounded: false,
-			contacts: std::collections::HashSet::new(),
+			contacts: std::collections::HashMap::new(),
+			intersects: std::collections::HashMap::new(),
 			models: Vec::new(),
 			walk: body::WalkState::new(),
 			camera: body::Camera::from_offset(glam::vec3(0.0,4.5-2.5,0.0),(config.width as f32)/(config.height as f32)),
@@ -590,6 +597,7 @@ impl framework::Example for GlobalState {
 			world:body::WorldState{},
 			game:body::GameMechanicsState::default(),
 			modes:Vec::new(),
+			mode_from_mode_id:std::collections::HashMap::new(),
 		};
 
 		//load textures
@@ -904,6 +912,7 @@ impl framework::Example for GlobalState {
 					//if generate_indexed_models succeeds, clear the previous ones
 					self.physics.clear();
 					self.graphics.clear();
+					self.physics.game.stage_id=0;
 					self.generate_model_physics(&indexed_model_instances);
 					self.generate_model_graphics(device,queue,indexed_model_instances);
 					//manual reset
