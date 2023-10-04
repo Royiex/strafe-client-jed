@@ -474,9 +474,9 @@ impl ModelPhysics {
 	}
 	pub fn from_model(model:&crate::model::IndexedModel,instance:&crate::model::ModelInstance) -> Option<Self> {
 		match &instance.attributes{
-			crate::model::CollisionAttributes::Decoration=>None,
 			crate::model::CollisionAttributes::Contact{contacting,general}=>Some(ModelPhysics::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Contact{contacting:contacting.clone(),general:general.clone()})),
-			crate::model::CollisionAttributes::Intersect{intersecting,general}=>None,//Some(ModelPhysics::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Intersecting{intersecting,general})),
+			crate::model::CollisionAttributes::Intersect{intersecting,general}=>Some(ModelPhysics::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Intersect{intersecting:intersecting.clone(),general:general.clone()})),
+			crate::model::CollisionAttributes::Decoration=>None,
 		}
 	}
 	pub fn unit_vertices(&self) -> [glam::Vec3;8] {

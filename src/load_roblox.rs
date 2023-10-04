@@ -30,7 +30,7 @@ fn get_texture_refs(dom:&rbx_dom_weak::WeakDom) -> Vec<rbx_dom_weak::types::Ref>
 	//next class
 	objects
 }
-fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3)->crate::model::CollisionAttributes{
+fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3,force_intersecting:bool)->crate::model::CollisionAttributes{
 	let mut general=crate::model::GameMechanicAttributes::default();
 	let mut intersecting=crate::model::IntersectingAttributes::default();
 	let mut contacting=crate::model::ContactingAttributes::default();
@@ -89,9 +89,21 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3)->crate::model:
 					//WormholeIn#
 				}
 			}
-			return crate::model::CollisionAttributes::Contact{contacting,general};
+			crate::model::CollisionAttributes::Contact{contacting,general}
 		},
-		false=>return crate::model::CollisionAttributes::Decoration,
+		false=>if force_intersecting
+		||general.jump_limit.is_some()
+		||general.booster.is_some()
+		||general.zone.is_some()
+		||general.stage_element.is_some()
+		||general.wormhole.is_some()
+		||intersecting.water.is_some()
+		||intersecting.accelerator.is_some()
+		{
+			crate::model::CollisionAttributes::Intersect{intersecting,general}
+		}else{
+			crate::model::CollisionAttributes::Decoration
+		},
 	}
 }
 
@@ -219,6 +231,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 				);
 
 				//push TempIndexedAttributes
+				let mut force_intersecting=false;
 				let mut temp_indexing_attributes=Vec::new();
 				if let Some(attr)=match &object.name[..]{
 					"MapStart"=>{
@@ -240,6 +253,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 						}
 					}
 				}{
+					force_intersecting=true;
 					temp_indexing_attributes.push(attr);
 				}
 
@@ -440,7 +454,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 				indexed_models[model_id].instances.push(crate::model::ModelInstance {
 					transform:model_transform,
 					color:glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
-					attributes:get_attributes(&object.name,*can_collide,glam::vec3(velocity.x,velocity.y,velocity.z)),
+					attributes:get_attributes(&object.name,*can_collide,glam::vec3(velocity.x,velocity.y,velocity.z),force_intersecting),
 					temp_indexing:temp_indexing_attributes,
 				});
 			}
