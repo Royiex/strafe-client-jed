@@ -368,17 +368,17 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 					primitives::Primitives::Cylinder=>RobloxBasePartDescription::Cylinder,
 					//use front face texture first and use top face texture as a fallback
 					primitives::Primitives::Wedge=>RobloxBasePartDescription::Wedge([
-						f0,//Wedge::Right
-						if f5.is_some(){f5}else{f1},//Wedge::TopFront
-						f2,//Wedge::Back
-						f3,//Wedge::Left
-						f4,//Wedge::Bottom
+						f0,//Cube::Right->Wedge::Right
+						if f5.is_some(){f5}else{f1},//Cube::Front|Cube::Top->Wedge::TopFront
+						f2,//Cube::Back->Wedge::Back
+						f3,//Cube::Left->Wedge::Left
+						f4,//Cube::Bottom->Wedge::Bottom
 					]),
 					primitives::Primitives::CornerWedge=>RobloxBasePartDescription::CornerWedge([
-						f0,//CornerWedge::Right
-						f1,//CornerWedge::Top
-						f4,//CornerWedge::Bottom
-						f5,//CornerWedge::Front
+						f0,//Cube::Right->CornerWedge::Right
+						f1,//Cube::Top->CornerWedge::Top
+						f4,//Cube::Bottom->CornerWedge::Bottom
+						f5,//Cube::Front->CornerWedge::Front
 					]),
 				};
 				//make new model if unit cube has not been created before
