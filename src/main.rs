@@ -104,8 +104,8 @@ impl GlobalState{
 			for model_instance in &model.instances{
 				if let Some(model_physics)=body::ModelPhysics::from_model(model,model_instance){
 					let model_id=self.physics.models.len() as u32;
-					//snoop it before it gets stolen
-					for attr in model_instance.temp_indexing.iter(){
+					self.physics.models.push(model_physics);
+					for attr in &model_instance.temp_indexing{
 						match attr{
 							model::TempIndexedAttributes::Start{mode_id}=>starts.push((*mode_id,model_id)),
 							model::TempIndexedAttributes::Spawn{mode_id,stage_id}=>spawns.push((*mode_id,model_id,*stage_id)),
@@ -113,8 +113,6 @@ impl GlobalState{
 							model::TempIndexedAttributes::UnorderedCheckpoint{mode_id}=>unordered_checkpoints.push((*mode_id,model_id)),
 						}
 					}
-					//steal it
-					self.physics.models.push(model_physics);
 				}
 			}
 		}
@@ -236,7 +234,7 @@ impl GlobalState{
 		//the models received here are supposed to be tightly packed, i.e. no code needs to check if two models are using the same groups.
 		let indexed_models_len=indexed_models.models.len();
 		let mut unique_texture_models=Vec::with_capacity(indexed_models_len);
-		for mut model in indexed_models.models.into_iter(){
+		for model in indexed_models.models.into_iter(){
 			//convert ModelInstance into ModelGraphicsInstance
 			let instances:Vec<ModelGraphicsInstance>=model.instances.into_iter().filter_map(|instance|{
 				if instance.color.w==0.0{
