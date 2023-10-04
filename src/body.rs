@@ -249,7 +249,7 @@ pub struct StyleModifiers{
 impl std::default::Default for StyleModifiers{
 	fn default() -> Self {
 		Self{
-			controls_mask: !0&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
+			controls_mask: !0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held: 0,
 			strafe_tick_num: 100,//100t
 			strafe_tick_den: 1_000_000_000,
