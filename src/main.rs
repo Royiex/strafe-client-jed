@@ -147,14 +147,22 @@ impl GlobalState{
 				}
 			}
 		}
+		let num_modes=self.physics.modes.len();
+		for (mode_id,mode) in eshmep{
+			self.physics.mode_from_mode_id.insert(mode_id,num_modes+mode);
+		}
 		self.physics.modes.append(&mut modedatas.into_iter().map(|mut tup|{
 			tup.1.sort_by_key(|tup|tup.0);
 			tup.2.sort_by_key(|tup|tup.0);
+			let mut eshmep1=std::collections::HashMap::new();
+			let mut eshmep2=std::collections::HashMap::new();
 			model::ModeDescription{
 				start:tup.0,
-				spawns:tup.1.into_iter().map(|tup|tup.1).collect(),
-				ordered_checkpoints:tup.2.into_iter().map(|tup|tup.1).collect(),
+				spawns:tup.1.into_iter().enumerate().map(|(i,tup)|{eshmep1.insert(tup.0,i);tup.1}).collect(),
+				ordered_checkpoints:tup.2.into_iter().enumerate().map(|(i,tup)|{eshmep2.insert(tup.0,i);tup.1}).collect(),
 				unordered_checkpoints:tup.3,
+				spawn_from_stage_id:eshmep1,
+				ordered_checkpoint_from_checkpoint_id:eshmep2,
 			}
 		}).collect());
 		println!("Physics Objects: {}",self.physics.models.len());
@@ -590,6 +598,7 @@ impl framework::Example for GlobalState {
 			world:body::WorldState{},
 			game:body::GameMechanicsState::default(),
 			modes:Vec::new(),
+			mode_from_mode_id:std::collections::HashMap::new(),
 		};
 
 		//load textures

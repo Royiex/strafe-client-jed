@@ -329,6 +329,7 @@ pub struct PhysicsState{
 	pub models:Vec<ModelPhysics>,
 	
 	pub modes:Vec<crate::model::ModeDescription>,
+	pub mode_from_mode_id:std::collections::HashMap::<u32,usize>,
 	//the spawn point is where you spawn when you load into the map.
 	//This is not the same as Reset which teleports you to Spawn0
 	pub spawn_point:glam::Vec3,
@@ -556,6 +557,13 @@ impl PhysicsState {
 	pub fn clear(&mut self){
 		self.models.clear();
 		self.modes.clear();
+	}
+	pub fn get_mode(&self,mode_id:u32)->Option<&crate::model::ModeDescription>{
+		if let Some(&mode)=self.mode_from_mode_id.get(&mode_id){
+			self.modes.get(mode)
+		}else{
+			None
+		}
 	}
 	//tickless gaming
 	pub fn run(&mut self, time_limit:TIME){
