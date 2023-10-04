@@ -515,11 +515,14 @@ pub struct RelativeCollision {
 }
 
 impl RelativeCollision {
+	pub fn model<'a>(&self,models:&'a Vec<ModelPhysics>)->Option<&'a ModelPhysics>{
+		models.get(self.model as usize)
+	}
 	pub fn mesh(&self,models:&Vec<ModelPhysics>) -> TreyMesh {
-		return models.get(self.model as usize).unwrap().face_mesh(self.face).clone()
+		return self.model(models).unwrap().face_mesh(self.face).clone()
 	}
 	pub fn normal(&self,models:&Vec<ModelPhysics>) -> glam::Vec3 {
-		return models.get(self.model as usize).unwrap().face_normal(self.face)
+		return self.model(models).unwrap().face_normal(self.face)
 	}
 }
 
