@@ -17,9 +17,7 @@ impl Worker {
     fn start(self) {
         thread::spawn(move || {
             loop {
-                let (ref lock, ref cvar) = &*self.receiver;
-                let task = lock.lock().unwrap().recv();
-                match task {
+                match self.receiver.0.lock().recv() {
                     Ok(task) => {
                         println!("Worker {} got a task: {}", self.id, task);
                         // Process the task
@@ -69,14 +67,10 @@ fn main() {
     if !is_worker_active {
         // If the worker is done, signal it to process a new task
         is_active.store(true, Ordering::SeqCst);
-        let (ref lock, ref cvar) = &*receiver;
-        cvar.notify_one();
+        thread::sleep(std::time::Duration::from_secs(2));
 
         // Send a new task
         sender.send("New Task".to_string()).unwrap();
-
-        // Wait for the worker to finish processing
-        cvar.wait_while(lock.lock(), |&active| active);
     } else {
         println!("Worker is still active. Skipping new task.");
     }
