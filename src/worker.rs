@@ -8,7 +8,6 @@ use parking_lot::Mutex;
 
 struct Worker<Task:Send,Value:Clone> {
     sender: mpsc::Sender<Task>,
-    receiver: Arc<Mutex<mpsc::Receiver<Task>>>,
     value:Arc<Mutex<Value>>,
 }
 
@@ -17,14 +16,12 @@ impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
         let (sender, receiver) = mpsc::channel::<Task>();
         let ret=Self {
             sender,
-            receiver:Arc::new(Mutex::new(receiver)),
             value:Arc::new(Mutex::new(value)),
         };
-        let receiver=ret.receiver.clone();
         let value=ret.value.clone();
         thread::spawn(move || {
             loop {
-                match receiver.lock().recv() {
+                match receiver.recv() {
                     Ok(task) => {
                         println!("Worker got a task");
                         // Process the task
