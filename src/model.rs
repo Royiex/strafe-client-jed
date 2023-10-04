@@ -173,8 +173,8 @@ pub enum CollisionAttributes{
 		general:GameMechanicAttributes,
 	},
 }
-impl CollisionAttributes{
-	pub fn contact() -> Self {
+impl std::default::Default for CollisionAttributes{
+	fn default() -> Self {
 		Self::Contact{
 			contacting:ContactingAttributes::default(),
 			general:GameMechanicAttributes::default()

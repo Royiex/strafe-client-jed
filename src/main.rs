@@ -386,47 +386,44 @@ impl framework::Example for GlobalState {
 		println!("models.len = {:?}", indexed_models.len());
 		indexed_models[0].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(10.,0.,-10.)),
-			color:glam::Vec4::ONE,
-			attributes:model::CollisionAttributes::contact(),
+			..Default::default()
 		});
 		//quad monkeys
 		indexed_models[1].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,10.)),
-			color:glam::Vec4::ONE,
-			attributes:model::CollisionAttributes::contact(),
+			..Default::default()
 		});
 		indexed_models[1].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,10.)),
 			color:glam::vec4(1.0,0.0,0.0,1.0),
-			attributes:model::CollisionAttributes::contact(),
+			..Default::default()
 		});
 		indexed_models[1].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,20.)),
 			color:glam::vec4(0.0,1.0,0.0,1.0),
-			attributes:model::CollisionAttributes::contact(),
+			..Default::default()
 		});
 		indexed_models[1].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,20.)),
 			color:glam::vec4(0.0,0.0,1.0,1.0),
-			attributes:model::CollisionAttributes::contact(),
+			..Default::default()
 		});
 		//decorative monkey
 		indexed_models[1].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(15.,10.,15.)),
 			color:glam::vec4(0.5,0.5,0.5,0.5),
 			attributes:model::CollisionAttributes::Decoration,
+			..Default::default()
 		});
 		//teapot
 		indexed_models[2].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_scale_rotation_translation(glam::vec3(0.5, 1.0, 0.2),glam::quat(-0.22248298016985793,-0.839457167990537,-0.05603504040830783,-0.49261857546227916),glam::vec3(-10.,7.,10.)),
-			color:glam::Vec4::ONE,
-			attributes:model::CollisionAttributes::contact(),
+			..Default::default()
 		});
 		//ground
 		indexed_models[3].instances.push(ModelInstance{
 			transform:glam::Affine3A::from_translation(glam::vec3(0.,0.,0.))*glam::Affine3A::from_scale(glam::vec3(160.0, 1.0, 160.0)),
-			color:glam::Vec4::ONE,
-			attributes:model::CollisionAttributes::contact(),
+			..Default::default()
 		});
 
 		let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
