@@ -113,11 +113,11 @@ pub enum CornerWedgeFace{
 	Front,
 }
 const CORNERWEDGE_DEFAULT_NORMALS:[[f32;3];5]=[
-	[ 1., 0., 0.],//Wedge::Right
-	[ 0., 1., 1.],//Wedge::BackTop
-	[-1., 1., 0.],//Wedge::LeftTop
-	[ 0.,-1., 0.],//Wedge::Bottom
-	[ 0., 0.,-1.],//Wedge::Front
+	[ 1., 0., 0.],//CornerWedge::Right
+	[ 0., 1., 1.],//CornerWedge::BackTop
+	[-1., 1., 0.],//CornerWedge::LeftTop
+	[ 0.,-1., 0.],//CornerWedge::Bottom
+	[ 0., 0.,-1.],//CornerWedge::Front
 ];
 //HashMap fits this use case perfectly but feels like using a sledgehammer to drive a nail
 pub fn unit_sphere()->crate::model::IndexedModel{

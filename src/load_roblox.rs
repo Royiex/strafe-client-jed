@@ -315,14 +315,32 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 					}
 				}
 				//obscure rust syntax "slice pattern"
-				let [f0,f1,f2,f3,f4,f5]=part_texture_description;
+				let [
+					f0,//Cube::Right
+					f1,//Cube::Top
+					f2,//Cube::Back
+					f3,//Cube::Left
+					f4,//Cube::Bottom
+					f5,//Cube::Front
+				]=part_texture_description;
 				let basepart_texture_description=match shape{
 					primitives::Primitives::Sphere=>RobloxBasePartDescription::Sphere,
 					primitives::Primitives::Cube=>RobloxBasePartDescription::Part([f0,f1,f2,f3,f4,f5]),
 					primitives::Primitives::Cylinder=>RobloxBasePartDescription::Cylinder,
 					//use front face texture first and use top face texture as a fallback
-					primitives::Primitives::Wedge=>RobloxBasePartDescription::Wedge([f0,if f2.is_some(){f2}else{f1},f3,f4,f5]),
-					primitives::Primitives::CornerWedge=>RobloxBasePartDescription::CornerWedge([f1,f3,f4,f5]),
+					primitives::Primitives::Wedge=>RobloxBasePartDescription::Wedge([
+						f0,//Wedge::Right
+						if f5.is_some(){f5}else{f1},//Wedge::TopFront
+						f2,//Wedge::Back
+						f3,//Wedge::Left
+						f4,//Wedge::Bottom
+					]),
+					primitives::Primitives::CornerWedge=>RobloxBasePartDescription::CornerWedge([
+						f0,//CornerWedge::Right
+						f1,//CornerWedge::Top
+						f4,//CornerWedge::Bottom
+						f5,//CornerWedge::Front
+					]),
 				};
 				//make new model if unit cube has not been created before
 				let model_id=if let Some(&model_id)=model_id_from_description.get(&basepart_texture_description){
