@@ -38,7 +38,8 @@ impl Worker {
 
 type Task = String;
 
-fn main() {
+#[test]
+fn test_worker() {
     let (sender, receiver) = mpsc::channel::<Task>();
     let receiver = Arc::new((Mutex::new(receiver), Condvar::new()));
     let is_active = Arc::new(AtomicBool::new(true));
