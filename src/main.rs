@@ -95,14 +95,68 @@ impl GlobalState{
 	}
 
 	fn generate_model_physics(&mut self,indexed_models:&model::IndexedModelInstances){
+		let mut starts=Vec::new();
+		let mut spawns=Vec::new();
+		let mut ordered_checkpoints=Vec::new();
+		let mut unordered_checkpoints=Vec::new();
 		for model in &indexed_models.models{
 			//make aabb and run vertices to get realistic bounds
 			for model_instance in &model.instances{
 				if let Some(model_physics)=body::ModelPhysics::from_model(model,model_instance){
+					let model_id=self.physics.models.len() as u32;
+					//snoop it before it gets stolen
+					for attr in model_instance.temp_indexing.iter(){
+						match attr{
+							model::TempIndexedAttributes::Start{mode_id}=>starts.push((*mode_id,model_id)),
+							model::TempIndexedAttributes::Spawn{mode_id,stage_id}=>spawns.push((*mode_id,model_id,*stage_id)),
+							model::TempIndexedAttributes::OrderedCheckpoint{mode_id,checkpoint_id}=>ordered_checkpoints.push((*mode_id,model_id,*checkpoint_id)),
+							model::TempIndexedAttributes::UnorderedCheckpoint{mode_id}=>unordered_checkpoints.push((*mode_id,model_id)),
+						}
+					}
+					//steal it
 					self.physics.models.push(model_physics);
 				}
 			}
 		}
+		//I don't wanna write structs for temporary structures
+		//this code builds ModeDescriptions from the unsorted lists at the top of the function
+		starts.sort_by_key(|tup|tup.0);
+		let mut eshmep=std::collections::HashMap::new();
+		let mut modedatas:Vec<(u32,Vec<(u32,u32)>,Vec<(u32,u32)>,Vec<u32>)>=starts.into_iter().enumerate().map(|(i,tup)|{
+			eshmep.insert(tup.0,i);
+			(tup.1,Vec::new(),Vec::new(),Vec::new())
+		}).collect();
+		for tup in spawns{
+			if let Some(mode_id)=eshmep.get(&tup.0){
+				if let Some(modedata)=modedatas.get_mut(*mode_id){
+					modedata.1.push((tup.2,tup.1));
+				}
+			}
+		}
+		for tup in ordered_checkpoints{
+			if let Some(mode_id)=eshmep.get(&tup.0){
+				if let Some(modedata)=modedatas.get_mut(*mode_id){
+					modedata.2.push((tup.2,tup.1));
+				}
+			}
+		}
+		for tup in unordered_checkpoints{
+			if let Some(mode_id)=eshmep.get(&tup.0){
+				if let Some(modedata)=modedatas.get_mut(*mode_id){
+					modedata.3.push(tup.1);
+				}
+			}
+		}
+		self.physics.modes.append(&mut modedatas.into_iter().map(|mut tup|{
+			tup.1.sort_by_key(|tup|tup.0);
+			tup.2.sort_by_key(|tup|tup.0);
+			model::ModeDescription{
+				start:tup.0,
+				spawns:tup.1.into_iter().map(|tup|tup.1).collect(),
+				ordered_checkpoints:tup.2.into_iter().map(|tup|tup.1).collect(),
+				unordered_checkpoints:tup.3,
+			}
+		}).collect());
 		println!("Physics Objects: {}",self.physics.models.len());
 	}
 	fn generate_model_graphics(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,indexed_models:model::IndexedModelInstances){

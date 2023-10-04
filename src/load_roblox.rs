@@ -217,9 +217,30 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 				* glam::Affine3A::from_scale(
 					glam::Vec3::new(size.x,size.y,size.z)/2.0
 				);
-				if object.name=="MapStart"{
-					spawn_point=model_transform.transform_point3(-glam::Vec3::Y)+glam::vec3(0.0,2.5+0.1,0.0);
-					println!("Found MapStart{:?}",spawn_point);
+
+				//push TempIndexedAttributes
+				let mut temp_indexing_attributes=Vec::new();
+				if let Some(attr)=match &object.name[..]{
+					"MapStart"=>{
+						spawn_point=model_transform.transform_point3(glam::Vec3::ZERO)+glam::vec3(0.0,2.5,0.0);
+						Some(crate::model::TempIndexedAttributes::Start{mode_id:0})
+					},
+					"UnorderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::UnorderedCheckpoint{mode_id:0}),
+					other=>{
+						let regman=lazy_regex::regex!(r"^(BonusStart|Spawn|OrderedCheckpoint)(\d+)$");
+						if let Some(captures) = regman.captures(other) {
+							match &captures[1]{
+								"BonusStart"=>Some(crate::model::TempIndexedAttributes::Start{mode_id:captures[2].parse::<u32>().unwrap()}),
+								"Spawn"=>Some(crate::model::TempIndexedAttributes::Spawn{mode_id:0,stage_id:captures[2].parse::<u32>().unwrap()}),
+								"OrderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::OrderedCheckpoint{mode_id:0,checkpoint_id:captures[2].parse::<u32>().unwrap()}),
+								_=>None,
+							}
+						}else{
+							None
+						}
+					}
+				}{
+					temp_indexing_attributes.push(attr);
 				}
 
 				//TODO: also detect "CylinderMesh" etc here
@@ -420,6 +441,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 					transform:model_transform,
 					color:glam::vec4(color3.r as f32/255f32, color3.g as f32/255f32, color3.b as f32/255f32, 1.0-*transparency),
 					attributes:get_attributes(&object.name,*can_collide,glam::vec3(velocity.x,velocity.y,velocity.z)),
+					temp_indexing:temp_indexing_attributes,
 				});
 			}
 		}

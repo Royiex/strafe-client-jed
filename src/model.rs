@@ -60,6 +60,17 @@ pub struct ModelInstance{
 	pub transform:glam::Affine3A,
 	pub color:glam::Vec4,//transparency is in here
 	pub attributes:CollisionAttributes,
+	pub temp_indexing:Vec<TempIndexedAttributes>,
+}
+impl std::default::Default for ModelInstance{
+	fn default() -> Self {
+		Self{
+			color:glam::Vec4::ONE,
+			transform:Default::default(),
+			attributes:Default::default(),
+			temp_indexing:Default::default(),
+		}
+	}
 }
 pub struct IndexedModelInstances{
 	pub textures:Vec<String>,//RenderPattern
@@ -74,6 +85,22 @@ pub struct ModeDescription{
 	pub spawns:Vec<u32>,//spawns[spawn_id]=model_id
 	pub ordered_checkpoints:Vec<u32>,//ordered_checkpoints[checkpoint_id]=model_id
 	pub unordered_checkpoints:Vec<u32>,//unordered_checkpoints[checkpoint_id]=model_id
+}
+pub enum TempIndexedAttributes{
+	Start{
+		mode_id:u32,
+	},
+	Spawn{
+		mode_id:u32,
+		stage_id:u32,
+	},
+	OrderedCheckpoint{
+		mode_id:u32,
+		checkpoint_id:u32,
+	},
+	UnorderedCheckpoint{
+		mode_id:u32,
+	},
 }
 
 //you have this effect while in contact
