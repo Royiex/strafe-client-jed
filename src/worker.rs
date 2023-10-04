@@ -2,35 +2,34 @@ use std::thread;
 use std::sync::{mpsc,Arc};
 use parking_lot::{Mutex,Condvar};
 
-struct Worker<Task:Send> {
+//The goal here is to have a worker thread that parks itself when it runs out of work.
+//The worker thread publishes the result of its work back to the worker object for every item in the work queue.
+//The physics (target use case) knows when it has not changed the body, so not updating the value is also an option.
+
+struct Worker<Task:Send,Value:Clone> {
     sender: mpsc::Sender<Task>,
     receiver: Arc<(Mutex<mpsc::Receiver<Task>>,Condvar)>,
+    value:Arc<Mutex<Value>>,
 }
 
-impl<Task:Send+'static> Worker<Task> {
-    fn new() -> Self {
+impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
+    fn new<F:Fn(Task)->Value+Send+'static>(value:Value,f:F) -> Self {
         let (sender, receiver) = mpsc::channel::<Task>();
-        Self {
+        let ret=Self {
             sender,
             receiver:Arc::new((Mutex::new(receiver),Condvar::new())),
-        }
-    }
-
-    fn send(&self,task:Task)->Result<(), mpsc::SendError<Task>>{
-        let ret=self.sender.send(task);
-        self.receiver.1.notify_one();
-        ret
-    }
-
-    fn start(&self) {
-        let receiver=self.receiver.clone();
+            value:Arc::new(Mutex::new(value)),
+        };
+        let receiver=ret.receiver.clone();
+        let value=ret.value.clone();
         thread::spawn(move || {
             loop{
                 loop {
                     match receiver.0.lock().recv() {
-                        Ok(_task) => {
+                        Ok(task) => {
                             println!("Worker got a task");
                             // Process the task
+                            *value.lock()=f(task);
                         }
                         Err(_) => {
                             println!("Worker stopping.",);
@@ -41,17 +40,27 @@ impl<Task:Send+'static> Worker<Task> {
                 receiver.1.wait(&mut receiver.0.lock());
             }
         });
+        ret
+    }
+
+    fn send(&self,task:Task)->Result<(), mpsc::SendError<Task>>{
+        let ret=self.sender.send(task);
+        self.receiver.1.notify_one();
+        ret
+    }
+
+    fn grab_clone(&self)->Value{
+        self.value.lock().clone()
     }
 }
 
 #[test]
 fn test_worker() {
-
+    println!("hiiiii");
     // Create the worker thread
-    let worker = Worker::new();
-
-    // Start the worker thread
-    worker.start();
+    let worker = Worker::new(crate::body::Body::with_pva(glam::Vec3::ZERO,glam::Vec3::ZERO,glam::Vec3::ZERO),
+        |_|crate::body::Body::with_pva(glam::Vec3::ONE,glam::Vec3::ONE,glam::Vec3::ONE)
+    );
 
     // Send tasks to the worker
     for i in 0..5 {
@@ -74,4 +83,6 @@ fn test_worker() {
         instruction:crate::body::PhysicsInstruction::StrafeTick,
     };
     worker.send(task).unwrap();
+
+    println!("value={:?}",worker.grab_clone());
 }
