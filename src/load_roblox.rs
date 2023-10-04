@@ -46,7 +46,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3,force_intersect
 			behaviour:crate::model::StageElementBehaviour::Platform,
 		}),
 		other=>{
-			if let Some(captures)=lazy_regex::regex!(r"^(Force)?(SpawnAt|Trigger|Teleport|Platform)(\d+)$")
+			if let Some(captures)=lazy_regex::regex!(r"^(Force)?(Spawn|SpawnAt|Trigger|Teleport|Platform)(\d+)$")
 			.captures(other){
 				general.stage_element=Some(crate::model::GameMechanicStageElement{
 					mode_id:0,
@@ -56,7 +56,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3,force_intersect
 						None=>false,
 					},
 					behaviour:match &captures[2]{
-						"SpawnAt"=>crate::model::StageElementBehaviour::SpawnAt,
+						"Spawn"|"SpawnAt"=>crate::model::StageElementBehaviour::SpawnAt,
 						"Trigger"=>crate::model::StageElementBehaviour::Trigger,
 						"Teleport"=>crate::model::StageElementBehaviour::Teleport,
 						"Platform"=>crate::model::StageElementBehaviour::Platform,
@@ -240,11 +240,11 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 					},
 					"UnorderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::UnorderedCheckpoint{mode_id:0}),
 					other=>{
-						let regman=lazy_regex::regex!(r"^(BonusStart|Spawn|OrderedCheckpoint)(\d+)$");
+						let regman=lazy_regex::regex!(r"^(BonusStart|Spawn|ForceSpawn|OrderedCheckpoint)(\d+)$");
 						if let Some(captures) = regman.captures(other) {
 							match &captures[1]{
 								"BonusStart"=>Some(crate::model::TempIndexedAttributes::Start{mode_id:captures[2].parse::<u32>().unwrap()}),
-								"Spawn"=>Some(crate::model::TempIndexedAttributes::Spawn{mode_id:0,stage_id:captures[2].parse::<u32>().unwrap()}),
+								"Spawn"|"ForceSpawn"=>Some(crate::model::TempIndexedAttributes::Spawn{mode_id:0,stage_id:captures[2].parse::<u32>().unwrap()}),
 								"OrderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::OrderedCheckpoint{mode_id:0,checkpoint_id:captures[2].parse::<u32>().unwrap()}),
 								_=>None,
 							}
