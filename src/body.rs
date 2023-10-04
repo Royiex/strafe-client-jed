@@ -45,20 +45,20 @@ trait MyHash{
 	fn hash(&self) -> u64;
 }
 impl MyHash for Body {
-    fn hash(&self) -> u64 {
+	fn hash(&self) -> u64 {
 		let mut hasher=std::collections::hash_map::DefaultHasher::new();
-        for &el in self.position.as_ref().iter() {
-            std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
-        }
-        for &el in self.velocity.as_ref().iter() {
-            std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
-        }
-        for &el in self.acceleration.as_ref().iter() {
-             std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
-        }
-        std::hash::Hasher::write(&mut hasher, self.time.to_ne_bytes().as_slice());
+		for &el in self.position.as_ref().iter() {
+			std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
+		}
+		for &el in self.velocity.as_ref().iter() {
+			std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
+		}
+		for &el in self.acceleration.as_ref().iter() {
+			 std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
+		}
+		std::hash::Hasher::write(&mut hasher, self.time.to_ne_bytes().as_slice());
 		return std::hash::Hasher::finish(&hasher);//hash check to see if walk target is valid
-    }
+	}
 }
 
 pub enum MoveRestriction {
@@ -80,9 +80,9 @@ impl InputState {
 }
 impl crate::instruction::InstructionEmitter<InputInstruction> for InputState{
 	fn next_instruction(&self, time_limit:crate::body::TIME) -> Option<TimedInstruction<InputInstruction>> {
-	    //this is polled by PhysicsState for actions like Jump
-	    //no, it has to be the other way around. physics is run up until the jump instruction, and then the jump instruction is pushed.
-	    self.queue.get(0)
+		//this is polled by PhysicsState for actions like Jump
+		//no, it has to be the other way around. physics is run up until the jump instruction, and then the jump instruction is pushed.
+		self.queue.get(0)
 	}
 }
 impl crate::instruction::InstructionConsumer<InputInstruction> for InputState{
@@ -171,12 +171,12 @@ pub struct Camera {
 
 #[inline]
 fn mat3_from_rotation_y_f64(angle: f64) -> glam::Mat3 {
-    let (sina, cosa) = angle.sin_cos();
-    glam::Mat3::from_cols(
-        glam::Vec3::new(cosa as f32, 0.0, -sina as f32),
-        glam::Vec3::Y,
-        glam::Vec3::new(sina as f32, 0.0, cosa as f32),
-    )
+	let (sina, cosa) = angle.sin_cos();
+	glam::Mat3::from_cols(
+		glam::Vec3::new(cosa as f32, 0.0, -sina as f32),
+		glam::Vec3::Y,
+		glam::Vec3::new(sina as f32, 0.0, cosa as f32),
+	)
 }
 #[inline]
 fn perspective_rh(fov_x_slope: f32, fov_y_slope: f32, z_near: f32, z_far: f32) -> glam::Mat4 {
@@ -192,11 +192,11 @@ fn perspective_rh(fov_x_slope: f32, fov_y_slope: f32, z_near: f32, z_far: f32) -
 impl Camera {
 	pub fn from_offset(offset:glam::Vec3,aspect:f32) -> Self {
 		Self{
-		    offset,
-		    angles: glam::DVec2::ZERO,
-		    fov: glam::vec2(aspect,1.0),
-		    sensitivity: glam::dvec2(1.0/6144.0,1.0/6144.0),
-    		time: 0,
+			offset,
+			angles: glam::DVec2::ZERO,
+			fov: glam::vec2(aspect,1.0),
+			sensitivity: glam::dvec2(1.0/6144.0,1.0/6144.0),
+			time: 0,
 		}
 	}
 	fn simulate_move_angles(&self, delta: glam::IVec2) -> glam::DVec2 {
@@ -986,19 +986,19 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 	fn process_instruction(&mut self, ins:TimedInstruction<PhysicsInstruction>) {
 		match &ins.instruction {
-		    PhysicsInstruction::StrafeTick => (),
-		    PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),
-		    _=>println!("{:?}",ins),
+			PhysicsInstruction::StrafeTick => (),
+			PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),
+			_=>println!("{:?}",ins),
 		}
 		//selectively update body
 		match &ins.instruction {
-		    PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),//dodge time for mouse movement
-    		PhysicsInstruction::Input(_)
-    		|PhysicsInstruction::SetSpawnPosition(_)
-		    |PhysicsInstruction::ReachWalkTargetVelocity
-		    |PhysicsInstruction::CollisionStart(_)
-		    |PhysicsInstruction::CollisionEnd(_)
-		    |PhysicsInstruction::StrafeTick => self.advance_time(ins.time),
+			PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),//dodge time for mouse movement
+			PhysicsInstruction::Input(_)
+			|PhysicsInstruction::SetSpawnPosition(_)
+			|PhysicsInstruction::ReachWalkTargetVelocity
+			|PhysicsInstruction::CollisionStart(_)
+			|PhysicsInstruction::CollisionEnd(_)
+			|PhysicsInstruction::StrafeTick => self.advance_time(ins.time),
 		}
 		match ins.instruction {
 			PhysicsInstruction::SetSpawnPosition(position)=>{
