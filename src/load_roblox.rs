@@ -35,10 +35,10 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3)->crate::model:
 	let mut intersecting=crate::model::IntersectingAttributes::default();
 	let mut contacting=crate::model::ContactingAttributes::default();
 	match name{
-		// "Water"=>intersecting.water=Some(crate::model::IntersectingWater::default()),
-		// "Accelerator"=>(),
-		// "MapFinish"=>(),
-		// "MapAnticheat"=>(),
+		//"Water"=>intersecting.water=Some(crate::model::IntersectingWater{density:1.0,drag:1.0}),
+		"Accelerator"=>intersecting.accelerator=Some(crate::model::IntersectingAccelerator{acceleration:velocity}),
+		"MapFinish"=>general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Finish}),
+		"MapAnticheat"=>general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Anitcheat}),
 		"Platform"=>general.stage_element=Some(crate::model::GameMechanicStageElement{
 			mode_id:0,
 			stage_id:0,
@@ -46,8 +46,8 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3)->crate::model:
 			behaviour:crate::model::StageElementBehaviour::Platform,
 		}),
 		other=>{
-			let regman=lazy_regex::regex!(r"^(Force)?(SpawnAt|Trigger|Teleport|Platform)(\d+)$");
-			if let Some(captures) = regman.captures(other) {
+			if let Some(captures)=lazy_regex::regex!(r"^(Force)?(SpawnAt|Trigger|Teleport|Platform)(\d+)$")
+			.captures(other){
 				general.stage_element=Some(crate::model::GameMechanicStageElement{
 					mode_id:0,
 					stage_id:captures[3].parse::<u32>().unwrap(),
@@ -60,10 +60,16 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3)->crate::model:
 						"Trigger"=>crate::model::StageElementBehaviour::Trigger,
 						"Teleport"=>crate::model::StageElementBehaviour::Teleport,
 						"Platform"=>crate::model::StageElementBehaviour::Platform,
-						_=>panic!("regex[2] messed up bad"),
+						_=>panic!("regex1[2] messed up bad"),
 					}
 				})
-				
+			}else if let Some(captures)=lazy_regex::regex!(r"^Bonus(Finish|Anticheat)(\d+)$")
+			.captures(other){
+				match &captures[1]{
+					"Finish"=>general.zone=Some(crate::model::GameMechanicZone{mode_id:captures[2].parse::<u32>().unwrap(),behaviour:crate::model::ZoneBehaviour::Finish}),
+					"Anticheat"=>general.zone=Some(crate::model::GameMechanicZone{mode_id:captures[2].parse::<u32>().unwrap(),behaviour:crate::model::ZoneBehaviour::Anitcheat}),
+					_=>panic!("regex2[1] messed up bad"),
+				}
 			}
 		}
 	}
