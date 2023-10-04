@@ -912,6 +912,7 @@ impl framework::Example for GlobalState {
 					//if generate_indexed_models succeeds, clear the previous ones
 					self.physics.clear();
 					self.graphics.clear();
+					self.physics.game.stage_id=0;
 					self.generate_model_physics(&indexed_model_instances);
 					self.generate_model_graphics(device,queue,indexed_model_instances);
 					//manual reset
