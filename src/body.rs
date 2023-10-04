@@ -195,7 +195,7 @@ impl Camera {
 			offset,
 			angles: glam::DVec2::ZERO,
 			fov: glam::vec2(aspect,1.0),
-			sensitivity: glam::dvec2(1.0/6144.0,1.0/6144.0),
+			sensitivity: glam::dvec2(1.0/16384.0,1.0/16384.0),
 			time: 0,
 		}
 	}
