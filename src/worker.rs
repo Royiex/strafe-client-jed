@@ -53,4 +53,12 @@ fn main() {
 
     // Sleep to allow worker thread to finish processing
     thread::sleep(std::time::Duration::from_secs(2));
+
+    // Send another task, which will spawn a new worker
+    let new_worker = Worker::new(2, Arc::clone(&receiver));
+    new_worker.start();
+    sender.send("New Task".to_string()).unwrap();
+
+    // Sleep to allow the new worker thread to process the task
+    thread::sleep(std::time::Duration::from_secs(2));
 }
