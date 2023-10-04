@@ -553,6 +553,10 @@ impl Body {
 }
 
 impl PhysicsState {
+	pub fn clear(&mut self){
+		self.models.clear();
+		self.modes.clear();
+	}
 	//tickless gaming
 	pub fn run(&mut self, time_limit:TIME){
 		//prepare is ommitted - everything is done via instructions.

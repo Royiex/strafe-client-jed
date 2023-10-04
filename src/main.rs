@@ -38,16 +38,13 @@ pub struct GraphicsBindGroups {
 	skybox_texture: wgpu::BindGroup,
 }
 
-pub struct GraphicsPipelines {
+pub struct GraphicsPipelines{
 	skybox: wgpu::RenderPipeline,
 	model: wgpu::RenderPipeline,
 }
 
-pub struct GraphicsData {
-	start_time: std::time::Instant,
+pub struct GraphicsState{
 	screen_size: (u32, u32),
-	manual_mouse_lock:bool,
-	physics: body::PhysicsState,
 	pipelines: GraphicsPipelines,
 	bind_groups: GraphicsBindGroups,
 	bind_group_layouts: GraphicsBindGroupLayouts,
@@ -59,7 +56,20 @@ pub struct GraphicsData {
 	staging_belt: wgpu::util::StagingBelt,
 }
 
-impl GraphicsData {
+impl GraphicsState{
+	pub fn clear(&mut self){
+		self.models.clear();
+	}
+}
+
+pub struct GlobalState{
+	start_time: std::time::Instant,
+	manual_mouse_lock:bool,
+	graphics:GraphicsState,
+	physics:body::PhysicsState,
+}
+
+impl GlobalState{
 	const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
 
 	fn create_depth_texture(
@@ -247,9 +257,9 @@ impl GraphicsData {
 		//.into_iter() the modeldata vec so entities can be /moved/ to models.entities
 		let mut model_count=0;
 		let mut instance_count=0;
-		let uniform_buffer_binding_size=<GraphicsData as framework::Example>::required_limits().max_uniform_buffer_binding_size as usize;
+		let uniform_buffer_binding_size=<GlobalState as framework::Example>::required_limits().max_uniform_buffer_binding_size as usize;
 		let chunk_size=uniform_buffer_binding_size/MODEL_BUFFER_SIZE_BYTES;
-		self.models.reserve(models.len());
+		self.graphics.models.reserve(models.len());
 		for model in models.into_iter() {
 			instance_count+=model.instances.len();
 			for instances_chunk in model.instances.rchunks(chunk_size){
@@ -264,13 +274,13 @@ impl GraphicsData {
 					Some(texture_id)=>{
 						match double_map.get(&texture_id){
 							Some(&mapped_texture_id)=>&texture_views[mapped_texture_id as usize],
-							None=>&self.temp_squid_texture_view,
+							None=>&self.graphics.temp_squid_texture_view,
 						}
 					},
-					None=>&self.temp_squid_texture_view,
+					None=>&self.graphics.temp_squid_texture_view,
 				};
 				let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-					layout: &self.bind_group_layouts.model,
+					layout: &self.graphics.bind_group_layouts.model,
 					entries: &[
 						wgpu::BindGroupEntry {
 							binding: 0,
@@ -282,7 +292,7 @@ impl GraphicsData {
 						},
 						wgpu::BindGroupEntry {
 							binding: 2,
-							resource: wgpu::BindingResource::Sampler(&self.samplers.repeat),
+							resource: wgpu::BindingResource::Sampler(&self.graphics.samplers.repeat),
 						},
 					],
 					label: Some(format!("Model{} Bind Group",model_count).as_str()),
@@ -293,7 +303,7 @@ impl GraphicsData {
 					usage: wgpu::BufferUsages::VERTEX,
 				});
 				//all of these are being moved here
-				self.models.push(ModelGraphics{
+				self.graphics.models.push(ModelGraphics{
 					instances:instances_chunk.to_vec(),
 					vertex_buf,
 					entities: model.entities.iter().map(|indices|{
@@ -315,7 +325,7 @@ impl GraphicsData {
 		println!("Texture References={}",num_textures);
 		println!("Textures Loaded={}",texture_views.len());
 		println!("Indexed Models={}",indexed_models_len);
-		println!("Graphics Objects: {}",self.models.len());
+		println!("Graphics Objects: {}",self.graphics.models.len());
 		println!("Graphics Instances: {}",instance_count);
 	}
 }
@@ -351,7 +361,7 @@ fn to_uniform_data(camera: &body::Camera, pos: glam::Vec3) -> [f32; 16 * 3 + 4] 
 	raw
 }
 
-impl framework::Example for GraphicsData {
+impl framework::Example for GlobalState {
 	fn optional_features() -> wgpu::Features {
 		wgpu::Features::TEXTURE_COMPRESSION_ASTC
 			| wgpu::Features::TEXTURE_COMPRESSION_ETC2
@@ -758,11 +768,8 @@ impl framework::Example for GraphicsData {
 
 		let depth_view = Self::create_depth_texture(config, device);
 
-		let mut graphics=GraphicsData {
-			manual_mouse_lock:false,
-			start_time: Instant::now(),
+		let graphics=GraphicsState {
 			screen_size: (config.width,config.height),
-			physics,
 			pipelines:GraphicsPipelines{
 				skybox:sky_pipeline,
 				model:model_pipeline
@@ -780,21 +787,28 @@ impl framework::Example for GraphicsData {
 			temp_squid_texture_view: squid_texture_view,
 		};
 
+		let mut state=GlobalState{
+			start_time:Instant::now(),
+			manual_mouse_lock:false,
+			graphics,
+			physics,
+		};
+
 		let indexed_model_instances=model::IndexedModelInstances{
 			textures:Vec::new(),
 			models:indexed_models,
 			spawn_point:glam::Vec3::Y*50.0,
 			modes:Vec::new(),
 		};
-		graphics.generate_model_physics(&indexed_model_instances);
-		graphics.generate_model_graphics(&device,&queue,indexed_model_instances);
+		state.generate_model_physics(&indexed_model_instances);
+		state.generate_model_graphics(&device,&queue,indexed_model_instances);
 
 		let args:Vec<String>=std::env::args().collect();
 		if args.len()==2{
-			graphics.load_file(std::path::PathBuf::from(&args[1]), device, queue);
+			state.load_file(std::path::PathBuf::from(&args[1]), device, queue);
 		}
 
-		return graphics;
+		return state;
 	}
 
 	fn load_file(&mut self,path: std::path::PathBuf, device: &wgpu::Device, queue: &wgpu::Queue){
@@ -837,8 +851,8 @@ impl framework::Example for GraphicsData {
 				}{
 					let spawn_point=indexed_model_instances.spawn_point;
 					//if generate_indexed_models succeeds, clear the previous ones
-					self.models.clear();
-					self.physics.models.clear();
+					self.physics.clear();
+					self.graphics.clear();
 					self.generate_model_physics(&indexed_model_instances);
 					self.generate_model_graphics(device,queue,indexed_model_instances);
 					//manual reset
@@ -911,7 +925,7 @@ impl framework::Example for GraphicsData {
 					15=>{//Tab
 						if s{
 							self.manual_mouse_lock=false;
-							match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.screen_size.0 as f32/2.0, self.screen_size.1 as f32/2.0)){
+							match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.graphics.screen_size.0 as f32/2.0, self.graphics.screen_size.1 as f32/2.0)){
 								Ok(())=>(),
 								Err(e)=>println!("Could not set cursor position: {:?}",e),
 							}
@@ -951,7 +965,7 @@ impl framework::Example for GraphicsData {
 			    delta,//these (f64,f64) are integers on my machine
 			} => {
 				if self.manual_mouse_lock{
-					match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.screen_size.0 as f32/2.0, self.screen_size.1 as f32/2.0)){
+					match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.graphics.screen_size.0 as f32/2.0, self.graphics.screen_size.1 as f32/2.0)){
 						Ok(())=>(),
 						Err(e)=>println!("Could not set cursor position: {:?}",e),
 					}
@@ -986,8 +1000,8 @@ impl framework::Example for GraphicsData {
 		device: &wgpu::Device,
 		_queue: &wgpu::Queue,
 	) {
-		self.depth_view = Self::create_depth_texture(config, device);
-		self.screen_size = (config.width, config.height);
+		self.graphics.depth_view = Self::create_depth_texture(config, device);
+		self.graphics.screen_size = (config.width, config.height);
 		self.physics.camera.set_fov_aspect(1.0,(config.width as f32)/(config.height as f32));
 	}
 
@@ -1007,19 +1021,19 @@ impl framework::Example for GraphicsData {
 
 		// update rotation
 		let camera_uniforms = to_uniform_data(&self.physics.camera,self.physics.body.extrapolated_position(time));
-		self.staging_belt
+		self.graphics.staging_belt
 			.write_buffer(
 				&mut encoder,
-				&self.camera_buf,
+				&self.graphics.camera_buf,
 				0,
 				wgpu::BufferSize::new((camera_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
 				device,
 			)
 			.copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
 		//This code only needs to run when the uniforms change
-		for model in self.models.iter() {
+		for model in self.graphics.models.iter() {
 			let model_uniforms = get_instances_buffer_data(&model.instances);
-			self.staging_belt
+			self.graphics.staging_belt
 				.write_buffer(
 					&mut encoder,
 					&model.model_buf,//description of where data will be written when command is executed
@@ -1029,7 +1043,7 @@ impl framework::Example for GraphicsData {
 				)
 				.copy_from_slice(bytemuck::cast_slice(&model_uniforms));
 		}
-		self.staging_belt.finish();
+		self.graphics.staging_belt.finish();
 
 		{
 			let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1048,7 +1062,7 @@ impl framework::Example for GraphicsData {
 					},
 				})],
 				depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-					view: &self.depth_view,
+					view: &self.graphics.depth_view,
 					depth_ops: Some(wgpu::Operations {
 						load: wgpu::LoadOp::Clear(1.0),
 						store: false,
@@ -1057,11 +1071,11 @@ impl framework::Example for GraphicsData {
 				}),
 			});
 
-			rpass.set_bind_group(0, &self.bind_groups.camera, &[]);
-			rpass.set_bind_group(1, &self.bind_groups.skybox_texture, &[]);
+			rpass.set_bind_group(0, &self.graphics.bind_groups.camera, &[]);
+			rpass.set_bind_group(1, &self.graphics.bind_groups.skybox_texture, &[]);
 
-			rpass.set_pipeline(&self.pipelines.model);
-			for model in self.models.iter() {
+			rpass.set_pipeline(&self.graphics.pipelines.model);
+			for model in self.graphics.models.iter() {
 				rpass.set_bind_group(2, &model.bind_group, &[]);
 				rpass.set_vertex_buffer(0, model.vertex_buf.slice(..));
 
@@ -1071,18 +1085,18 @@ impl framework::Example for GraphicsData {
 				}
 			}
 
-			rpass.set_pipeline(&self.pipelines.skybox);
+			rpass.set_pipeline(&self.graphics.pipelines.skybox);
 			rpass.draw(0..3, 0..1);
 		}
 
 		queue.submit(std::iter::once(encoder.finish()));
 
-		self.staging_belt.recall();
+		self.graphics.staging_belt.recall();
 	}
 }
 
 fn main() {
-	framework::run::<GraphicsData>(
+	framework::run::<GlobalState>(
 		format!("Strafe Client v{}",
 			env!("CARGO_PKG_VERSION")
 		).as_str()
