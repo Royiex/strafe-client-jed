@@ -65,11 +65,11 @@ pub struct IndexedModelInstances{
 	pub textures:Vec<String>,//RenderPattern
 	pub models:Vec<IndexedModel>,
 	//may make this into an object later.
-	pub stages:Vec<StageDescription>,
+	pub modes:Vec<ModeDescription>,
 	pub spawn_point:glam::Vec3,
 }
 //stage description referencing flattened ids is spooky, but the map loading is meant to be deterministic.
-pub struct StageDescription{
+pub struct ModeDescription{
 	pub start:u32,//start=model_id
 	pub spawns:Vec<u32>,//spawns[spawn_id]=model_id
 	pub ordered_checkpoints:Vec<u32>,//ordered_checkpoints[checkpoint_id]=model_id

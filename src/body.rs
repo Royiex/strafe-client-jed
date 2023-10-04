@@ -328,7 +328,7 @@ pub struct PhysicsState{
 	//all models
 	pub models:Vec<ModelPhysics>,
 	
-	pub stages:Vec<crate::model::StageDescription>,
+	pub modes:Vec<crate::model::ModeDescription>,
 	//the spawn point is where you spawn when you load into the map.
 	//This is not the same as Reset which teleports you to Spawn0
 	pub spawn_point:glam::Vec3,

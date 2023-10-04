@@ -528,7 +528,7 @@ impl framework::Example for GraphicsData {
 			controls: 0,
 			world:body::WorldState{},
 			game:body::GameMechanicsState::default(),
-			stages:Vec::new(),
+			modes:Vec::new(),
 		};
 
 		//load textures
@@ -784,7 +784,7 @@ impl framework::Example for GraphicsData {
 			textures:Vec::new(),
 			models:indexed_models,
 			spawn_point:glam::Vec3::Y*50.0,
-			stages:Vec::new(),
+			modes:Vec::new(),
 		};
 		graphics.generate_model_physics(&indexed_model_instances);
 		graphics.generate_model_graphics(&device,&queue,indexed_model_instances);

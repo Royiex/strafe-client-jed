@@ -171,8 +171,6 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 	//IndexedModelInstances includes textures
 	let mut spawn_point=glam::Vec3::ZERO;
 
-	let mut stages=Vec::new();
-
 	let mut indexed_models=Vec::new();
 	let mut model_id_from_description=std::collections::HashMap::<RobloxBasePartDescription,usize>::new();
 
@@ -424,6 +422,6 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 		textures:asset_id_from_texture_id.iter().map(|t|t.to_string()).collect(),
 		models:indexed_models,
 		spawn_point,
-		stages,
+		modes:Vec::new(),
 	}
 }
