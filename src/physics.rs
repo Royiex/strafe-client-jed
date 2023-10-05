@@ -13,7 +13,22 @@ pub enum PhysicsInstruction {
 	// 	bool,//true = Force
 	// )
 	//InputInstructions conditionally activate RefreshWalkTarget (by doing what SetWalkTargetVelocity used to do and then flagging it)
-	Input(InputInstruction),
+	Input(PhysicsInputInstruction),
+}
+#[derive(Debug)]
+pub enum PhysicsInputInstruction {
+	ReplaceMouse(MouseState,MouseState),
+	SetNextMouse(MouseState),
+	SetMoveForward(bool),
+	SetMoveLeft(bool),
+	SetMoveBack(bool),
+	SetMoveRight(bool),
+	SetMoveUp(bool),
+	SetMoveDown(bool),
+	SetJump(bool),
+	SetZoom(bool),
+	Reset,
+	Idle,
 }
 #[derive(Debug)]
 pub enum InputInstruction {
@@ -92,7 +107,7 @@ impl crate::instruction::InstructionConsumer<InputInstruction> for InputState{
 */
 
 //hey dumbass just use a delta
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct MouseState {
 	pub pos: glam::IVec2,
 	pub time: TIME,
@@ -106,10 +121,6 @@ impl Default for MouseState{
 	}
 }
 impl MouseState {
-	pub fn move_mouse(&mut self,pos:glam::IVec2,time:TIME){
-		self.time=time;
-		self.pos=pos;
-	}
 	pub fn lerp(&self,target:&MouseState,time:TIME)->glam::IVec2 {
 		let m0=self.pos.as_i64vec2();
 		let m1=target.pos.as_i64vec2();
@@ -556,51 +567,79 @@ impl PhysicsState {
 	}
 
 	pub fn into_worker(mut self)->crate::worker::Worker<TimedInstruction<InputInstruction>,PhysicsOutputState>{
-		let mut last_time=0;
-			//last_time: this indicates the last time the mouse position was known.
-			//Only used to generate a MouseState right before mouse movement
-			//to finalize a long period of no movement and avoid interpolating from a long out-of-date MouseState.
-		let mut mouse_blocking=true;//waiting for next_mouse to be written
+		let mut mouse_blocking=true;
+		let mut last_mouse_time=self.next_mouse.time;
 		let mut timeline=std::collections::VecDeque::new();
 		crate::worker::Worker::new(self.output(),move |ins:TimedInstruction<InputInstruction>|{
-			let run_queue=match &ins.instruction{
-				InputInstruction::MoveMouse(_)=>{
-					if !mouse_blocking{
-						//mouse has not been moving for a while.
-						//make sure not to interpolate between two distant MouseStates.
-						//generate a mouse instruction with no movement timestamped at last InputInstruction
-						//Idle instructions are CRITICAL to keeping this value up to date
-						//interpolate normally (now that prev mouse pos is up to date)
-						timeline.push_back(TimedInstruction{
-							time:last_time,
-							instruction:InputInstruction::MoveMouse(self.next_mouse.pos),
-						});
-					}
-					mouse_blocking=true;//block physics until the next mouse event or mouse event timeout.
-					true//empty queue
-				},
-				_=>{
+			if if let Some(phys_input)=match ins.instruction{
+				InputInstruction::MoveMouse(m)=>{
 					if mouse_blocking{
-						//check if last mouse move is within 50ms
-						if ins.time-self.next_mouse.time<50_000_000{
-							last_time=ins.time;
-							false//do not empty queue
-						}else{
-							mouse_blocking=false;
-							timeline.push_back(TimedInstruction{
-								time:ins.time,
-								instruction:InputInstruction::MoveMouse(self.next_mouse.pos),
-							});
-							true
-						}
+						//tell the game state which is living in the past about its future
+						timeline.push_front(TimedInstruction{
+							time:last_mouse_time,
+							instruction:PhysicsInputInstruction::SetNextMouse(MouseState{time:ins.time,pos:m}),
+						});
 					}else{
-						last_time=ins.time;
-						true
+						//mouse has just started moving again after being still for longer than 10ms.
+						//replace the entire mouse interpolation state to avoid an intermediate state with identical m0.t m1.t timestamps which will divide by zero
+						timeline.push_front(TimedInstruction{
+							time:last_mouse_time,
+							instruction:PhysicsInputInstruction::ReplaceMouse(
+								MouseState{time:last_mouse_time,pos:self.next_mouse.pos},
+								MouseState{time:ins.time,pos:m}
+							),
+						});
+						//delay physics execution until we have an interpolation target
+						mouse_blocking=true;
 					}
+					last_mouse_time=ins.time;
+					None
 				},
-			};
-			timeline.push_back(ins);
-			if run_queue{
+				InputInstruction::MoveForward(s)=>Some(PhysicsInputInstruction::SetMoveForward(s)),
+				InputInstruction::MoveLeft(s)=>Some(PhysicsInputInstruction::SetMoveLeft(s)),
+				InputInstruction::MoveBack(s)=>Some(PhysicsInputInstruction::SetMoveBack(s)),
+				InputInstruction::MoveRight(s)=>Some(PhysicsInputInstruction::SetMoveRight(s)),
+				InputInstruction::MoveUp(s)=>Some(PhysicsInputInstruction::SetMoveUp(s)),
+				InputInstruction::MoveDown(s)=>Some(PhysicsInputInstruction::SetMoveDown(s)),
+				InputInstruction::Jump(s)=>Some(PhysicsInputInstruction::SetJump(s)),
+				InputInstruction::Zoom(s)=>Some(PhysicsInputInstruction::SetZoom(s)),
+				InputInstruction::Reset=>Some(PhysicsInputInstruction::Reset),
+				InputInstruction::Idle=>Some(PhysicsInputInstruction::Idle),
+			}{
+				//non-mouse event
+				timeline.push_back(TimedInstruction{
+					time:ins.time,
+					instruction:phys_input,
+				});
+				
+				if mouse_blocking{
+					//assume the mouse has stopped moving after 10ms.
+					//shitty mice are 125Hz which is 8ms so this should cover that.
+					//setting this to 100us still doesn't print even though it's 10x lower than the polling rate,
+					//so mouse events are probably not handled separately from drawing and fire right before it :(
+					if 10_000_000<ins.time-self.next_mouse.time{
+						//push an event to extrapolate no movement from
+						timeline.push_front(TimedInstruction{
+							time:last_mouse_time,
+							instruction:PhysicsInputInstruction::SetNextMouse(MouseState{time:ins.time,pos:self.next_mouse.pos}),
+						});
+						last_mouse_time=ins.time;
+						//stop blocking. the mouse is not moving so the physics does not need to live in the past and wait for interpolation targets.
+						mouse_blocking=false;
+						true
+					}else{
+						false
+					}
+				}else{
+					//keep this up to date so that it can be used as a known-timestamp
+					//that the mouse was not moving when the mouse starts moving again
+					last_mouse_time=ins.time;
+					true
+				}
+			}else{
+				//mouse event
+				true
+			}{
 				//empty queue
 				while let Some(instruction)=timeline.pop_front(){
 					self.run(instruction.time);
@@ -1136,8 +1175,9 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 	fn process_instruction(&mut self, ins:TimedInstruction<PhysicsInstruction>) {
 		match &ins.instruction {
-			PhysicsInstruction::Input(InputInstruction::Idle)
-			|PhysicsInstruction::Input(InputInstruction::MoveMouse(_))
+			PhysicsInstruction::Input(PhysicsInputInstruction::Idle)
+			|PhysicsInstruction::Input(PhysicsInputInstruction::SetNextMouse(_))
+			|PhysicsInstruction::Input(PhysicsInputInstruction::ReplaceMouse(_,_))
 			|PhysicsInstruction::StrafeTick => (),
 			_=>println!("{}|{:?}",ins.time,ins.instruction),
 		}
@@ -1264,29 +1304,32 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				let mut refresh_walk_target=true;
 				let mut refresh_walk_target_velocity=true;
 				match input_instruction{
-					InputInstruction::MoveMouse(m) => {
+					PhysicsInputInstruction::SetNextMouse(m) => {
 						self.camera.angles=self.camera.simulate_move_angles(self.next_mouse.pos);
-						self.camera.mouse.move_mouse(self.next_mouse.pos,self.next_mouse.time);
-						self.next_mouse.move_mouse(m,self.time);
+						(self.camera.mouse,self.next_mouse)=(self.next_mouse.clone(),m);
 					},
-					InputInstruction::MoveForward(s) => self.set_control(StyleModifiers::CONTROL_MOVEFORWARD,s),
-					InputInstruction::MoveLeft(s) => self.set_control(StyleModifiers::CONTROL_MOVELEFT,s),
-					InputInstruction::MoveBack(s) => self.set_control(StyleModifiers::CONTROL_MOVEBACK,s),
-					InputInstruction::MoveRight(s) => self.set_control(StyleModifiers::CONTROL_MOVERIGHT,s),
-					InputInstruction::MoveUp(s) => self.set_control(StyleModifiers::CONTROL_MOVEUP,s),
-					InputInstruction::MoveDown(s) => self.set_control(StyleModifiers::CONTROL_MOVEDOWN,s),
-					InputInstruction::Jump(s) => {
+					PhysicsInputInstruction::ReplaceMouse(m0,m1) => {
+						self.camera.angles=self.camera.simulate_move_angles(m0.pos);
+						(self.camera.mouse,self.next_mouse)=(m0,m1);
+					},
+					PhysicsInputInstruction::SetMoveForward(s) => self.set_control(StyleModifiers::CONTROL_MOVEFORWARD,s),
+					PhysicsInputInstruction::SetMoveLeft(s) => self.set_control(StyleModifiers::CONTROL_MOVELEFT,s),
+					PhysicsInputInstruction::SetMoveBack(s) => self.set_control(StyleModifiers::CONTROL_MOVEBACK,s),
+					PhysicsInputInstruction::SetMoveRight(s) => self.set_control(StyleModifiers::CONTROL_MOVERIGHT,s),
+					PhysicsInputInstruction::SetMoveUp(s) => self.set_control(StyleModifiers::CONTROL_MOVEUP,s),
+					PhysicsInputInstruction::SetMoveDown(s) => self.set_control(StyleModifiers::CONTROL_MOVEDOWN,s),
+					PhysicsInputInstruction::SetJump(s) => {
 						self.set_control(StyleModifiers::CONTROL_JUMP,s);
 						if self.grounded{
 							self.jump();
 						}
 						refresh_walk_target_velocity=false;
 					},
-					InputInstruction::Zoom(s) => {
+					PhysicsInputInstruction::SetZoom(s) => {
 						self.set_control(StyleModifiers::CONTROL_ZOOM,s);
 						refresh_walk_target=false;
 					},
-					InputInstruction::Reset => {
+					PhysicsInputInstruction::Reset => {
 						//temp
 						self.body.position=self.spawn_point;
 						self.body.velocity=glam::Vec3::ZERO;
@@ -1297,7 +1340,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						self.grounded=false;
 						refresh_walk_target=false;
 					},
-					InputInstruction::Idle => {refresh_walk_target=false;},//literally idle!
+					PhysicsInputInstruction::Idle => {refresh_walk_target=false;},//literally idle!
 				}
 				if refresh_walk_target{
 					//calculate walk target velocity

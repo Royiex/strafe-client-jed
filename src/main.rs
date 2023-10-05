@@ -880,7 +880,7 @@ impl framework::Example for GlobalState {
 					physics.spawn_point=spawn_point;
 					physics.process_instruction(instruction::TimedInstruction{
 						time:physics.time,
-						instruction: PhysicsInstruction::Input(InputInstruction::Reset),
+						instruction: PhysicsInstruction::Input(physics::PhysicsInputInstruction::Reset),
 					});
 					physics.generate_models(&indexed_model_instances);
 					self.physics_thread=physics.into_worker();
