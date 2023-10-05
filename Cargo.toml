@@ -23,7 +23,7 @@ rbx_xml = "0.13.1"
 wgpu = "0.17.0"
 winit = "0.28.6"
 
-[profile.release]
-lto = true
-strip = true
-codegen-units = 1
+#[profile.release]
+#lto = true
+#strip = true
+#codegen-units = 1
