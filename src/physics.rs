@@ -1136,14 +1136,14 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 	fn process_instruction(&mut self, ins:TimedInstruction<PhysicsInstruction>) {
 		match &ins.instruction {
-			PhysicsInstruction::Input(InputInstruction::Idle)|
-			PhysicsInstruction::StrafeTick => (),
-			PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),
+			PhysicsInstruction::Input(InputInstruction::Idle)
+			|PhysicsInstruction::Input(InputInstruction::MoveMouse(_))
+			|PhysicsInstruction::StrafeTick => (),
 			_=>println!("{}|{:?}",ins.time,ins.instruction),
 		}
 		//selectively update body
 		match &ins.instruction {
-			PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),//dodge time for mouse movement
+			//PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),//dodge time for mouse movement
 			PhysicsInstruction::Input(_)
 			|PhysicsInstruction::ReachWalkTargetVelocity
 			|PhysicsInstruction::CollisionStart(_)
