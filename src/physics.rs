@@ -1006,7 +1006,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		match &ins.instruction {
 			PhysicsInstruction::StrafeTick => (),
 			PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),
-			_=>println!("{:?}",ins),
+			_=>println!("{}|{:?}",ins.time,ins.instruction),
 		}
 		//selectively update body
 		match &ins.instruction {
