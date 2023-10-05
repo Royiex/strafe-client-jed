@@ -996,9 +996,11 @@ impl framework::Example for GlobalState {
 				//do not step the physics because the mouse polling rate is higher than the physics can run.
 				//essentially the previous input will be overwritten until a true step runs
 				//which is fine because they run all the time.
+				let delta=glam::ivec2(delta.0 as i32,delta.1 as i32);
+				self.mouse.pos+=delta;
 				self.physics_thread.send(TimedInstruction{
 					time,
-					instruction:InputInstruction::MoveMouse(glam::ivec2(delta.0 as i32,delta.1 as i32)),
+					instruction:InputInstruction::MoveMouse(self.mouse.pos),
 				}).unwrap();
 			},
 			winit::event::DeviceEvent::MouseWheel {
@@ -1033,12 +1035,14 @@ impl framework::Example for GlobalState {
 		queue: &wgpu::Queue,
 		_spawner: &framework::Spawner,
 	) {
+		//ideally this would be scheduled to execute and finish right before the render.
 		let time=self.start_time.elapsed().as_nanos() as i64;
-
 		self.physics_thread.send(TimedInstruction{
 			time,
 			instruction:InputInstruction::Idle,
 		}).unwrap();
+		//update time lol
+		self.mouse.time=time;
 
 		let mut encoder =
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
