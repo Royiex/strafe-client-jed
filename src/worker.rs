@@ -6,13 +6,13 @@ use parking_lot::Mutex;
 //The worker thread publishes the result of its work back to the worker object for every item in the work queue.
 //The physics (target use case) knows when it has not changed the body, so not updating the value is also an option.
 
-struct Worker<Task:Send,Value:Clone> {
+pub struct Worker<Task:Send,Value:Clone> {
 	sender: mpsc::Sender<Task>,
 	value:Arc<Mutex<Value>>,
 }
 
 impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
-	fn new<F:Fn(Task)->Value+Send+'static>(value:Value,f:F) -> Self {
+	pub fn new<F:FnMut(Task)->Value+Send+'static>(value:Value,mut f:F) -> Self {
 		let (sender, receiver) = mpsc::channel::<Task>();
 		let ret=Self {
 			sender,
@@ -23,8 +23,6 @@ impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
 			loop {
 				match receiver.recv() {
 					Ok(task) => {
-						println!("Worker got a task");
-						// Process the task
 						let v=f(task);//make sure function is evaluated before lock is acquired
 						*value.lock()=v;
 					}
@@ -38,11 +36,11 @@ impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
 		ret
 	}
 
-	fn send(&self,task:Task)->Result<(), mpsc::SendError<Task>>{
+	pub fn send(&self,task:Task)->Result<(), mpsc::SendError<Task>>{
 		self.sender.send(task)
 	}
 
-	fn grab_clone(&self)->Value{
+	pub fn grab_clone(&self)->Value{
 		self.value.lock().clone()
 	}
 }
