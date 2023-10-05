@@ -565,40 +565,41 @@ impl PhysicsState {
 		crate::worker::Worker::new(self.output(),move |ins:TimedInstruction<InputInstruction>|{
 			let run_queue=match &ins.instruction{
 				InputInstruction::MoveMouse(_)=>{
+			//I FORGOT TO EDIT THE MOVE MOUSE TIMESTAMPS
 					if !mouse_blocking{
 						//mouse has not been moving for a while.
 						//make sure not to interpolate between two distant MouseStates.
 						//generate a mouse instruction with no movement timestamped at last InputInstruction
 						//Idle instructions are CRITICAL to keeping this value up to date
 						//interpolate normally (now that prev mouse pos is up to date)
-						timeline.push_back(TimedInstruction{
-							time:last_time,
-							instruction:InputInstruction::MoveMouse(self.next_mouse.pos),
-						});
+						// timeline.push_back(TimedInstruction{
+						// 	time:last_time,
+						// 	instruction:InputInstruction::MoveMouse(self.next_mouse.pos),
+						// });
 					}
 					mouse_blocking=true;//block physics until the next mouse event or mouse event timeout.
 					true//empty queue
 				},
 				_=>{
 					if mouse_blocking{
+						//maybe I can turn this inside out by making this anotehr state machine where 50_000_000 is an instruction timestamp
 						//check if last mouse move is within 50ms
 						if ins.time-self.next_mouse.time<50_000_000{
-							last_time=ins.time;
 							false//do not empty queue
 						}else{
 							mouse_blocking=false;
-							timeline.push_back(TimedInstruction{
-								time:ins.time,
-								instruction:InputInstruction::MoveMouse(self.next_mouse.pos),
-							});
+							// timeline.push_back(TimedInstruction{
+							// 	time:ins.time,
+							// 	instruction:InputInstruction::MoveMouse(self.next_mouse.pos),
+							// });
 							true
 						}
 					}else{
-						last_time=ins.time;
 						true
 					}
 				},
 			};
+			last_time=ins.time;
 			timeline.push_back(ins);
 			if run_queue{
 				//empty queue
