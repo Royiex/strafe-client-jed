@@ -173,8 +173,8 @@ impl PhysicsCamera {
 		a.y=a.y.clamp(-std::f64::consts::FRAC_PI_2, std::f64::consts::FRAC_PI_2);
 		return a
 	}
-	fn simulate_move_rotation_y(&self, delta_x: i32) -> glam::Mat3 {
-		mat3_from_rotation_y_f64(self.angles.x-self.sensitivity.x*(delta_x as f64))
+	fn simulate_move_rotation_y(&self, mouse_pos_x: i32) -> glam::Mat3 {
+		mat3_from_rotation_y_f64(self.angles.x-self.sensitivity.x*((mouse_pos_x-self.mouse.pos.x) as f64))
 	}
 }
 
