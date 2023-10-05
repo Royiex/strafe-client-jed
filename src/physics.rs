@@ -125,6 +125,7 @@ impl MouseState {
 		let m0=self.pos.as_i64vec2();
 		let m1=target.pos.as_i64vec2();
 		//these are deltas
+		//let time=time.clamp(self.time, target.time);
 		let t1t=(target.time-time) as i64;
 		let tt0=(time-self.time) as i64;
 		let dt=(target.time-self.time) as i64;
