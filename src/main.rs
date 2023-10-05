@@ -1057,6 +1057,7 @@ impl framework::Example for GlobalState {
 			)
 			.copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
 		//This code only needs to run when the uniforms change
+		/*
 		for model in self.graphics.models.iter() {
 			let model_uniforms = get_instances_buffer_data(&model.instances);
 			self.graphics.staging_belt
@@ -1069,6 +1070,7 @@ impl framework::Example for GlobalState {
 				)
 				.copy_from_slice(bytemuck::cast_slice(&model_uniforms));
 		}
+		*/
 		self.graphics.staging_belt.finish();
 
 		{
