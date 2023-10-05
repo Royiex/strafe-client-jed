@@ -44,14 +44,65 @@ pub struct GraphicsPipelines{
 	model: wgpu::RenderPipeline,
 }
 
+pub struct GraphicsCamera{
+	screen_size: glam::UVec2,
+	fov: glam::Vec2,//slope
+	//camera angles and such are extrapolated and passed in every time
+}
+
+#[inline]
+fn perspective_rh(fov_x_slope: f32, fov_y_slope: f32, z_near: f32, z_far: f32) -> glam::Mat4 {
+	//glam_assert!(z_near > 0.0 && z_far > 0.0);
+	let r = z_far / (z_near - z_far);
+	glam::Mat4::from_cols(
+		glam::Vec4::new(1.0/fov_x_slope, 0.0, 0.0, 0.0),
+		glam::Vec4::new(0.0, 1.0/fov_y_slope, 0.0, 0.0),
+		glam::Vec4::new(0.0, 0.0, r, -1.0),
+		glam::Vec4::new(0.0, 0.0, r * z_near, 0.0),
+	)
+}
+impl GraphicsCamera{
+	pub fn new(screen_size:glam::UVec2,fov_y:f32)->Self{
+		Self{
+			screen_size,
+			fov: glam::vec2(fov_y*(screen_size.x as f32)/(screen_size.y as f32),fov_y),
+		}
+	}
+	pub fn proj(&self)->glam::Mat4{
+		perspective_rh(self.fov.x, self.fov.y, 0.5, 2000.0)
+	}
+	pub fn view(&self,pos:glam::Vec3,angles:glam::Vec2)->glam::Mat4{
+		//f32 good enough for view matrix
+		glam::Mat4::from_translation(pos) * glam::Mat4::from_euler(glam::EulerRot::YXZ, angles.x, angles.y, 0f32)
+	}
+	pub fn set_screen_size(&mut self,screen_size:glam::UVec2){
+		self.screen_size=screen_size;
+		self.fov.x=self.fov.y*(screen_size.x as f32)/(screen_size.y as f32);
+	}
+
+	pub fn to_uniform_data(&self,(pos,angles): (glam::Vec3,glam::Vec2)) -> [f32; 16 * 3 + 4] {
+		let proj=self.proj();
+		let proj_inv = proj.inverse();
+		let view=self.view(pos,angles);
+		let view_inv = view.inverse();
+
+		let mut raw = [0f32; 16 * 3 + 4];
+		raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj)[..]);
+		raw[16..32].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj_inv)[..]);
+		raw[32..48].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&view_inv)[..]);
+		raw[48..52].copy_from_slice(AsRef::<[f32; 4]>::as_ref(&view.col(3)));
+		raw
+	}
+}
+
 pub struct GraphicsState{
-	screen_size: (u32, u32),
 	pipelines: GraphicsPipelines,
 	bind_groups: GraphicsBindGroups,
 	bind_group_layouts: GraphicsBindGroupLayouts,
 	samplers: GraphicsSamplers,
-	temp_squid_texture_view: wgpu::TextureView,
+	camera:GraphicsCamera,
 	camera_buf: wgpu::Buffer,
+	temp_squid_texture_view: wgpu::TextureView,
 	models: Vec<ModelGraphics>,
 	depth_view: wgpu::TextureView,
 	staging_belt: wgpu::util::StagingBelt,
@@ -66,8 +117,9 @@ impl GraphicsState{
 pub struct GlobalState{
 	start_time: std::time::Instant,
 	manual_mouse_lock:bool,
+	mouse:physics::MouseState,
 	graphics:GraphicsState,
-	physics:physics::PhysicsState,
+	physics_thread:worker::Worker<TimedInstruction<InputInstruction>,physics::PhysicsOutputState>,
 }
 
 impl GlobalState{
@@ -95,77 +147,6 @@ impl GlobalState{
 		depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
 	}
 
-	fn generate_model_physics(&mut self,indexed_models:&model::IndexedModelInstances){
-		let mut starts=Vec::new();
-		let mut spawns=Vec::new();
-		let mut ordered_checkpoints=Vec::new();
-		let mut unordered_checkpoints=Vec::new();
-		for model in &indexed_models.models{
-			//make aabb and run vertices to get realistic bounds
-			for model_instance in &model.instances{
-				if let Some(model_physics)=physics::ModelPhysics::from_model(model,model_instance){
-					let model_id=self.physics.models.len() as u32;
-					self.physics.models.push(model_physics);
-					for attr in &model_instance.temp_indexing{
-						match attr{
-							model::TempIndexedAttributes::Start{mode_id}=>starts.push((*mode_id,model_id)),
-							model::TempIndexedAttributes::Spawn{mode_id,stage_id}=>spawns.push((*mode_id,model_id,*stage_id)),
-							model::TempIndexedAttributes::OrderedCheckpoint{mode_id,checkpoint_id}=>ordered_checkpoints.push((*mode_id,model_id,*checkpoint_id)),
-							model::TempIndexedAttributes::UnorderedCheckpoint{mode_id}=>unordered_checkpoints.push((*mode_id,model_id)),
-						}
-					}
-				}
-			}
-		}
-		//I don't wanna write structs for temporary structures
-		//this code builds ModeDescriptions from the unsorted lists at the top of the function
-		starts.sort_by_key(|tup|tup.0);
-		let mut eshmep=std::collections::HashMap::new();
-		let mut modedatas:Vec<(u32,Vec<(u32,u32)>,Vec<(u32,u32)>,Vec<u32>)>=starts.into_iter().enumerate().map(|(i,tup)|{
-			eshmep.insert(tup.0,i);
-			(tup.1,Vec::new(),Vec::new(),Vec::new())
-		}).collect();
-		for tup in spawns{
-			if let Some(mode_id)=eshmep.get(&tup.0){
-				if let Some(modedata)=modedatas.get_mut(*mode_id){
-					modedata.1.push((tup.2,tup.1));
-				}
-			}
-		}
-		for tup in ordered_checkpoints{
-			if let Some(mode_id)=eshmep.get(&tup.0){
-				if let Some(modedata)=modedatas.get_mut(*mode_id){
-					modedata.2.push((tup.2,tup.1));
-				}
-			}
-		}
-		for tup in unordered_checkpoints{
-			if let Some(mode_id)=eshmep.get(&tup.0){
-				if let Some(modedata)=modedatas.get_mut(*mode_id){
-					modedata.3.push(tup.1);
-				}
-			}
-		}
-		let num_modes=self.physics.modes.len();
-		for (mode_id,mode) in eshmep{
-			self.physics.mode_from_mode_id.insert(mode_id,num_modes+mode);
-		}
-		self.physics.modes.append(&mut modedatas.into_iter().map(|mut tup|{
-			tup.1.sort_by_key(|tup|tup.0);
-			tup.2.sort_by_key(|tup|tup.0);
-			let mut eshmep1=std::collections::HashMap::new();
-			let mut eshmep2=std::collections::HashMap::new();
-			model::ModeDescription{
-				start:tup.0,
-				spawns:tup.1.into_iter().enumerate().map(|(i,tup)|{eshmep1.insert(tup.0,i);tup.1}).collect(),
-				ordered_checkpoints:tup.2.into_iter().enumerate().map(|(i,tup)|{eshmep2.insert(tup.0,i);tup.1}).collect(),
-				unordered_checkpoints:tup.3,
-				spawn_from_stage_id:eshmep1,
-				ordered_checkpoint_from_checkpoint_id:eshmep2,
-			}
-		}).collect());
-		println!("Physics Objects: {}",self.physics.models.len());
-	}
 	fn generate_model_graphics(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,indexed_models:model::IndexedModelInstances){
 		//generate texture view per texture
 
@@ -408,20 +389,6 @@ fn get_instances_buffer_data(instances:&[ModelGraphicsInstance]) -> Vec<f32> {
 	raw
 }
 
-fn to_uniform_data(camera: &physics::Camera, pos: glam::Vec3) -> [f32; 16 * 3 + 4] {
-	let proj=camera.proj();
-	let proj_inv = proj.inverse();
-	let view=camera.view(pos);
-	let view_inv = view.inverse();
-
-	let mut raw = [0f32; 16 * 3 + 4];
-	raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj)[..]);
-	raw[16..32].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj_inv)[..]);
-	raw[32..48].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&view_inv)[..]);
-	raw[48..52].copy_from_slice(AsRef::<[f32; 4]>::as_ref(&view.col(3)));
-	raw
-}
-
 impl framework::Example for GlobalState {
 	fn optional_features() -> wgpu::Features {
 		wgpu::Features::TEXTURE_COMPRESSION_ASTC
@@ -581,25 +548,6 @@ impl framework::Example for GlobalState {
 			label: None,
 			source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
 		});
-
-		let physics = physics::PhysicsState {
-			spawn_point:glam::vec3(0.0,50.0,0.0),
-			body: physics::Body::with_pva(glam::vec3(0.0,50.0,0.0),glam::vec3(0.0,0.0,0.0),glam::vec3(0.0,-100.0,0.0)),
-			time: 0,
-			style:physics::StyleModifiers::default(),
-			grounded: false,
-			contacts: std::collections::HashMap::new(),
-			intersects: std::collections::HashMap::new(),
-			models: Vec::new(),
-			walk: physics::WalkState::new(),
-			camera: physics::Camera::from_offset(glam::vec3(0.0,4.5-2.5,0.0),(config.width as f32)/(config.height as f32)),
-			mouse_interpolation: physics::MouseInterpolationState::new(),
-			controls: 0,
-			world:physics::WorldState{},
-			game:physics::GameMechanicsState::default(),
-			modes:Vec::new(),
-			mode_from_mode_id:std::collections::HashMap::new(),
-		};
 
 		//load textures
 		let device_features = device.features();
@@ -795,7 +743,10 @@ impl framework::Example for GlobalState {
 			multiview: None,
 		});
 
-		let camera_uniforms = to_uniform_data(&physics.camera,physics.body.extrapolated_position(0));
+		let mut physics = physics::PhysicsState::default();
+
+		let camera=GraphicsCamera::new(glam::uvec2(config.width,config.height), 1.0);
+		let camera_uniforms = camera.to_uniform_data(physics.output().adjust_mouse(&physics.next_mouse));
 		let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 			label: Some("Camera"),
 			contents: bytemuck::cast_slice(&camera_uniforms),
@@ -811,6 +762,7 @@ impl framework::Example for GlobalState {
 			],
 			label: Some("Camera"),
 		});
+
 		let skybox_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
 			layout: &skybox_texture_bind_group_layout,
 			entries: &[
@@ -829,7 +781,6 @@ impl framework::Example for GlobalState {
 		let depth_view = Self::create_depth_texture(config, device);
 
 		let graphics=GraphicsState {
-			screen_size: (config.width,config.height),
 			pipelines:GraphicsPipelines{
 				skybox:sky_pipeline,
 				model:model_pipeline
@@ -838,6 +789,7 @@ impl framework::Example for GlobalState {
 				camera:camera_bind_group,
 				skybox_texture:skybox_texture_bind_group,
 			},
+			camera,
 			camera_buf,
 			models: Vec::new(),
 			depth_view,
@@ -847,20 +799,30 @@ impl framework::Example for GlobalState {
 			temp_squid_texture_view: squid_texture_view,
 		};
 
-		let mut state=GlobalState{
-			start_time:Instant::now(),
-			manual_mouse_lock:false,
-			graphics,
-			physics,
-		};
-
 		let indexed_model_instances=model::IndexedModelInstances{
 			textures:Vec::new(),
 			models:indexed_models,
 			spawn_point:glam::Vec3::Y*50.0,
 			modes:Vec::new(),
 		};
-		state.generate_model_physics(&indexed_model_instances);
+
+		//how to multithread
+
+		//1. build
+		physics.generate_models(&indexed_model_instances);
+
+		//2. move
+		let physics_thread=physics.into_worker();
+
+		//3. forget
+
+		let mut state=GlobalState{
+			start_time:Instant::now(),
+			manual_mouse_lock:false,
+			mouse:physics::MouseState::default(),
+			graphics,
+			physics_thread,
+		};
 		state.generate_model_graphics(&device,&queue,indexed_model_instances);
 
 		let args:Vec<String>=std::env::args().collect();
@@ -911,18 +873,20 @@ impl framework::Example for GlobalState {
 				}{
 					let spawn_point=indexed_model_instances.spawn_point;
 					//if generate_indexed_models succeeds, clear the previous ones
-					self.physics.clear();
 					self.graphics.clear();
-					self.physics.game.stage_id=0;
-					self.physics.spawn_point=spawn_point;
-					self.generate_model_physics(&indexed_model_instances);
-					self.generate_model_graphics(device,queue,indexed_model_instances);
-					//manual reset
-					let time=self.physics.time;
-					instruction::InstructionConsumer::process_instruction(&mut self.physics, instruction::TimedInstruction{
-						time,
+
+					let mut physics=physics::PhysicsState::default();
+					physics.game.stage_id=0;
+					physics.spawn_point=spawn_point;
+					physics.process_instruction(instruction::TimedInstruction{
+						time:physics.time,
 						instruction: PhysicsInstruction::Input(InputInstruction::Reset),
 					});
+					physics.generate_models(&indexed_model_instances);
+					self.physics_thread=physics.into_worker();
+
+					self.generate_model_graphics(device,queue,indexed_model_instances);
+					//manual reset
 				}else{
 					println!("No modeldatas were generated");
 				}
@@ -983,7 +947,7 @@ impl framework::Example for GlobalState {
 					15=>{//Tab
 						if s{
 							self.manual_mouse_lock=false;
-							match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.graphics.screen_size.0 as f32/2.0, self.graphics.screen_size.1 as f32/2.0)){
+							match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.graphics.camera.screen_size.x as f32/2.0, self.graphics.camera.screen_size.y as f32/2.0)){
 								Ok(())=>(),
 								Err(e)=>println!("Could not set cursor position: {:?}",e),
 							}
@@ -1012,18 +976,17 @@ impl framework::Example for GlobalState {
 					},
 					_ => {println!("scancode {}",keycode);None},
 				}{
-					self.physics.run(time);
-					self.physics.process_instruction(TimedInstruction{
+					self.physics_thread.send(TimedInstruction{
 						time,
-						instruction:PhysicsInstruction::Input(input_instruction),
-					})
+						instruction:input_instruction,
+					}).unwrap();
 				}
 			},
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine
 			} => {
 				if self.manual_mouse_lock{
-					match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.graphics.screen_size.0 as f32/2.0, self.graphics.screen_size.1 as f32/2.0)){
+					match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.graphics.camera.screen_size.x as f32/2.0, self.graphics.camera.screen_size.y as f32/2.0)){
 						Ok(())=>(),
 						Err(e)=>println!("Could not set cursor position: {:?}",e),
 					}
@@ -1031,21 +994,20 @@ impl framework::Example for GlobalState {
 				//do not step the physics because the mouse polling rate is higher than the physics can run.
 				//essentially the previous input will be overwritten until a true step runs
 				//which is fine because they run all the time.
-				self.physics.process_instruction(TimedInstruction{
+				self.physics_thread.send(TimedInstruction{
 					time,
-					instruction:PhysicsInstruction::Input(InputInstruction::MoveMouse(glam::ivec2(delta.0 as i32,delta.1 as i32))),
-				})
+					instruction:InputInstruction::MoveMouse(glam::ivec2(delta.0 as i32,delta.1 as i32)),
+				}).unwrap();
 			},
 			winit::event::DeviceEvent::MouseWheel {
 			    delta,
 			} => {
 				println!("mousewheel {:?}",delta);
 				if false{//self.physics.style.use_scroll{
-					self.physics.run(time);
-					self.physics.process_instruction(TimedInstruction{
+					self.physics_thread.send(TimedInstruction{
 						time,
-						instruction:PhysicsInstruction::Input(InputInstruction::Jump(true)),//activates the immediate jump path, but the style modifier prevents controls&CONTROL_JUMP bit from being set to auto jump
-					})
+						instruction:InputInstruction::Jump(true),//activates the immediate jump path, but the style modifier prevents controls&CONTROL_JUMP bit from being set to auto jump
+					}).unwrap();
 				}
 			}
 			_=>(),
@@ -1059,8 +1021,7 @@ impl framework::Example for GlobalState {
 		_queue: &wgpu::Queue,
 	) {
 		self.graphics.depth_view = Self::create_depth_texture(config, device);
-		self.graphics.screen_size = (config.width, config.height);
-		self.physics.camera.set_fov_aspect(1.0,(config.width as f32)/(config.height as f32));
+		self.graphics.camera.set_screen_size(glam::uvec2(config.width, config.height));
 	}
 
 	fn render(
@@ -1072,13 +1033,16 @@ impl framework::Example for GlobalState {
 	) {
 		let time=self.start_time.elapsed().as_nanos() as i64;
 
-		self.physics.run(time);
+		self.physics_thread.send(TimedInstruction{
+			time,
+			instruction:InputInstruction::Idle,
+		}).unwrap();
 
 		let mut encoder =
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
 		// update rotation
-		let camera_uniforms = to_uniform_data(&self.physics.camera,self.physics.body.extrapolated_position(time));
+		let camera_uniforms = self.graphics.camera.to_uniform_data(self.physics_thread.grab_clone().adjust_mouse(&self.mouse));
 		self.graphics.staging_belt
 			.write_buffer(
 				&mut encoder,

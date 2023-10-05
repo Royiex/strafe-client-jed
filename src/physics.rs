@@ -32,7 +32,7 @@ pub enum InputInstruction {
 		//for interpolation / networking / playback reasons, most playback heads will always want
 		//to be 1 instruction ahead to generate the next state for interpolation.
 }
-#[derive(Clone,Debug)]
+#[derive(Clone)]
 pub struct Body {
 	position: glam::Vec3,//I64 where 2^32 = 1 u
 	velocity: glam::Vec3,//I64 where 2^32 = 1 u/s
@@ -91,49 +91,33 @@ impl crate::instruction::InstructionConsumer<InputInstruction> for InputState{
 }
 */
 
-enum MouseInterpolation {
-	First,//just checks the last value
-	Lerp,//lerps between
-}
-
 //hey dumbass just use a delta
-pub struct MouseInterpolationState {
-	interpolation: MouseInterpolation,
-	time0: TIME,
-	time1: TIME,
-	mouse0: glam::IVec2,
-	mouse1: glam::IVec2,
+#[derive(Clone)]
+pub struct MouseState {
+	pub pos: glam::IVec2,
+	pub time: TIME,
 }
-
-impl MouseInterpolationState {
-	pub fn new() -> Self {
+impl Default for MouseState{
+	fn default() -> Self {
 		Self {
-			interpolation:MouseInterpolation::First,
-			time0:0,
-			time1:1,//ONE NANOSECOND!!!! avoid divide by zero
-			mouse0:glam::IVec2::ZERO,
-			mouse1:glam::IVec2::ZERO,
+			time:0,
+			pos:glam::IVec2::ZERO,
 		}
 	}
-	pub fn move_mouse(&mut self,time:TIME,delta:glam::IVec2){
-		self.time0=self.time1;
-		self.mouse0=self.mouse1;
-		self.time1=time;
-		self.mouse1=self.mouse1+delta;
+}
+impl MouseState {
+	pub fn move_mouse(&mut self,pos:glam::IVec2,time:TIME){
+		self.time=time;
+		self.pos=pos;
 	}
-	pub fn interpolated_position(&self,time:TIME) -> glam::IVec2 {
-		match self.interpolation {
-			MouseInterpolation::First => self.mouse0,
-			MouseInterpolation::Lerp => {
-				let m0=self.mouse0.as_i64vec2();
-				let m1=self.mouse1.as_i64vec2();
-				//these are deltas
-				let t1t=(self.time1-time) as i64;
-				let tt0=(time-self.time0) as i64;
-				let dt=(self.time1-self.time0) as i64;
-				((m0*t1t+m1*tt0)/dt).as_ivec2()
-			}
-		}
+	pub fn lerp(&self,target:&MouseState,time:TIME)->glam::IVec2 {
+		let m0=self.pos.as_i64vec2();
+		let m1=target.pos.as_i64vec2();
+		//these are deltas
+		let t1t=(target.time-time) as i64;
+		let tt0=(time-self.time) as i64;
+		let dt=(target.time-self.time) as i64;
+		((m0*t1t+m1*tt0)/dt).as_ivec2()
 	}
 }
 
@@ -156,15 +140,14 @@ impl WalkState {
 	}
 }
 
-// Note: we use the Y=up coordinate space in this example.
-pub struct Camera {
+#[derive(Clone)]
+pub struct PhysicsCamera {
 	offset: glam::Vec3,
 	angles: glam::DVec2,//YAW AND THEN PITCH
 	//punch: glam::Vec3,
 	//punch_velocity: glam::Vec3,
-	fov: glam::Vec2,//slope
 	sensitivity: glam::DVec2,
-	time: TIME,
+	mouse:MouseState,
 }
 
 #[inline]
@@ -176,45 +159,22 @@ fn mat3_from_rotation_y_f64(angle: f64) -> glam::Mat3 {
 		glam::Vec3::new(sina as f32, 0.0, cosa as f32),
 	)
 }
-#[inline]
-fn perspective_rh(fov_x_slope: f32, fov_y_slope: f32, z_near: f32, z_far: f32) -> glam::Mat4 {
-	//glam_assert!(z_near > 0.0 && z_far > 0.0);
-	let r = z_far / (z_near - z_far);
-	glam::Mat4::from_cols(
-		glam::Vec4::new(1.0/fov_x_slope, 0.0, 0.0, 0.0),
-		glam::Vec4::new(0.0, 1.0/fov_y_slope, 0.0, 0.0),
-		glam::Vec4::new(0.0, 0.0, r, -1.0),
-		glam::Vec4::new(0.0, 0.0, r * z_near, 0.0),
-	)
-}
-impl Camera {
-	pub fn from_offset(offset:glam::Vec3,aspect:f32) -> Self {
+impl PhysicsCamera {
+	pub fn from_offset(offset:glam::Vec3) -> Self {
 		Self{
 			offset,
 			angles: glam::DVec2::ZERO,
-			fov: glam::vec2(aspect,1.0),
 			sensitivity: glam::dvec2(1.0/16384.0,1.0/16384.0),
-			time: 0,
+			mouse:MouseState{pos:glam::IVec2::ZERO,time:-1},//escape initialization hell divide by zero
 		}
 	}
-	fn simulate_move_angles(&self, delta: glam::IVec2) -> glam::DVec2 {
-		let mut a=self.angles-self.sensitivity*delta.as_dvec2();
+	pub fn simulate_move_angles(&self, mouse_pos: glam::IVec2) -> glam::DVec2 {
+		let mut a=self.angles-self.sensitivity*(mouse_pos-self.mouse.pos).as_dvec2();
 		a.y=a.y.clamp(-std::f64::consts::FRAC_PI_2, std::f64::consts::FRAC_PI_2);
 		return a
 	}
 	fn simulate_move_rotation_y(&self, delta_x: i32) -> glam::Mat3 {
 		mat3_from_rotation_y_f64(self.angles.x-self.sensitivity.x*(delta_x as f64))
-	}
-	pub fn proj(&self)->glam::Mat4{
-		perspective_rh(self.fov.x, self.fov.y, 0.5, 2000.0)
-	}
-	pub fn view(&self,pos:glam::Vec3)->glam::Mat4{
-		//f32 good enough for view matrix
-		glam::Mat4::from_translation(pos+self.offset) * glam::Mat4::from_euler(glam::EulerRot::YXZ, self.angles.x as f32, self.angles.y as f32, 0f32)
-	}
-	pub fn set_fov_aspect(&mut self,fov:f32,aspect:f32){
-		self.fov.x=fov*aspect;
-		self.fov.y=fov;
 	}
 }
 
@@ -275,7 +235,7 @@ impl StyleModifiers{
 	const UP_DIR:glam::Vec3 = glam::Vec3::Y;
 
 	fn get_control(&self,control:u32,controls:u32)->bool{
-		controls&self.controls_mask&control!=0
+		controls&self.controls_mask&control==control
 	}
 
 	fn get_control_dir(&self,controls:u32)->glam::Vec3{
@@ -319,8 +279,8 @@ pub struct PhysicsState{
 	pub intersects:std::collections::HashMap::<u32,RelativeCollision>,
 	//pub intersections: Vec<ModelId>,
 	//camera must exist in state because wormholes modify the camera, also camera punch
-	pub camera:Camera,
-	pub mouse_interpolation:MouseInterpolationState,
+	pub camera:PhysicsCamera,
+	pub next_mouse:MouseState,//Where is the mouse headed next
 	pub controls:u32,
 	pub walk:WalkState,
 	pub grounded:bool,
@@ -332,6 +292,16 @@ pub struct PhysicsState{
 	//the spawn point is where you spawn when you load into the map.
 	//This is not the same as Reset which teleports you to Spawn0
 	pub spawn_point:glam::Vec3,
+}
+#[derive(Clone)]
+pub struct PhysicsOutputState{
+	camera:PhysicsCamera,
+	body:Body,
+}
+impl PhysicsOutputState{
+	pub fn adjust_mouse(&self,mouse:&MouseState)->(glam::Vec3,glam::Vec2){
+		(self.body.extrapolated_position(mouse.time),self.camera.simulate_move_angles(mouse.pos).as_vec2())
+	}
 }
 
 #[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
@@ -554,6 +524,29 @@ impl Body {
 	}
 }
 
+impl Default for PhysicsState{
+	fn default() -> Self {
+ 		Self{
+			spawn_point:glam::vec3(0.0,50.0,0.0),
+			body: Body::with_pva(glam::vec3(0.0,50.0,0.0),glam::vec3(0.0,0.0,0.0),glam::vec3(0.0,-100.0,0.0)),
+			time: 0,
+			style:StyleModifiers::default(),
+			grounded: false,
+			contacts: std::collections::HashMap::new(),
+			intersects: std::collections::HashMap::new(),
+			models: Vec::new(),
+			walk: WalkState::new(),
+			camera: PhysicsCamera::from_offset(glam::vec3(0.0,4.5-2.5,0.0)),
+			next_mouse: MouseState::default(),
+			controls: 0,
+			world:WorldState{},
+			game:GameMechanicsState::default(),
+			modes:Vec::new(),
+			mode_from_mode_id:std::collections::HashMap::new(),
+		}
+	}
+}
+
 impl PhysicsState {
 	pub fn clear(&mut self){
 		self.models.clear();
@@ -561,6 +554,145 @@ impl PhysicsState {
 		self.contacts.clear();
 		self.intersects.clear();
 	}
+
+	pub fn into_worker(mut self)->crate::worker::Worker<TimedInstruction<InputInstruction>,PhysicsOutputState>{
+		let mut last_time=0;
+			//last_time: this indicates the last time the mouse position was known.
+			//Only used to generate a MouseState right before mouse movement
+			//to finalize a long period of no movement and avoid interpolating from a long out-of-date MouseState.
+		let mut mouse_blocking=true;//waiting for next_mouse to be written
+		let mut timeline=std::collections::VecDeque::new();
+		crate::worker::Worker::new(self.output(),move |ins:TimedInstruction<InputInstruction>|{
+			let run_queue=match &ins.instruction{
+				InputInstruction::MoveMouse(_)=>{
+					if !mouse_blocking{
+						//mouse has not been moving for a while.
+						//make sure not to interpolate between two distant MouseStates.
+						//generate a mouse instruction with no movement timestamped at last InputInstruction
+						//Idle instructions are CRITICAL to keeping this value up to date
+						//interpolate normally (now that prev mouse pos is up to date)
+						timeline.push_back(TimedInstruction{
+							time:last_time,
+							instruction:InputInstruction::MoveMouse(self.next_mouse.pos),
+						});
+					}
+					mouse_blocking=true;//block physics until the next mouse event or mouse event timeout.
+					true//empty queue
+				},
+				_=>{
+					if mouse_blocking{
+						//check if last mouse move is within 50ms
+						if ins.time-self.next_mouse.time<50_000_000{
+							last_time=ins.time;
+							false//do not empty queue
+						}else{
+							mouse_blocking=false;
+							timeline.push_back(TimedInstruction{
+								time:ins.time,
+								instruction:InputInstruction::MoveMouse(self.next_mouse.pos),
+							});
+							true
+						}
+					}else{
+						last_time=ins.time;
+						true
+					}
+				},
+			};
+			timeline.push_back(ins);
+			if run_queue{
+				//empty queue
+				while let Some(instruction)=timeline.pop_front(){
+					self.run(instruction.time);
+					self.process_instruction(TimedInstruction{
+						time:instruction.time,
+						instruction:PhysicsInstruction::Input(instruction.instruction),
+					});
+				}
+			}
+			self.output()
+		})
+	}
+
+	pub fn output(&self)->PhysicsOutputState{
+		PhysicsOutputState{
+			body:self.body.clone(),
+			camera:self.camera.clone(),
+		}
+	}
+
+	pub fn generate_models(&mut self,indexed_models:&crate::model::IndexedModelInstances){
+		let mut starts=Vec::new();
+		let mut spawns=Vec::new();
+		let mut ordered_checkpoints=Vec::new();
+		let mut unordered_checkpoints=Vec::new();
+		for model in &indexed_models.models{
+			//make aabb and run vertices to get realistic bounds
+			for model_instance in &model.instances{
+				if let Some(model_physics)=ModelPhysics::from_model(model,model_instance){
+					let model_id=self.models.len() as u32;
+					self.models.push(model_physics);
+					for attr in &model_instance.temp_indexing{
+						match attr{
+							crate::model::TempIndexedAttributes::Start{mode_id}=>starts.push((*mode_id,model_id)),
+							crate::model::TempIndexedAttributes::Spawn{mode_id,stage_id}=>spawns.push((*mode_id,model_id,*stage_id)),
+							crate::model::TempIndexedAttributes::OrderedCheckpoint{mode_id,checkpoint_id}=>ordered_checkpoints.push((*mode_id,model_id,*checkpoint_id)),
+							crate::model::TempIndexedAttributes::UnorderedCheckpoint{mode_id}=>unordered_checkpoints.push((*mode_id,model_id)),
+						}
+					}
+				}
+			}
+		}
+		//I don't wanna write structs for temporary structures
+		//this code builds ModeDescriptions from the unsorted lists at the top of the function
+		starts.sort_by_key(|tup|tup.0);
+		let mut eshmep=std::collections::HashMap::new();
+		let mut modedatas:Vec<(u32,Vec<(u32,u32)>,Vec<(u32,u32)>,Vec<u32>)>=starts.into_iter().enumerate().map(|(i,tup)|{
+			eshmep.insert(tup.0,i);
+			(tup.1,Vec::new(),Vec::new(),Vec::new())
+		}).collect();
+		for tup in spawns{
+			if let Some(mode_id)=eshmep.get(&tup.0){
+				if let Some(modedata)=modedatas.get_mut(*mode_id){
+					modedata.1.push((tup.2,tup.1));
+				}
+			}
+		}
+		for tup in ordered_checkpoints{
+			if let Some(mode_id)=eshmep.get(&tup.0){
+				if let Some(modedata)=modedatas.get_mut(*mode_id){
+					modedata.2.push((tup.2,tup.1));
+				}
+			}
+		}
+		for tup in unordered_checkpoints{
+			if let Some(mode_id)=eshmep.get(&tup.0){
+				if let Some(modedata)=modedatas.get_mut(*mode_id){
+					modedata.3.push(tup.1);
+				}
+			}
+		}
+		let num_modes=self.modes.len();
+		for (mode_id,mode) in eshmep{
+			self.mode_from_mode_id.insert(mode_id,num_modes+mode);
+		}
+		self.modes.append(&mut modedatas.into_iter().map(|mut tup|{
+			tup.1.sort_by_key(|tup|tup.0);
+			tup.2.sort_by_key(|tup|tup.0);
+			let mut eshmep1=std::collections::HashMap::new();
+			let mut eshmep2=std::collections::HashMap::new();
+			crate::model::ModeDescription{
+				start:tup.0,
+				spawns:tup.1.into_iter().enumerate().map(|(i,tup)|{eshmep1.insert(tup.0,i);tup.1}).collect(),
+				ordered_checkpoints:tup.2.into_iter().enumerate().map(|(i,tup)|{eshmep2.insert(tup.0,i);tup.1}).collect(),
+				unordered_checkpoints:tup.3,
+				spawn_from_stage_id:eshmep1,
+				ordered_checkpoint_from_checkpoint_id:eshmep2,
+			}
+		}).collect());
+		println!("Physics Objects: {}",self.models.len());
+	}
+
 	pub fn get_mode(&self,mode_id:u32)->Option<&crate::model::ModeDescription>{
 		if let Some(&mode)=self.mode_from_mode_id.get(&mode_id){
 			self.modes.get(mode)
@@ -1004,6 +1136,7 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 	fn process_instruction(&mut self, ins:TimedInstruction<PhysicsInstruction>) {
 		match &ins.instruction {
+			PhysicsInstruction::Input(InputInstruction::Idle)|
 			PhysicsInstruction::StrafeTick => (),
 			PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),
 			_=>println!("{}|{:?}",ins.time,ins.instruction),
@@ -1032,10 +1165,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 								_ => (),
 							},
 						}
-						match &general.booster{
-							Some(booster)=>self.body.velocity+=booster.velocity,
-							None=>(),
-						}
+						//check ground
+						self.contacts.insert(c.model,c);
 						match &general.stage_element{
 							Some(stage_element)=>{
 								if stage_element.force||self.game.stage_id<stage_element.stage_id{
@@ -1065,11 +1196,16 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 							},
 							None=>(),
 						}
-						//check ground
-						self.contacts.insert(c.model,c);
 						//flatten v
 						let mut v=self.body.velocity;
 						self.contact_constrain_velocity(&mut v);
+						match &general.booster{
+							Some(booster)=>{
+								v+=booster.velocity;
+								self.contact_constrain_velocity(&mut v);
+							},
+							None=>(),
+						}
 						self.body.velocity=v;
 						if self.grounded&&self.style.get_control(StyleModifiers::CONTROL_JUMP,self.controls){
 							self.jump();
@@ -1105,7 +1241,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				}
 			},
 			PhysicsInstruction::StrafeTick => {
-				let camera_mat=self.camera.simulate_move_rotation_y(self.mouse_interpolation.interpolated_position(self.time).x-self.mouse_interpolation.mouse0.x);
+				let camera_mat=self.camera.simulate_move_rotation_y(self.camera.mouse.lerp(&self.next_mouse,self.time).x);
 				let control_dir=camera_mat*self.style.get_control_dir(self.controls);
 				let d=self.body.velocity.dot(control_dir);
 				if d<self.style.mv {
@@ -1129,8 +1265,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				let mut refresh_walk_target_velocity=true;
 				match input_instruction{
 					InputInstruction::MoveMouse(m) => {
-						self.camera.angles=self.camera.simulate_move_angles(self.mouse_interpolation.mouse1-self.mouse_interpolation.mouse0);
-						self.mouse_interpolation.move_mouse(self.time,m);
+						self.camera.angles=self.camera.simulate_move_angles(self.next_mouse.pos);
+						self.camera.mouse.move_mouse(self.next_mouse.pos,self.next_mouse.time);
+						self.next_mouse.move_mouse(m,self.time);
 					},
 					InputInstruction::MoveForward(s) => self.set_control(StyleModifiers::CONTROL_MOVEFORWARD,s),
 					InputInstruction::MoveLeft(s) => self.set_control(StyleModifiers::CONTROL_MOVELEFT,s),
@@ -1165,7 +1302,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				if refresh_walk_target{
 					//calculate walk target velocity
 					if refresh_walk_target_velocity{
-						let camera_mat=self.camera.simulate_move_rotation_y(self.mouse_interpolation.interpolated_position(self.time).x-self.mouse_interpolation.mouse0.x);
+						let camera_mat=self.camera.simulate_move_rotation_y(self.camera.mouse.lerp(&self.next_mouse,self.time).x);
 						let control_dir=camera_mat*self.style.get_control_dir(self.controls);
 						self.walk.target_velocity=self.style.walkspeed*control_dir;
 					}
