@@ -33,7 +33,10 @@ impl Aabb {
 		self.min=self.min.min(point);
 		self.max=self.max.max(point);
 	}
-
+	pub fn join(&mut self, aabb:&Aabb){
+		self.min=self.min.min(aabb.min);
+		self.max=self.max.max(aabb.max);
+	}
 	pub fn normal(face:AabbFace) -> glam::Vec3 {
 		match face {
 			AabbFace::Right => glam::vec3(1.,0.,0.),
@@ -59,5 +62,17 @@ impl Aabb {
 			AabbFace::Front => aabb.max.z=aabb.min.z,
 		}
 		return aabb;
+	}
+	pub fn center(&self)->glam::Vec3{
+		return (self.min+self.max)/2.0
+	}
+	//probably use floats for area & volume because we don't care about precision
+	pub fn area_weight(&self)->f32{
+		let d=self.max-self.min;
+		d.x*d.y+d.y*d.z+d.z*d.x
+	}
+	pub fn volume(&self)->f32{
+		let d=self.max-self.min;
+		d.x*d.y*d.z
 	}
 }
