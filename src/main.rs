@@ -846,7 +846,6 @@ impl framework::Example for GlobalState {
 			//.snf = "SNMF"
 			//.snf = "SNBF"
 			if let (Ok(()),Ok(()))=(std::io::Read::read_exact(&mut input, &mut first_8),std::io::Seek::rewind(&mut input)){
-				//
 				if let Some(indexed_model_instances)={
 					match &first_8[0..4]{
 						b"<rob"=>{
