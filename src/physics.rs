@@ -1094,35 +1094,35 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						}
 						//check ground
 						self.contacts.insert(c.model,c);
-						match &general.stage_element{
-							Some(stage_element)=>{
-								if stage_element.force||self.game.stage_id<stage_element.stage_id{
-									self.game.stage_id=stage_element.stage_id;
-								}
-								match stage_element.behaviour{
-									crate::model::StageElementBehaviour::SpawnAt=>(),
-									crate::model::StageElementBehaviour::Trigger
-									|crate::model::StageElementBehaviour::Teleport=>{
-										//TODO make good
-										if let Some(mode)=self.get_mode(stage_element.mode_id){
-											if let Some(&spawn)=mode.get_spawn_model_id(self.game.stage_id){
-												if let Some(model)=self.models.get(spawn as usize){
-													self.body.position=model.transform.transform_point3(glam::Vec3::Y)+glam::Vec3::Y*(self.style.hitbox_halfsize.y+0.1);
-													//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
-													self.contacts.clear();
-													self.intersects.clear();
-													self.body.acceleration=self.style.gravity;
-													self.walk.state=WalkEnum::Reached;
-													self.grounded=false;
-												}else{println!("bad1");}
-											}else{println!("bad2");}
-										}else{println!("bad3");}
-									},
-									crate::model::StageElementBehaviour::Platform=>(),
-								}
-							},
-							None=>(),
-						}
+		match &general.stage_element{
+			Some(stage_element)=>{
+				if stage_element.force||self.game.stage_id<stage_element.stage_id{
+					self.game.stage_id=stage_element.stage_id;
+				}
+				match stage_element.behaviour{
+					crate::model::StageElementBehaviour::SpawnAt=>(),
+					crate::model::StageElementBehaviour::Trigger
+					|crate::model::StageElementBehaviour::Teleport=>{
+						//TODO make good
+						if let Some(mode)=self.get_mode(stage_element.mode_id){
+							if let Some(&spawn)=mode.get_spawn_model_id(self.game.stage_id){
+								if let Some(model)=self.models.get(spawn as usize){
+									self.body.position=model.transform.transform_point3(glam::Vec3::Y)+glam::Vec3::Y*(self.style.hitbox_halfsize.y+0.1);
+									//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
+									self.contacts.clear();
+									self.intersects.clear();
+									self.body.acceleration=self.style.gravity;
+									self.walk.state=WalkEnum::Reached;
+									self.grounded=false;
+								}else{println!("bad1");}
+							}else{println!("bad2");}
+						}else{println!("bad3");}
+					},
+					crate::model::StageElementBehaviour::Platform=>(),
+				}
+			},
+			None=>(),
+		}
 						//flatten v
 						let mut v=self.body.velocity;
 						self.contact_constrain_velocity(&mut v);
@@ -1142,6 +1142,35 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
 						self.intersects.insert(c.model,c);
+		match &general.stage_element{
+			Some(stage_element)=>{
+				if stage_element.force||self.game.stage_id<stage_element.stage_id{
+					self.game.stage_id=stage_element.stage_id;
+				}
+				match stage_element.behaviour{
+					crate::model::StageElementBehaviour::SpawnAt=>(),
+					crate::model::StageElementBehaviour::Trigger
+					|crate::model::StageElementBehaviour::Teleport=>{
+						//TODO make good
+						if let Some(mode)=self.get_mode(stage_element.mode_id){
+							if let Some(&spawn)=mode.get_spawn_model_id(self.game.stage_id){
+								if let Some(model)=self.models.get(spawn as usize){
+									self.body.position=model.transform.transform_point3(glam::Vec3::Y)+glam::Vec3::Y*(self.style.hitbox_halfsize.y+0.1);
+									//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
+									self.contacts.clear();
+									self.intersects.clear();
+									self.body.acceleration=self.style.gravity;
+									self.walk.state=WalkEnum::Reached;
+									self.grounded=false;
+								}else{println!("bad1");}
+							}else{println!("bad2");}
+						}else{println!("bad3");}
+					},
+					crate::model::StageElementBehaviour::Platform=>(),
+				}
+			},
+			None=>(),
+		}
 					},
 				}
 			},

@@ -34,11 +34,12 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3,force_intersect
 	let mut general=crate::model::GameMechanicAttributes::default();
 	let mut intersecting=crate::model::IntersectingAttributes::default();
 	let mut contacting=crate::model::ContactingAttributes::default();
+	let mut force_can_collide=can_collide;
 	match name{
 		//"Water"=>intersecting.water=Some(crate::model::IntersectingWater{density:1.0,drag:1.0}),
-		"Accelerator"=>intersecting.accelerator=Some(crate::model::IntersectingAccelerator{acceleration:velocity}),
-		"MapFinish"=>general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Finish}),
-		"MapAnticheat"=>general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Anitcheat}),
+		"Accelerator"=>{force_can_collide=false;intersecting.accelerator=Some(crate::model::IntersectingAccelerator{acceleration:velocity})},
+		"MapFinish"=>{force_can_collide=false;general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Finish})},
+		"MapAnticheat"=>{force_can_collide=false;general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Anitcheat})},
 		"Platform"=>general.stage_element=Some(crate::model::GameMechanicStageElement{
 			mode_id:0,
 			stage_id:0,
@@ -57,14 +58,15 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3,force_intersect
 					},
 					behaviour:match &captures[2]{
 						"Spawn"|"SpawnAt"=>crate::model::StageElementBehaviour::SpawnAt,
-						"Trigger"=>crate::model::StageElementBehaviour::Trigger,
-						"Teleport"=>crate::model::StageElementBehaviour::Teleport,
+						"Trigger"=>{force_can_collide=false;crate::model::StageElementBehaviour::Trigger},
+						"Teleport"=>{force_can_collide=false;crate::model::StageElementBehaviour::Teleport},
 						"Platform"=>crate::model::StageElementBehaviour::Platform,
 						_=>panic!("regex1[2] messed up bad"),
 					}
 				})
 			}else if let Some(captures)=lazy_regex::regex!(r"^Bonus(Finish|Anticheat)(\d+)$")
 			.captures(other){
+				force_can_collide=false;
 				match &captures[1]{
 					"Finish"=>general.zone=Some(crate::model::GameMechanicZone{mode_id:captures[2].parse::<u32>().unwrap(),behaviour:crate::model::ZoneBehaviour::Finish}),
 					"Anticheat"=>general.zone=Some(crate::model::GameMechanicZone{mode_id:captures[2].parse::<u32>().unwrap(),behaviour:crate::model::ZoneBehaviour::Anitcheat}),
@@ -77,7 +79,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:glam::Vec3,force_intersect
 	if velocity!=glam::Vec3::ZERO{
 		general.booster=Some(crate::model::GameMechanicBooster{velocity});
 	}
-	match can_collide{
+	match force_can_collide{
 		true=>{
 			match name{
 				//"Bounce"=>(),
