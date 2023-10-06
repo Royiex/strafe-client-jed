@@ -904,18 +904,18 @@ impl PhysicsState {
 		None
 	}
 	fn predict_collision_start(&self,time:TIME,time_limit:TIME,model_id:u32) -> Option<TimedInstruction<PhysicsInstruction>> {
+		let mesh0=self.mesh();
+		let mesh1=self.models.get(model_id as usize).unwrap().mesh();
+		let (p,v,a,time)=(self.body.position,self.body.velocity,self.body.acceleration,self.body.time);
 		//find best t
 		let mut best_time=time_limit;
 		let mut best_face:Option<TreyMeshFace>=None;
-		let mesh0=self.mesh();
-		let mesh1=self.models.get(model_id as usize).unwrap().mesh();
-		let (p,v,a)=(self.body.position,self.body.velocity,self.body.acceleration);
 		//collect x
 		for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,0.5*a.x) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
+			let t_time=time+((t as f64)*1_000_000_000f64) as TIME;
 			if time<=t_time&&t_time<best_time&&0f32<v.x+a.x*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
@@ -931,7 +931,7 @@ impl PhysicsState {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
+			let t_time=time+((t as f64)*1_000_000_000f64) as TIME;
 			if time<=t_time&&t_time<best_time&&v.x+a.x*t<0f32{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
@@ -948,7 +948,7 @@ impl PhysicsState {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
+			let t_time=time+((t as f64)*1_000_000_000f64) as TIME;
 			if time<=t_time&&t_time<best_time&&0f32<v.y+a.y*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
@@ -964,7 +964,7 @@ impl PhysicsState {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
+			let t_time=time+((t as f64)*1_000_000_000f64) as TIME;
 			if time<=t_time&&t_time<best_time&&v.y+a.y*t<0f32{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
@@ -981,7 +981,7 @@ impl PhysicsState {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
+			let t_time=time+((t as f64)*1_000_000_000f64) as TIME;
 			if time<=t_time&&t_time<best_time&&0f32<v.z+a.z*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
@@ -997,7 +997,7 @@ impl PhysicsState {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=self.body.time+((t as f64)*1_000_000_000f64) as TIME;
+			let t_time=time+((t as f64)*1_000_000_000f64) as TIME;
 			if time<=t_time&&t_time<best_time&&v.z+a.z*t<0f32{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
