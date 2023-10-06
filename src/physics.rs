@@ -312,7 +312,7 @@ pub struct PhysicsOutputState{
 }
 impl PhysicsOutputState{
 	pub fn adjust_mouse(&self,mouse:&MouseState)->(glam::Vec3,glam::Vec2){
-		(self.body.extrapolated_position(mouse.time),self.camera.simulate_move_angles(mouse.pos).as_vec2())
+		(self.body.extrapolated_position(mouse.time)+self.camera.offset,self.camera.simulate_move_angles(mouse.pos).as_vec2())
 	}
 }
 
