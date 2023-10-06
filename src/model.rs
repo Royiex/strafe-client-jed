@@ -52,7 +52,7 @@ pub struct ModelSingleTexture{
 #[derive(Clone)]
 pub struct ModelGraphicsInstance{
 	pub transform:glam::Mat4,
-	pub normal_transform:glam::Mat4,
+	pub normal_transform:glam::Mat3,
 	pub color:glam::Vec4,
 }
 pub struct ModelInstance{

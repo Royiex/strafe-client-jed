@@ -73,7 +73,7 @@ impl GraphicsCamera{
 	pub fn proj(&self)->glam::Mat4{
 		perspective_rh(self.fov.x, self.fov.y, 0.5, 2000.0)
 	}
-	pub fn view(&self,pos:glam::Vec3,angles:glam::Vec2)->glam::Mat4{
+	pub fn world(&self,pos:glam::Vec3,angles:glam::Vec2)->glam::Mat4{
 		//f32 good enough for view matrix
 		glam::Mat4::from_translation(pos) * glam::Mat4::from_euler(glam::EulerRot::YXZ, angles.x, angles.y, 0f32)
 	}
@@ -82,17 +82,17 @@ impl GraphicsCamera{
 		self.fov.x=self.fov.y*(screen_size.x as f32)/(screen_size.y as f32);
 	}
 
-	pub fn to_uniform_data(&self,(pos,angles): (glam::Vec3,glam::Vec2)) -> [f32; 16 * 3 + 4] {
+	pub fn to_uniform_data(&self,(pos,angles): (glam::Vec3,glam::Vec2)) -> [f32; 16 * 4] {
 		let proj=self.proj();
 		let proj_inv = proj.inverse();
-		let view=self.view(pos,angles);
-		let view_inv = view.inverse();
+		let view_inv=self.world(pos,angles);
+		let view=view_inv.inverse();
 
-		let mut raw = [0f32; 16 * 3 + 4];
+		let mut raw = [0f32; 16 * 4];
 		raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj)[..]);
 		raw[16..32].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj_inv)[..]);
-		raw[32..48].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&view_inv)[..]);
-		raw[48..52].copy_from_slice(AsRef::<[f32; 4]>::as_ref(&view.col(3)));
+		raw[32..48].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&view)[..]);
+		raw[48..64].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&view_inv)[..]);
 		raw
 	}
 }
@@ -226,7 +226,7 @@ impl GlobalState{
 				}else{
 					Some(ModelGraphicsInstance{
 						transform: glam::Mat4::from(instance.transform),
-						normal_transform: glam::Mat4::from(instance.transform.inverse()).transpose(),
+						normal_transform: glam::Mat3::from(instance.transform.matrix3.inverse().transpose()),
 						color: instance.color,
 					})
 				}
@@ -374,7 +374,7 @@ impl GlobalState{
 	}
 }
 
-const MODEL_BUFFER_SIZE:usize=4*4 + 4*4 + 4;//let size=std::mem::size_of::<ModelInstance>();
+const MODEL_BUFFER_SIZE:usize=4*4 + 12 + 4;//let size=std::mem::size_of::<ModelInstance>();
 const MODEL_BUFFER_SIZE_BYTES:usize=MODEL_BUFFER_SIZE*4;
 fn get_instances_buffer_data(instances:&[ModelGraphicsInstance]) -> Vec<f32> {
 	let mut raw = Vec::with_capacity(MODEL_BUFFER_SIZE*instances.len());
@@ -383,7 +383,12 @@ fn get_instances_buffer_data(instances:&[ModelGraphicsInstance]) -> Vec<f32> {
     	//model transform
     	raw.extend_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&mi.transform)[..]);
     	//normal transform
-    	raw.extend_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&mi.normal_transform)[..]);
+    	raw.extend_from_slice(AsRef::<[f32; 3]>::as_ref(&mi.normal_transform.x_axis));
+    	raw.extend_from_slice(&[0.0]);
+    	raw.extend_from_slice(AsRef::<[f32; 3]>::as_ref(&mi.normal_transform.y_axis));
+    	raw.extend_from_slice(&[0.0]);
+    	raw.extend_from_slice(AsRef::<[f32; 3]>::as_ref(&mi.normal_transform.z_axis));
+    	raw.extend_from_slice(&[0.0]);
     	//color
     	raw.extend_from_slice(AsRef::<[f32; 4]>::as_ref(&mi.color));
     	raw.append(&mut v);

@@ -5,8 +5,8 @@ struct Camera {
 	proj_inv: mat4x4<f32>,
 	// from world to camera
 	view: mat4x4<f32>,
-	// camera position
-	cam_pos: vec4<f32>,
+	// from camera to world
+	view_inv: mat4x4<f32>,
 };
 
 //group 0 is the camera
@@ -31,8 +31,7 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
 		1.0
 	);
 
-	// transposition = inversion for this orthonormal matrix
-	let inv_model_view = transpose(mat3x3<f32>(camera.view[0].xyz, camera.view[1].xyz, camera.view[2].xyz));
+	let inv_model_view = mat3x3<f32>(camera.view_inv[0].xyz, camera.view_inv[1].xyz, camera.view_inv[2].xyz);
 	let unprojected = camera.proj_inv * pos;
 
 	var result: SkyOutput;
@@ -43,7 +42,7 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
 
 struct ModelInstance{
 	transform:mat4x4<f32>,
-	normal_transform:mat4x4<f32>,
+	normal_transform:mat3x3<f32>,
 	color:vec4<f32>,
 }
 //my fancy idea is to create a megatexture for each model that includes all the textures each intance will need
@@ -78,11 +77,11 @@ fn vs_entity_texture(
 ) -> EntityOutputTexture {
 	var position: vec4<f32> = model_instances[instance].transform * vec4<f32>(pos, 1.0);
 	var result: EntityOutputTexture;
-	result.normal = (model_instances[instance].normal_transform * vec4<f32>(normal, 1.0)).xyz;
+	result.normal = model_instances[instance].normal_transform * normal;
 	result.texture = texture;
 	result.color = color;
 	result.model_color = model_instances[instance].color;
-	result.view = position.xyz - camera.cam_pos.xyz;
+	result.view = position.xyz - camera.view_inv[3].xyz;//col(3)
 	result.position = camera.proj * camera.view * position;
 	return result;
 }
