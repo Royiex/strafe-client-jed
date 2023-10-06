@@ -13,6 +13,12 @@ pub struct Aabb {
 	pub max: glam::Vec3,
 }
 
+impl Default for Aabb {
+	fn default() -> Self {
+		Aabb::new()
+	}
+}
+
 impl Aabb {
 	const VERTEX_DATA: [glam::Vec3; 8] = [
 		glam::vec3(1., -1., -1.),
@@ -36,6 +42,13 @@ impl Aabb {
 	pub fn join(&mut self, aabb:&Aabb){
 		self.min=self.min.min(aabb.min);
 		self.max=self.max.max(aabb.max);
+	}
+	pub fn inflate(&mut self, hs:glam::Vec3){
+		self.min-=hs;
+		self.max+=hs;
+	}
+	pub fn intersects(&self,aabb:&Aabb)->bool{
+		(self.min.cmplt(aabb.max)&aabb.min.cmplt(self.max)).all()
 	}
 	pub fn normal(face:AabbFace) -> glam::Vec3 {
 		match face {

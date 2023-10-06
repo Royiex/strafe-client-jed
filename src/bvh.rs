@@ -9,11 +9,24 @@ use crate::aabb::Aabb;
 //start with bisection into octrees because a bad bvh is still 1000x better than no bvh
 //sort the centerpoints on each axis (3 lists)
 //bv is put into octant based on whether it is upper or lower in each list
-
+#[derive(Default)]
 pub struct BvhNode{
 	children:Vec<Self>,
 	models:Vec<u32>,
 	aabb:Aabb,
+}
+
+impl BvhNode{
+	pub fn the_tester<F:FnMut(u32)>(&self,aabb:&Aabb,f:&mut F){
+		for &model in &self.models{
+			f(model);
+		}
+		for child in &self.children{
+			if aabb.intersects(&child.aabb){
+				child.the_tester(aabb,f);
+			}
+		}
+	}
 }
 
 pub fn generate_bvh(boxen:Vec<Aabb>)->BvhNode{
