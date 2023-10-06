@@ -119,7 +119,7 @@ pub struct GlobalState{
 	manual_mouse_lock:bool,
 	mouse:physics::MouseState,
 	graphics:GraphicsState,
-	physics_thread:worker::Worker<TimedInstruction<InputInstruction>,physics::PhysicsOutputState>,
+	physics_thread:worker::CompatWorker<TimedInstruction<InputInstruction>,physics::PhysicsOutputState,Box<dyn FnMut(TimedInstruction<InputInstruction>)->physics::PhysicsOutputState>>,
 }
 
 impl GlobalState{

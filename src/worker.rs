@@ -45,6 +45,31 @@ impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
 	}
 }
 
+pub struct CompatWorker<Task,Value:Clone,F>{
+	data:std::marker::PhantomData<Task>,
+	f:F,
+	value:Value,
+}
+
+impl<Task,Value:Clone,F:FnMut(Task)->Value> CompatWorker<Task,Value,F> {
+	pub fn new(value:Value,f:F) -> Self {
+		Self {
+			f,
+			value,
+			data:std::marker::PhantomData,
+		}
+	}
+
+	pub fn send(&mut self,task:Task)->Result<(),()>{
+		self.value=(self.f)(task);
+		Ok(())
+	}
+
+	pub fn grab_clone(&self)->Value{
+		self.value.clone()
+	}
+}
+
 #[test]//How to run this test with printing: cargo test --release -- --nocapture
 fn test_worker() {
 	println!("hiiiii");
