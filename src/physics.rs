@@ -297,6 +297,7 @@ pub struct PhysicsState{
 	pub grounded:bool,
 	//all models
 	pub models:Vec<ModelPhysics>,
+	pub bvh:crate::bvh::BvhNode,
 	
 	pub modes:Vec<crate::model::ModeDescription>,
 	pub mode_from_mode_id:std::collections::HashMap::<u32,usize>,
@@ -428,6 +429,7 @@ impl Default for PhysicsState{
 			contacts: std::collections::HashMap::new(),
 			intersects: std::collections::HashMap::new(),
 			models: Vec::new(),
+			bvh:crate::bvh::BvhNode::default(),
 			walk: WalkState::new(),
 			camera: PhysicsCamera::from_offset(glam::vec3(0.0,4.5-2.5,0.0)),
 			next_mouse: MouseState::default(),
@@ -564,6 +566,7 @@ impl PhysicsState {
 				}
 			}
 		}
+		self.bvh=crate::bvh::generate_bvh(self.models.iter().map(|m|m.mesh().clone()).collect());
 		//I don't wanna write structs for temporary structures
 		//this code builds ModeDescriptions from the unsorted lists at the top of the function
 		starts.sort_by_key(|tup|tup.0);
@@ -1036,13 +1039,15 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 		// 	collector.collect(self.predict_collision_end2(self.time,time_limit,collision_data));
 		// }
 		//check for collision start instructions (against every part in the game with no optimization!!)
-		for i in 0..self.models.len() {
-			let i=i as u32;
-			if self.contacts.contains_key(&i)||self.intersects.contains_key(&i){
-				continue;
+		let mut aabb=crate::aabb::Aabb::new();
+		aabb.grow(self.body.extrapolated_position(self.time));
+		aabb.grow(self.body.extrapolated_position(time_limit));
+		aabb.inflate(self.style.hitbox_halfsize);
+		self.bvh.the_tester(&aabb,&mut |id|{
+			if !(self.contacts.contains_key(&id)||self.intersects.contains_key(&id)){
+				collector.collect(self.predict_collision_start(self.time,time_limit,id));
 			}
-			collector.collect(self.predict_collision_start(self.time,time_limit,i));
-		}
+		});
 		if self.grounded {
 			//walk maintenance
 			collector.collect(self.next_walk_instruction());
