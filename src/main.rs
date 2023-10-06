@@ -4,6 +4,7 @@ use model::{Vertex,ModelInstance,ModelGraphicsInstance};
 use physics::{InputInstruction, PhysicsInstruction};
 use instruction::{TimedInstruction, InstructionConsumer};
 
+mod aabb;
 mod model;
 mod zeroes;
 mod worker;

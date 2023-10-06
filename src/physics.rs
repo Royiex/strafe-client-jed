@@ -315,114 +315,9 @@ impl PhysicsOutputState{
 	}
 }
 
-#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
-pub enum AabbFace{
-	Right,//+X
-	Top,
-	Back,
-	Left,
-	Bottom,
-	Front,
-}
-#[derive(Clone)]
-pub struct Aabb {
-	min: glam::Vec3,
-	max: glam::Vec3,
-}
-
-impl Aabb {
-	// const FACE_DATA: [[f32; 3]; 6] = [
-	// 	[0.0f32, 0., 1.],
-	// 	[0.0f32, 0., -1.],
-	// 	[1.0f32, 0., 0.],
-	// 	[-1.0f32, 0., 0.],
-	// 	[0.0f32, 1., 0.],
-	// 	[0.0f32, -1., 0.],
-	// ];
-	const VERTEX_DATA: [glam::Vec3; 8] = [
-		glam::vec3(1., -1., -1.),
-		glam::vec3(1., 1., -1.),
-		glam::vec3(1., 1., 1.),
-		glam::vec3(1., -1., 1.),
-		glam::vec3(-1., -1., 1.),
-		glam::vec3(-1., 1., 1.),
-		glam::vec3(-1., 1., -1.),
-		glam::vec3(-1., -1., -1.),
-	];
-	const VERTEX_DATA_RIGHT: [glam::Vec3; 4] = [
-		glam::vec3(1., -1., -1.),
-		glam::vec3(1., 1., -1.),
-		glam::vec3(1., 1., 1.),
-		glam::vec3(1., -1., 1.),
-	];
-	const VERTEX_DATA_TOP: [glam::Vec3; 4] = [
-		glam::vec3(1., 1., -1.),
-		glam::vec3(-1., 1., -1.),
-		glam::vec3(-1., 1., 1.),
-		glam::vec3(1., 1., 1.),
-	];
-	const VERTEX_DATA_BACK: [glam::Vec3; 4] = [
-		glam::vec3(-1., -1., 1.),
-		glam::vec3(1., -1., 1.),
-		glam::vec3(1., 1., 1.),
-		glam::vec3(-1., 1., 1.),
-	];
-	const VERTEX_DATA_LEFT: [glam::Vec3; 4] = [
-		glam::vec3(-1., -1., 1.),
-		glam::vec3(-1., 1., 1.),
-		glam::vec3(-1., 1., -1.),
-		glam::vec3(-1., -1., -1.),
-	];
-	const VERTEX_DATA_BOTTOM: [glam::Vec3; 4] = [
-		glam::vec3(1., -1., 1.),
-		glam::vec3(-1., -1., 1.),
-		glam::vec3(-1., -1., -1.),
-		glam::vec3(1., -1., -1.),
-	];
-	const VERTEX_DATA_FRONT: [glam::Vec3; 4] = [
-		glam::vec3(-1., 1., -1.),
-		glam::vec3(1., 1., -1.),
-		glam::vec3(1., -1., -1.),
-		glam::vec3(-1., -1., -1.),
-	];
-
-	pub fn new() -> Self {
-		Self {min: glam::Vec3::INFINITY,max: glam::Vec3::NEG_INFINITY}
-	}
-
-	pub fn grow(&mut self, point:glam::Vec3){
-		self.min=self.min.min(point);
-		self.max=self.max.max(point);
-	}
-
-	pub fn normal(face:AabbFace) -> glam::Vec3 {
-		match face {
-			AabbFace::Right => glam::vec3(1.,0.,0.),
-			AabbFace::Top => glam::vec3(0.,1.,0.),
-			AabbFace::Back => glam::vec3(0.,0.,1.),
-			AabbFace::Left => glam::vec3(-1.,0.,0.),
-			AabbFace::Bottom => glam::vec3(0.,-1.,0.),
-			AabbFace::Front => glam::vec3(0.,0.,-1.),
-		}
-	}
-	pub fn unit_vertices() -> [glam::Vec3;8] {
-		return Self::VERTEX_DATA;
-	}
-	pub fn unit_face_vertices(face:AabbFace) -> [glam::Vec3;4] {
-		match face {
-			AabbFace::Right => Self::VERTEX_DATA_RIGHT,
-			AabbFace::Top => Self::VERTEX_DATA_TOP,
-			AabbFace::Back => Self::VERTEX_DATA_BACK,
-			AabbFace::Left => Self::VERTEX_DATA_LEFT,
-			AabbFace::Bottom => Self::VERTEX_DATA_BOTTOM,
-			AabbFace::Front => Self::VERTEX_DATA_FRONT,
-		}
-	}
-}
-
 //pretend to be using what we want to eventually do
-type TreyMeshFace = AabbFace;
-type TreyMesh = Aabb;
+type TreyMeshFace = crate::aabb::AabbFace;
+type TreyMesh = crate::aabb::Aabb;
 
 enum PhysicsCollisionAttributes{
 	Contact{//track whether you are contacting the object
@@ -445,7 +340,7 @@ pub struct ModelPhysics {
 
 impl ModelPhysics {
 	fn from_model_transform_attributes(model:&crate::model::IndexedModel,transform:&glam::Affine3A,attributes:PhysicsCollisionAttributes)->Self{
-		let mut aabb=Aabb::new();
+		let mut aabb=TreyMesh::new();
 		for indexed_vertex in &model.unique_vertices {
 			aabb.grow(transform.transform_point3(glam::Vec3::from_array(model.unique_pos[indexed_vertex.pos as usize])));
 		}
@@ -463,29 +358,16 @@ impl ModelPhysics {
 		}
 	}
 	pub fn unit_vertices(&self) -> [glam::Vec3;8] {
-		Aabb::unit_vertices()
+		TreyMesh::unit_vertices()
 	}
 	pub fn mesh(&self) -> &TreyMesh {
 		return &self.mesh;
 	}
-	pub fn unit_face_vertices(&self,face:TreyMeshFace) -> [glam::Vec3;4] {
-		Aabb::unit_face_vertices(face)
-	}
-	pub fn face_mesh(&self,face:TreyMeshFace) -> TreyMesh {
-		let mut aabb=self.mesh.clone();
-		//in this implementation face = worldspace aabb face
-		match face {
-			AabbFace::Right => aabb.min.x=aabb.max.x,
-			AabbFace::Top => aabb.min.y=aabb.max.y,
-			AabbFace::Back => aabb.min.z=aabb.max.z,
-			AabbFace::Left => aabb.max.x=aabb.min.x,
-			AabbFace::Bottom => aabb.max.y=aabb.min.y,
-			AabbFace::Front => aabb.max.z=aabb.min.z,
-		}
-		return aabb;
+	pub fn face_mesh(&self,face:TreyMeshFace)->TreyMesh{
+		self.mesh.face(face)
 	}
 	pub fn face_normal(&self,face:TreyMeshFace) -> glam::Vec3 {
-		Aabb::normal(face)//this is wrong for scale
+		TreyMesh::normal(face)//this is wrong for scale
 	}
 }
 
@@ -861,8 +743,8 @@ impl PhysicsState {
 		}
 	}
 	fn mesh(&self) -> TreyMesh {
-		let mut aabb=Aabb::new();
-		for vertex in Aabb::unit_vertices(){
+		let mut aabb=TreyMesh::new();
+		for vertex in TreyMesh::unit_vertices(){
 			aabb.grow(self.body.position+self.style.hitbox_halfsize*vertex);
 		}
 		aabb
@@ -879,7 +761,7 @@ impl PhysicsState {
 		let (v,a)=(-self.body.velocity,self.body.acceleration);
 		//collect x
 		match collision_data.face {
-			AabbFace::Top|AabbFace::Back|AabbFace::Bottom|AabbFace::Front=>{
+			TreyMeshFace::Top|TreyMeshFace::Back|TreyMeshFace::Bottom|TreyMeshFace::Front=>{
 				for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,0.5*a.x) {
 					//negative t = back in time
 					//must be moving towards surface to collide
@@ -907,14 +789,14 @@ impl PhysicsState {
 					}
 				}
 			},
-			AabbFace::Left=>{
+			TreyMeshFace::Left=>{
 				//generate event if v.x<0||a.x<0
 				if -v.x<0f32{
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Left);
 				}
 			},
-			AabbFace::Right=>{
+			TreyMeshFace::Right=>{
 				//generate event if 0<v.x||0<a.x
 				if 0f32<(-v.x){
 					best_time=time;
@@ -924,7 +806,7 @@ impl PhysicsState {
 		}
 		//collect y
 		match collision_data.face {
-			AabbFace::Left|AabbFace::Back|AabbFace::Right|AabbFace::Front=>{
+			TreyMeshFace::Left|TreyMeshFace::Back|TreyMeshFace::Right|TreyMeshFace::Front=>{
 				for t in zeroes2(mesh0.max.y-mesh1.min.y,v.y,0.5*a.y) {
 					//negative t = back in time
 					//must be moving towards surface to collide
@@ -952,14 +834,14 @@ impl PhysicsState {
 					}
 				}
 			},
-			AabbFace::Bottom=>{
+			TreyMeshFace::Bottom=>{
 				//generate event if v.y<0||a.y<0
 				if -v.y<0f32{
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Bottom);
 				}
 			},
-			AabbFace::Top=>{
+			TreyMeshFace::Top=>{
 				//generate event if 0<v.y||0<a.y
 				if 0f32<(-v.y){
 					best_time=time;
@@ -969,7 +851,7 @@ impl PhysicsState {
 		}
 		//collect z
 		match collision_data.face {
-			AabbFace::Left|AabbFace::Bottom|AabbFace::Right|AabbFace::Top=>{
+			TreyMeshFace::Left|TreyMeshFace::Bottom|TreyMeshFace::Right|TreyMeshFace::Top=>{
 				for t in zeroes2(mesh0.max.z-mesh1.min.z,v.z,0.5*a.z) {
 					//negative t = back in time
 					//must be moving towards surface to collide
@@ -997,14 +879,14 @@ impl PhysicsState {
 					}
 				}
 			},
-			AabbFace::Front=>{
+			TreyMeshFace::Front=>{
 				//generate event if v.z<0||a.z<0
 				if -v.z<0f32{
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Front);
 				}
 			},
-			AabbFace::Back=>{
+			TreyMeshFace::Back=>{
 				//generate event if 0<v.z||0<a.z
 				if 0f32<(-v.z){
 					best_time=time;
@@ -1198,7 +1080,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						match &contacting.surf{
 							Some(surf)=>println!("I'm surfing!"),
 							None=>match &c.face {
-								AabbFace::Top => {
+								TreyMeshFace::Top => {
 									//ground
 									self.grounded=true;
 								},
@@ -1268,7 +1150,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						self.body.acceleration=a;
 						//check ground
 						match &c.face {
-							AabbFace::Top => {
+							TreyMeshFace::Top => {
 								self.grounded=false;
 							},
 							_ => (),
