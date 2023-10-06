@@ -265,9 +265,9 @@ impl GlobalState{
 			let mut vertices = Vec::new();
 			let mut index_from_vertex = std::collections::HashMap::new();//::<IndexedVertex,usize>
 			let mut entities = Vec::new();
-			//TODO: combine groups using the same render pattern
-			for group in model.groups {
+			//this mut be combined in a more complex way if the models use different render patterns per group
 				let mut indices = Vec::new();
+			for group in model.groups {
 				for poly in group.polys {
 					for end_index in 2..poly.vertices.len() {
 						for &index in &[0, end_index - 1, end_index] {
@@ -289,8 +289,8 @@ impl GlobalState{
 						}
 					}
 				}
-				entities.push(indices);
 			}
+				entities.push(indices);
 			models.push(model::ModelSingleTexture{
 				instances:model.instances,
 				vertices,
