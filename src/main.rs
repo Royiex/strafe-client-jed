@@ -235,7 +235,7 @@ impl GlobalState{
 			let id=unique_texture_models.len();
 			let mut unique_textures=Vec::new();
 			for group in model.groups.into_iter(){
-				//ignore zero coppy optimization for now
+				//ignore zero copy optimization for now
 				let texture_index=if let Some(texture_index)=unique_textures.iter().position(|&texture|texture==group.texture){
 					texture_index
 				}else{
