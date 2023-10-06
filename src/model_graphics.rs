@@ -27,9 +27,29 @@ pub struct ModelGraphicsSingleTexture{
 	pub entities: Vec<Vec<u16>>,
 	pub texture: Option<u32>,
 }
+#[derive(Clone,PartialEq)]
+pub struct ModelGraphicsColor4(glam::Vec4);
+impl ModelGraphicsColor4{
+	pub const fn get(&self)->glam::Vec4{
+		self.0
+	}
+}
+impl From<glam::Vec4> for ModelGraphicsColor4{
+	fn from(value:glam::Vec4)->Self{
+		Self(value)
+	}
+}
+impl std::hash::Hash for ModelGraphicsColor4{
+	fn hash<H: std::hash::Hasher>(&self,state:&mut H) {
+		for &f in self.0.as_ref(){
+			u32::from_ne_bytes(f.to_ne_bytes()).hash(state);
+		}
+	}
+}
+impl Eq for ModelGraphicsColor4{}
 #[derive(Clone)]
 pub struct ModelGraphicsInstance{
 	pub transform:glam::Mat4,
 	pub normal_transform:glam::Mat3,
-	pub color:glam::Vec4,
+	pub color:ModelGraphicsColor4,
 }

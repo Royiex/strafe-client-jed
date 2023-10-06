@@ -230,7 +230,7 @@ impl GlobalState{
 					Some(ModelGraphicsInstance{
 						transform: instance.transform.into(),
 						normal_transform: Into::<glam::Mat3>::into(instance.transform.matrix3).inverse().transpose(),
-						color: instance.color,
+						color:model_graphics::ModelGraphicsColor4::from(instance.color),
 					})
 				}
 			}).collect();
@@ -262,9 +262,182 @@ impl GlobalState{
 				});
 			}
 		}
+		//check every model to see if it's using the same (texture,color) but has few instances, if it is combine it into one model
+		//1. collect unique instances of texture and color, note model id
+		//2. for each model id, check if removing it from the pool decreases both the model count and instance count by more than one
+		//3. transpose all models that stay in the set
+
+		//best plan: benchmark set_bind_group, set_vertex_buffer, set_index_buffer and draw_indexed
+		//check if the estimated render performance is better by transposing multiple model instances into one model instance
+
+		//for now: just deduplicate single models...
+		let mut deduplicated_models=Vec::with_capacity(indexed_models_len);//use indexed_models_len because the list will likely get smaller instead of bigger
+		let mut unique_texture_color=std::collections::HashMap::new();//texture->color->vec![(model_id,instance_id)]
+		for (model_id,model) in unique_texture_models.iter().enumerate(){
+			//for now: filter out models with more than one instance
+			if 1<model.instances.len(){
+				continue;
+			}
+			//populate hashmap
+			let unique_color=if let Some(unique_color)=unique_texture_color.get_mut(&model.texture){
+				unique_color
+			}else{
+				//make new hashmap
+				let unique_color=std::collections::HashMap::new();
+				unique_texture_color.insert(model.texture,unique_color);
+				unique_texture_color.get_mut(&model.texture).unwrap()
+			};
+			//separate instances by color
+			for (instance_id,instance) in model.instances.iter().enumerate(){
+				let model_instance_list=if let Some(model_instance_list)=unique_color.get_mut(&instance.color){
+					model_instance_list
+				}else{
+					//make new hashmap
+					let model_instance_list=Vec::new();
+					unique_color.insert(instance.color.clone(),model_instance_list);
+					unique_color.get_mut(&instance.color).unwrap()
+				};
+				//add model instance to list
+				model_instance_list.push((model_id,instance_id));
+			}
+		}
+		//populate a hashmap of models selected for transposition
+		let mut selected_model_instances=std::collections::HashSet::new();
+		for (texture,unique_color) in unique_texture_color.into_iter(){
+			for (color,model_instance_list) in unique_color.into_iter(){
+				if 1<model_instance_list.len(){
+					//create model
+					let mut unique_pos=Vec::new();
+					let mut pos_id_from=std::collections::HashMap::new();
+					let mut map_pos_id=std::collections::HashMap::new();
+					let mut unique_tex=Vec::new();
+					let mut tex_id_from=std::collections::HashMap::new();
+					let mut map_tex_id=std::collections::HashMap::new();
+					let mut unique_normal=Vec::new();
+					let mut normal_id_from=std::collections::HashMap::new();
+					let mut map_normal_id=std::collections::HashMap::new();
+					let mut unique_color=Vec::new();
+					let mut color_id_from=std::collections::HashMap::new();
+					let mut map_color_id=std::collections::HashMap::new();
+					let mut unique_vertices=Vec::new();
+					let mut vertex_id_from=std::collections::HashMap::new();
+					let mut map_vertex_id=std::collections::HashMap::new();
+
+					let mut polys=Vec::new();
+					//transform instance vertices
+					for (model_id,instance_id) in model_instance_list.into_iter(){
+						//populate hashset to prevent these models from being copied
+						selected_model_instances.insert(model_id);
+						//there is only one instance per model
+						let model=&unique_texture_models[model_id];
+						let instance=&model.instances[instance_id];
+						//just hash word slices LOL
+						for (old_pos_id,untransformed_pos) in model.unique_pos.iter().enumerate(){
+							let pos=instance.transform.transform_point3(glam::Vec3::from_array(untransformed_pos.clone())).to_array();
+							let h=pos.map(|v|u32::from_ne_bytes(v.to_ne_bytes()));
+							let pos_id=if let Some(&pos_id)=pos_id_from.get(&h){
+								pos_id
+							}else{
+								let pos_id=unique_pos.len();
+								unique_pos.push(pos.clone());
+								pos_id_from.insert(h,pos_id);
+								pos_id
+							};
+							map_pos_id.insert(old_pos_id,pos_id);
+						}
+						for (old_tex_id,tex) in model.unique_tex.iter().enumerate(){
+							let h=tex.map(|v|u32::from_ne_bytes(v.to_ne_bytes()));
+							let tex_id=if let Some(&tex_id)=tex_id_from.get(&h){
+								tex_id
+							}else{
+								let tex_id=unique_tex.len();
+								unique_tex.push(tex.clone());
+								tex_id_from.insert(h,tex_id);
+								tex_id
+							};
+							map_tex_id.insert(old_tex_id,tex_id);
+						}
+						for (old_normal_id,untransformed_normal) in model.unique_normal.iter().enumerate(){
+							let normal=(instance.normal_transform*glam::Vec3::from_array(untransformed_normal.clone())).to_array();
+							let h=normal.map(|v|u32::from_ne_bytes(v.to_ne_bytes()));
+							let normal_id=if let Some(&normal_id)=normal_id_from.get(&h){
+								normal_id
+							}else{
+								let normal_id=unique_normal.len();
+								unique_normal.push(normal.clone());
+								normal_id_from.insert(h,normal_id);
+								normal_id
+							};
+							map_normal_id.insert(old_normal_id,normal_id);
+						}
+						for (old_color_id,color) in model.unique_color.iter().enumerate(){
+							let h=color.map(|v|u32::from_ne_bytes(v.to_ne_bytes()));
+							let color_id=if let Some(&color_id)=color_id_from.get(&h){
+								color_id
+							}else{
+								let color_id=unique_color.len();
+								unique_color.push(color.clone());
+								color_id_from.insert(h,color_id);
+								color_id
+							};
+							map_color_id.insert(old_color_id,color_id);
+						}
+						//map the indexed vertices onto new indices
+						//creating the vertex map is slightly different because the vertices are directly hashable
+						for (old_vertex_id,unmapped_vertex) in model.unique_vertices.iter().enumerate(){
+							let vertex=model::IndexedVertex{
+								pos:map_pos_id[&(unmapped_vertex.pos as usize)] as u32,
+								tex:map_tex_id[&(unmapped_vertex.tex as usize)] as u32,
+								normal:map_normal_id[&(unmapped_vertex.normal as usize)] as u32,
+								color:map_color_id[&(unmapped_vertex.color as usize)] as u32,
+							};
+							let vertex_id=if let Some(&vertex_id)=vertex_id_from.get(&vertex){
+								vertex_id
+							}else{
+								let vertex_id=unique_vertices.len();
+								unique_vertices.push(vertex.clone());
+								vertex_id_from.insert(vertex,vertex_id);
+								vertex_id
+							};
+							map_vertex_id.insert(old_vertex_id as u32,vertex_id as u32);
+						}
+						for group in &model.groups{
+							for poly in &group.polys{
+								polys.push(model::IndexedPolygon{vertices:poly.vertices.iter().map(|vertex_id|map_vertex_id[vertex_id]).collect()});
+							}
+						}
+					}
+					//push model into dedup
+					deduplicated_models.push(model_graphics::IndexedModelGraphicsSingleTexture{
+						unique_pos,
+						unique_tex,
+						unique_normal,
+						unique_color,
+						unique_vertices,
+						texture,
+						groups:vec![model_graphics::IndexedGroupFixedTexture{
+							polys
+						}],
+						instances:vec![model_graphics::ModelGraphicsInstance{
+							transform:glam::Mat4::IDENTITY,
+							normal_transform:glam::Mat3::IDENTITY,
+							color
+						}],
+					});
+				}
+			}
+		}
+		//construct transposed models
+		//fill untouched models
+		for (model_id,model) in unique_texture_models.into_iter().enumerate(){
+			if !selected_model_instances.contains(&model_id){
+				deduplicated_models.push(model);
+			}
+		}
+
 		//de-index models
-		let mut models=Vec::with_capacity(unique_texture_models.len());
-		for model in unique_texture_models.into_iter(){
+		let mut models=Vec::with_capacity(indexed_models_len);
+		for model in deduplicated_models.into_iter(){
 			let mut vertices = Vec::new();
 			let mut index_from_vertex = std::collections::HashMap::new();//::<IndexedVertex,usize>
 			let mut entities = Vec::new();
@@ -393,7 +566,7 @@ fn get_instances_buffer_data(instances:&[ModelGraphicsInstance]) -> Vec<f32> {
     	raw.extend_from_slice(AsRef::<[f32; 3]>::as_ref(&mi.normal_transform.z_axis));
     	raw.extend_from_slice(&[0.0]);
     	//color
-    	raw.extend_from_slice(AsRef::<[f32; 4]>::as_ref(&mi.color));
+    	raw.extend_from_slice(AsRef::<[f32; 4]>::as_ref(&mi.color.get()));
     	raw.append(&mut v);
 	}
 	raw
