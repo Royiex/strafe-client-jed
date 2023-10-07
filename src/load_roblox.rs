@@ -311,9 +311,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 								};
 								let normal_id=normalid.to_u32();
 								if normal_id<6{
-									let mut roblox_texture_transform=RobloxTextureTransform::default();
-									let mut roblox_texture_color=glam::Vec4::ONE;
-									if decal.class=="Texture"{
+									let (roblox_texture_color,roblox_texture_transform)=if decal.class=="Texture"{
 										//generate tranform
 										if let (
 												Some(rbx_dom_weak::types::Variant::Float32(ox)),
@@ -336,13 +334,19 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 												5=>(size.x,size.y),//front
 												_=>panic!("unreachable"),
 											};
-											roblox_texture_transform=RobloxTextureTransform{
-												offset_u:*ox/(*sx),offset_v:*oy/(*sy),
-												scale_u:size_u/(*sx),scale_v:size_v/(*sy),
-											};
-											roblox_texture_color=glam::vec4(decal_color3.r,decal_color3.g,decal_color3.b,1.0-*decal_transparency);
+											(
+												glam::vec4(decal_color3.r,decal_color3.g,decal_color3.b,1.0-*decal_transparency),
+												RobloxTextureTransform{
+													offset_u:*ox/(*sx),offset_v:*oy/(*sy),
+													scale_u:size_u/(*sx),scale_v:size_v/(*sy),
+												}
+											)
+										}else{
+											(glam::Vec4::ONE,RobloxTextureTransform::default())
 										}
-									}
+									}else{
+										(glam::Vec4::ONE,RobloxTextureTransform::default())
+									};
 									part_texture_description[normal_id as usize]=Some(RobloxFaceTextureDescription{
 										texture:texture_id,
 										color:roblox_texture_color,
