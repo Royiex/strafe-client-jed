@@ -107,8 +107,9 @@ local cornerWedgeVerticies = {
 */
 #[derive(Hash,PartialEq,Eq)]
 pub enum CornerWedgeFace{
-	Top,
 	Right,
+	TopBack,
+	TopLeft,
 	Bottom,
 	Front,
 }
@@ -162,7 +163,8 @@ pub type CornerWedgeFaceDescription=std::collections::HashMap::<CornerWedgeFace,
 pub fn unit_cornerwedge()->crate::model::IndexedModel{
 	let mut t=CornerWedgeFaceDescription::new();
 	t.insert(CornerWedgeFace::Right,FaceDescription::default());
-	t.insert(CornerWedgeFace::Top,FaceDescription::default());
+	t.insert(CornerWedgeFace::TopBack,FaceDescription::default());
+	t.insert(CornerWedgeFace::TopLeft,FaceDescription::default());
 	t.insert(CornerWedgeFace::Bottom,FaceDescription::default());
 	t.insert(CornerWedgeFace::Front,FaceDescription::default());
 	generate_partial_unit_cornerwedge(t)
@@ -456,9 +458,10 @@ pub fn generate_partial_unit_cornerwedge(face_descriptions:CornerWedgeFaceDescri
 		} as u32;
 		let face_id=match face{
 			CornerWedgeFace::Right => 0,
-			CornerWedgeFace::Top => 1,
-			CornerWedgeFace::Bottom => 2,
-			CornerWedgeFace::Front => 3,
+			CornerWedgeFace::TopBack => 1,
+			CornerWedgeFace::TopLeft => 2,
+			CornerWedgeFace::Bottom => 3,
+			CornerWedgeFace::Front => 4,
 		};
 		//always push normal
 		let normal_index=generated_normal.len() as u32;

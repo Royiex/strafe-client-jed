@@ -178,7 +178,7 @@ impl RobloxFaceTextureDescription{
 }
 type RobloxPartDescription=[Option<RobloxFaceTextureDescription>;6];
 type RobloxWedgeDescription=[Option<RobloxFaceTextureDescription>;5];
-type RobloxCornerWedgeDescription=[Option<RobloxFaceTextureDescription>;4];
+type RobloxCornerWedgeDescription=[Option<RobloxFaceTextureDescription>;5];
 #[derive(Clone,Eq,Hash,PartialEq)]
 enum RobloxBasePartDescription{
 	Sphere,
@@ -380,9 +380,11 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 						f3,//Cube::Left->Wedge::Left
 						f4,//Cube::Bottom->Wedge::Bottom
 					]),
+					//TODO: fix Left+Back texture coordinates to match roblox when not overwridden by Top
 					primitives::Primitives::CornerWedge=>RobloxBasePartDescription::CornerWedge([
 						f0,//Cube::Right->CornerWedge::Right
-						f1,//Cube::Top->CornerWedge::Top
+						if f2.is_some(){f2}else{f1.clone()},//Cube::Back|Cube::Top->CornerWedge::TopBack
+						if f3.is_some(){f3}else{f1},//Cube::Left|Cube::Top->CornerWedge::TopLeft
 						f4,//Cube::Bottom->CornerWedge::Bottom
 						f5,//Cube::Front->CornerWedge::Front
 					]),
@@ -441,10 +443,11 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 							for (face_id,roblox_face_description) in cornerwedge_texture_description.iter().enumerate(){
 								cornerwedge_face_description.insert(
 								match face_id{
-									0=>primitives::CornerWedgeFace::Top,
-									1=>primitives::CornerWedgeFace::Right,
-									2=>primitives::CornerWedgeFace::Bottom,
-									3=>primitives::CornerWedgeFace::Front,
+									0=>primitives::CornerWedgeFace::Right,
+									1=>primitives::CornerWedgeFace::TopBack,
+									2=>primitives::CornerWedgeFace::TopLeft,
+									3=>primitives::CornerWedgeFace::Bottom,
+									4=>primitives::CornerWedgeFace::Front,
 									_=>panic!("unreachable"),
 								},
 								match roblox_face_description{
