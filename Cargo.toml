@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 async-executor = "1.5.1"
 bytemuck = { version = "1.13.1", features = ["derive"] }
+configparser = "3.0.2"
 ddsfile = "0.5.1"
 env_logger = "0.10.0"
 glam = "0.24.1"

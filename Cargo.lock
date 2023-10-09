@@ -332,6 +332,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "configparser"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5458d9d1a587efaf5091602c59d299696a3877a439c8f6d461a2d3cce11df87a"
+
+[[package]]
 name = "constant_time_eq"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1686,6 +1692,7 @@ version = "0.8.0"
 dependencies = [
  "async-executor",
  "bytemuck",
+ "configparser",
  "ddsfile",
  "env_logger",
  "glam",
