@@ -148,3 +148,14 @@ impl Timer<UnpausedScaled>{
 		}
 	}
 }
+
+#[test]
+fn test_timer_unscaled(){
+	const ONE_SECOND:TIME=1_000_000_000;
+	let run_prepare=paused();
+
+	let run_start=run_prepare.unpause(ONE_SECOND);
+	let run_finish=run_start.pause(11*ONE_SECOND);
+
+	assert_eq!(run_finish.time(),10*ONE_SECOND);
+}

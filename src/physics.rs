@@ -47,7 +47,7 @@ pub enum InputInstruction {
 		//for interpolation / networking / playback reasons, most playback heads will always want
 		//to be 1 instruction ahead to generate the next state for interpolation.
 }
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct Body {
 	position: glam::Vec3,//I64 where 2^32 = 1 u
 	velocity: glam::Vec3,//I64 where 2^32 = 1 u/s
