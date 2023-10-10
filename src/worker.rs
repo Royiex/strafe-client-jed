@@ -79,7 +79,7 @@ fn test_worker() {
 	);
 
 	// Send tasks to the worker
-	for i in 0..5 {
+	for _ in 0..5 {
 		let task = crate::instruction::TimedInstruction{
 			time:0,
 			instruction:crate::physics::PhysicsInstruction::StrafeTick,
