@@ -16,27 +16,6 @@ impl Default for Fov{
 	}
 }
 
-struct FovCalculator{
-	fov:Fov,
-	zoom:f64,
-	screen_size:glam::UVec2,
-}
-impl FovCalculator{
-	pub fn calculate(&self)->glam::DVec2{
-		self.zoom*match self.fov{
-			Fov::Exactly{x,y}=>glam::dvec2(x,y),
-			Fov::DeriveX{x,y}=>match x{
-				DerivedFov::FromScreenAspect=>glam::dvec2(y*(self.screen_size.x as f64/self.screen_size.y as f64),y),
-				DerivedFov::FromAspect(ratio)=>glam::dvec2(y*ratio.ratio,y),
-			},
-			Fov::DeriveY{x,y}=>match y{
-				DerivedFov::FromScreenAspect=>glam::dvec2(x,x*(self.screen_size.y as f64/self.screen_size.x as f64)),
-				DerivedFov::FromAspect(ratio)=>glam::dvec2(x,x*ratio.ratio),
-			},
-		}
-	}
-}
-
 enum Sensitivity{
 	Exactly{x:f64,y:f64},
 	DeriveX{x:Ratio,y:f64},
@@ -48,23 +27,33 @@ impl Default for Sensitivity{
 	}
 }
 
-struct SensitivityCalculator{
-	sensitivity:Sensitivity,
-}
-impl SensitivityCalculator{
-	pub fn calculate(&self)->glam::DVec2{
-		match self.sensitivity{
-			Sensitivity::Exactly{x,y}=>glam::dvec2(x,y),
-			Sensitivity::DeriveX{x,y}=>glam::dvec2(y*x.ratio,y),
-			Sensitivity::DeriveY{x,y}=>glam::dvec2(x,x*y.ratio),
-		}
-	}
-}
 
 #[derive(Default)]
 pub struct UserSettings{
 	fov:Fov,
 	sensitivity:Sensitivity,
+}
+impl UserSettings{
+	pub fn calculate_fov(&self,zoom:f64,screen_size:&glam::UVec2)->glam::DVec2{
+		zoom*match &self.fov{
+			&Fov::Exactly{x,y}=>glam::dvec2(x,y),
+			Fov::DeriveX{x,y}=>match x{
+				DerivedFov::FromScreenAspect=>glam::dvec2(y*(screen_size.x as f64/screen_size.y as f64),*y),
+				DerivedFov::FromAspect(ratio)=>glam::dvec2(y*ratio.ratio,*y),
+			},
+			Fov::DeriveY{x,y}=>match y{
+				DerivedFov::FromScreenAspect=>glam::dvec2(*x,x*(screen_size.y as f64/screen_size.x as f64)),
+				DerivedFov::FromAspect(ratio)=>glam::dvec2(*x,x*ratio.ratio),
+			},
+		}
+	}
+	pub fn calculate_sensitivity(&self)->glam::DVec2{
+		match &self.sensitivity{
+			&Sensitivity::Exactly{x,y}=>glam::dvec2(x,y),
+			Sensitivity::DeriveX{x,y}=>glam::dvec2(y*x.ratio,*y),
+			Sensitivity::DeriveY{x,y}=>glam::dvec2(*x,x*y.ratio),
+		}
+	}
 }
 
 /*
