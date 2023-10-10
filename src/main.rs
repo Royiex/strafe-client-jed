@@ -10,6 +10,7 @@ mod model;
 mod zeroes;
 mod worker;
 mod physics;
+mod settings;
 mod framework;
 mod primitives;
 mod instruction;
