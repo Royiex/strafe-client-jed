@@ -7,6 +7,7 @@ use instruction::{TimedInstruction, InstructionConsumer};
 mod bvh;
 mod aabb;
 mod model;
+mod timers;
 mod zeroes;
 mod worker;
 mod physics;
