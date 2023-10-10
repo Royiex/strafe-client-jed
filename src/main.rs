@@ -65,10 +65,10 @@ fn perspective_rh(fov_x_slope: f32, fov_y_slope: f32, z_near: f32, z_far: f32) -
 	)
 }
 impl GraphicsCamera{
-	pub fn new(screen_size:glam::UVec2,fov_y:f32)->Self{
+	pub fn new(screen_size:glam::UVec2,fov:glam::Vec2)->Self{
 		Self{
 			screen_size,
-			fov: glam::vec2(fov_y*(screen_size.x as f32)/(screen_size.y as f32),fov_y),
+			fov,
 		}
 	}
 	pub fn proj(&self)->glam::Mat4{
@@ -77,10 +77,6 @@ impl GraphicsCamera{
 	pub fn world(&self,pos:glam::Vec3,angles:glam::Vec2)->glam::Mat4{
 		//f32 good enough for view matrix
 		glam::Mat4::from_translation(pos) * glam::Mat4::from_euler(glam::EulerRot::YXZ, angles.x, angles.y, 0f32)
-	}
-	pub fn set_screen_size(&mut self,screen_size:glam::UVec2){
-		self.screen_size=screen_size;
-		self.fov.x=self.fov.y*(screen_size.x as f32)/(screen_size.y as f32);
 	}
 
 	pub fn to_uniform_data(&self,(pos,angles): (glam::Vec3,glam::Vec2)) -> [f32; 16 * 4] {
@@ -115,12 +111,16 @@ impl GraphicsState{
 	pub fn clear(&mut self){
 		self.models.clear();
 	}
+	pub fn load_user_settings(&mut self,user_settings:&settings::UserSettings){
+		self.camera.fov=user_settings.calculate_fov(1.0,&self.camera.screen_size).as_vec2();
+	}
 }
 
 pub struct GlobalState{
 	start_time: std::time::Instant,
 	manual_mouse_lock:bool,
 	mouse:physics::MouseState,
+	user_settings:settings::UserSettings,
 	graphics:GraphicsState,
 	physics_thread:worker::CompatWorker<TimedInstruction<InputInstruction>,physics::PhysicsOutputState,Box<dyn FnMut(TimedInstruction<InputInstruction>)->physics::PhysicsOutputState>>,
 }
@@ -414,6 +414,8 @@ impl framework::Example for GlobalState {
 		device: &wgpu::Device,
 		queue: &wgpu::Queue,
 	) -> Self {
+		//wee
+		let user_settings=settings::read_user_settings();
 		let mut indexed_models = Vec::new();
 		indexed_models.append(&mut model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap(),*glam::Vec4::ONE.as_ref()));
 		indexed_models.push(primitives::unit_sphere());
@@ -753,7 +755,11 @@ impl framework::Example for GlobalState {
 
 		let mut physics = physics::PhysicsState::default();
 
-		let camera=GraphicsCamera::new(glam::uvec2(config.width,config.height), 1.0);
+		physics.load_user_settings(&user_settings);
+
+		let screen_size=glam::uvec2(config.width,config.height);
+
+		let camera=GraphicsCamera::new(screen_size,user_settings.calculate_fov(1.0,&screen_size).as_vec2());
 		let camera_uniforms = camera.to_uniform_data(physics.output().adjust_mouse(&physics.next_mouse));
 		let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 			label: Some("Camera"),
@@ -788,7 +794,7 @@ impl framework::Example for GlobalState {
 
 		let depth_view = Self::create_depth_texture(config, device);
 
-		let graphics=GraphicsState {
+		let mut graphics=GraphicsState {
 			pipelines:GraphicsPipelines{
 				skybox:sky_pipeline,
 				model:model_pipeline
@@ -806,6 +812,8 @@ impl framework::Example for GlobalState {
 			samplers: GraphicsSamplers { repeat: repeat_sampler },
 			temp_squid_texture_view: squid_texture_view,
 		};
+
+		graphics.load_user_settings(&user_settings);
 
 		let indexed_model_instances=model::IndexedModelInstances{
 			textures:Vec::new(),
@@ -828,6 +836,7 @@ impl framework::Example for GlobalState {
 			start_time:Instant::now(),
 			manual_mouse_lock:false,
 			mouse:physics::MouseState::default(),
+			user_settings,
 			graphics,
 			physics_thread,
 		};
@@ -889,9 +898,11 @@ impl framework::Example for GlobalState {
 						time:physics.time,
 						instruction: PhysicsInstruction::Input(physics::PhysicsInputInstruction::Reset),
 					});
+					physics.load_user_settings(&self.user_settings);
 					physics.generate_models(&indexed_model_instances);
 					self.physics_thread=physics.into_worker();
 
+					//graphics.load_user_settings(&self.user_settings);
 					self.generate_model_graphics(device,queue,indexed_model_instances);
 					//manual reset
 				}else{
@@ -1030,7 +1041,8 @@ impl framework::Example for GlobalState {
 		_queue: &wgpu::Queue,
 	) {
 		self.graphics.depth_view = Self::create_depth_texture(config, device);
-		self.graphics.camera.set_screen_size(glam::uvec2(config.width, config.height));
+		self.graphics.camera.screen_size=glam::uvec2(config.width, config.height);
+		self.graphics.load_user_settings(&self.user_settings);
 	}
 
 	fn render(

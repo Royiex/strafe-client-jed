@@ -175,7 +175,7 @@ impl PhysicsCamera {
 		Self{
 			offset,
 			angles: glam::DVec2::ZERO,
-			sensitivity: glam::dvec2(1.0/16384.0,1.0/16384.0),
+			sensitivity: glam::dvec2(1.0/1024.0,1.0/1024.0),
 			mouse:MouseState{pos:glam::IVec2::ZERO,time:-1},//escape initialization hell divide by zero
 		}
 	}
@@ -615,6 +615,10 @@ impl PhysicsState {
 			}
 		}).collect());
 		println!("Physics Objects: {}",self.models.len());
+	}
+
+	pub fn load_user_settings(&mut self,user_settings:&crate::settings::UserSettings){
+		self.camera.sensitivity=user_settings.calculate_sensitivity();
 	}
 
 	pub fn get_mode(&self,mode_id:u32)->Option<&crate::model::ModeDescription>{
