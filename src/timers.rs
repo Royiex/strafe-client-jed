@@ -1,13 +1,18 @@
 type TIME=crate::physics::TIME;
 
+#[derive(Clone)]
 pub struct Timescale{
 	num:i64,
 	den:std::num::NonZeroU64,
 }
 
+#[derive(Clone)]
 pub struct Paused{}
+#[derive(Clone)]
 pub struct Unpaused{}
+#[derive(Clone)]
 pub struct PausedScaled{scale:Timescale}
+#[derive(Clone)]
 pub struct UnpausedScaled{scale:Timescale}
 
 pub trait TimerState{}
@@ -32,10 +37,81 @@ pub trait IsUnscaled{}
 impl IsUnscaled for Paused{}
 impl IsUnscaled for Unpaused{}
 
+//scaled timer wrapper
+enum Scaled{
+	Paused(Timer<PausedScaled>),
+	Unpaused(Timer<UnpausedScaled>),
+}
+pub struct ScaledTimer{
+	timer:Scaled,
+}
+impl ScaledTimer{
+	pub fn unpaused()->Self{
+		Self{
+			timer:Scaled::Unpaused(unpaused_scaled(Timescale{num:1,den:std::num::NonZeroU64::new(1).unwrap()}))
+		}
+	}
+	pub fn time(&self,time:TIME)->TIME{
+		match &self.timer{
+			Scaled::Paused(timer)=>timer.time(),
+			Scaled::Unpaused(timer)=>timer.time(time),
+		}
+	}
+	pub fn pause(&mut self,time:TIME){
+		match &self.timer{
+			Scaled::Paused(_)=>(),
+			Scaled::Unpaused(timer)=>self.timer=Scaled::Paused(timer.clone().pause(time)),
+		};
+	}
+	pub fn unpause(&mut self,time:TIME){
+		match &self.timer{
+			Scaled::Paused(timer)=>self.timer=Scaled::Unpaused(timer.clone().unpause(time)),
+			Scaled::Unpaused(_)=>(),
+		};
+	}
+}
+
+//unscaled timer wrapper
+enum Unscaled{
+	Paused(Timer<Paused>),
+	Unpaused(Timer<Unpaused>),
+}
+pub struct UnscaledTimer{
+	timer:Unscaled,
+}
+
+impl UnscaledTimer{
+	pub fn unpaused()->Self{
+		Self{
+			timer:Unscaled::Unpaused(unpaused())
+		}
+	}
+	pub fn time(&self,time:TIME)->TIME{
+		match &self.timer{
+			Unscaled::Paused(timer)=>timer.time(),
+			Unscaled::Unpaused(timer)=>timer.time(time),
+		}
+	}
+	pub fn pause(&mut self,time:TIME){
+		match &self.timer{
+			Unscaled::Paused(_)=>(),
+			Unscaled::Unpaused(timer)=>self.timer=Unscaled::Paused(timer.clone().pause(time)),
+		};
+	}
+	pub fn unpause(&mut self,time:TIME){
+		match &self.timer{
+			Unscaled::Paused(timer)=>self.timer=Unscaled::Unpaused(timer.clone().unpause(time)),
+			Unscaled::Unpaused(_)=>(),
+		};
+	}
+}
+
+#[derive(Clone)]
 pub struct Timer<State:TimerState>{
 	offset:crate::physics::TIME,
 	state:State,
 }
+
 fn get_offset(time:TIME,write_time:TIME)->TIME{
 	write_time-time
 }

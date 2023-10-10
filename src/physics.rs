@@ -42,6 +42,7 @@ pub enum InputInstruction {
 	Jump(bool),
 	Zoom(bool),
 	Reset,
+	SetPaused(bool),
 	Idle,
 		//Idle: there were no input events, but the simulation is safe to advance to this timestep
 		//for interpolation / networking / playback reasons, most playback heads will always want
@@ -453,6 +454,7 @@ impl PhysicsState {
 	pub fn into_worker(mut self)->crate::worker::CompatWorker<TimedInstruction<InputInstruction>,PhysicsOutputState,Box<dyn FnMut(TimedInstruction<InputInstruction>)->PhysicsOutputState>>{
 		let mut mouse_blocking=true;
 		let mut last_mouse_time=self.next_mouse.time;
+		let mut simulation_timer=crate::timers::UnscaledTimer::unpaused();
 		let mut timeline=std::collections::VecDeque::new();
 		crate::worker::CompatWorker::new(self.output(),Box::new(move |ins:TimedInstruction<InputInstruction>|{
 			if if let Some(phys_input)=match ins.instruction{
@@ -460,17 +462,17 @@ impl PhysicsState {
 					if mouse_blocking{
 						//tell the game state which is living in the past about its future
 						timeline.push_front(TimedInstruction{
-							time:last_mouse_time,
+							time:simulation_timer.time(last_mouse_time),
 							instruction:PhysicsInputInstruction::SetNextMouse(MouseState{time:ins.time,pos:m}),
 						});
 					}else{
 						//mouse has just started moving again after being still for longer than 10ms.
 						//replace the entire mouse interpolation state to avoid an intermediate state with identical m0.t m1.t timestamps which will divide by zero
 						timeline.push_front(TimedInstruction{
-							time:last_mouse_time,
+							time:simulation_timer.time(last_mouse_time),
 							instruction:PhysicsInputInstruction::ReplaceMouse(
-								MouseState{time:last_mouse_time,pos:self.next_mouse.pos},
-								MouseState{time:ins.time,pos:m}
+								MouseState{time:simulation_timer.time(last_mouse_time),pos:self.next_mouse.pos},
+								MouseState{time:simulation_timer.time(ins.time),pos:m}
 							),
 						});
 						//delay physics execution until we have an interpolation target
@@ -479,6 +481,14 @@ impl PhysicsState {
 					last_mouse_time=ins.time;
 					None
 				},
+				InputInstruction::SetPaused(s)=>{
+					if s{
+						simulation_timer.pause(ins.time);
+					}else{
+						simulation_timer.unpause(ins.time);
+					}
+					Some(PhysicsInputInstruction::Idle)
+				}
 				InputInstruction::MoveForward(s)=>Some(PhysicsInputInstruction::SetMoveForward(s)),
 				InputInstruction::MoveLeft(s)=>Some(PhysicsInputInstruction::SetMoveLeft(s)),
 				InputInstruction::MoveBack(s)=>Some(PhysicsInputInstruction::SetMoveBack(s)),
@@ -492,7 +502,7 @@ impl PhysicsState {
 			}{
 				//non-mouse event
 				timeline.push_back(TimedInstruction{
-					time:ins.time,
+					time:simulation_timer.time(ins.time),
 					instruction:phys_input,
 				});
 				
@@ -504,7 +514,7 @@ impl PhysicsState {
 					if 10_000_000<ins.time-self.next_mouse.time{
 						//push an event to extrapolate no movement from
 						timeline.push_front(TimedInstruction{
-							time:last_mouse_time,
+							time:simulation_timer.time(last_mouse_time),
 							instruction:PhysicsInputInstruction::SetNextMouse(MouseState{time:ins.time,pos:self.next_mouse.pos}),
 						});
 						last_mouse_time=ins.time;
@@ -526,9 +536,10 @@ impl PhysicsState {
 			}{
 				//empty queue
 				while let Some(instruction)=timeline.pop_front(){
-					self.run(instruction.time);
+					let simulation_time=simulation_timer.time(instruction.time);
+					self.run(simulation_time);
 					self.process_instruction(TimedInstruction{
-						time:instruction.time,
+						time:simulation_time,
 						instruction:PhysicsInstruction::Input(instruction.instruction),
 					});
 				}
