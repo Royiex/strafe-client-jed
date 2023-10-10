@@ -951,6 +951,16 @@ impl framework::Example for GlobalState {
 					57=>Some(InputInstruction::Jump(s)),//Space
 					44=>Some(InputInstruction::Zoom(s)),//Z
 					19=>if s{Some(InputInstruction::Reset)}else{None},//R
+					87=>{//F11
+						if s{
+							if window.fullscreen().is_some(){
+								window.set_fullscreen(None);
+							}else{
+								window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
+							}
+						}
+						None
+					},
 					01=>{//Esc
 						if s{
 							self.manual_mouse_lock=false;
