@@ -1,5 +1,7 @@
 use crate::{instruction::{InstructionEmitter, InstructionConsumer, TimedInstruction}, zeroes::zeroes2};
 
+use crate::integer::{Planar64,Planar64Vec3,Angle32Vec2};
+
 #[derive(Debug)]
 pub enum PhysicsInstruction {
 	CollisionStart(RelativeCollision),
@@ -49,9 +51,9 @@ pub enum InputInstruction {
 }
 #[derive(Clone)]
 pub struct Body {
-	position: glam::Vec3,//I64 where 2^32 = 1 u
-	velocity: glam::Vec3,//I64 where 2^32 = 1 u/s
-	acceleration: glam::Vec3,//I64 where 2^32 = 1 u/s/s
+	position: Planar64Vec3,//I64 where 2^32 = 1 u
+	velocity: Planar64Vec3,//I64 where 2^32 = 1 u/s
+	acceleration: Planar64Vec3,//I64 where 2^32 = 1 u/s/s
 	time: TIME,//nanoseconds x xxxxD!
 }
 trait MyHash{
@@ -137,14 +139,14 @@ pub enum WalkEnum{
 	Transient,
 }
 pub struct WalkState {
-	pub target_velocity: glam::Vec3,
+	pub target_velocity: Planar64Vec3,
 	pub target_time: TIME,
 	pub state: WalkEnum,
 }
 impl WalkState {
 	pub fn new() -> Self {
 		Self{
-			target_velocity:glam::Vec3::ZERO,
+			target_velocity:Planar64Vec3::ZERO,
 			target_time:0,
 			state:WalkEnum::Reached,
 		}
@@ -153,10 +155,10 @@ impl WalkState {
 
 #[derive(Clone)]
 pub struct PhysicsCamera {
-	offset: glam::Vec3,
+	offset: Planar64Vec3,
 	angles: glam::DVec2,//YAW AND THEN PITCH
-	//punch: glam::Vec3,
-	//punch_velocity: glam::Vec3,
+	//punch: Planar64Vec3,
+	//punch_velocity: Planar64Vec3,
 	sensitivity: glam::DVec2,
 	mouse:MouseState,
 }
@@ -165,13 +167,13 @@ pub struct PhysicsCamera {
 fn mat3_from_rotation_y_f64(angle: f64) -> glam::Mat3 {
 	let (sina, cosa) = angle.sin_cos();
 	glam::Mat3::from_cols(
-		glam::Vec3::new(cosa as f32, 0.0, -sina as f32),
-		glam::Vec3::Y,
-		glam::Vec3::new(sina as f32, 0.0, cosa as f32),
+		Planar64Vec3::new(cosa as f32, 0.0, -sina as f32),
+		Planar64Vec3::Y,
+		Planar64Vec3::new(sina as f32, 0.0, cosa as f32),
 	)
 }
 impl PhysicsCamera {
-	pub fn from_offset(offset:glam::Vec3) -> Self {
+	pub fn from_offset(offset:Planar64Vec3) -> Self {
 		Self{
 			offset,
 			angles: glam::DVec2::ZERO,
@@ -206,14 +208,14 @@ pub struct WorldState{}
 pub struct StyleModifiers{
 	pub controls_mask:u32,//controls which are unable to be activated
 	pub controls_held:u32,//controls which must be active to be able to strafe
-	pub mv:f32,
-	pub walkspeed:f32,
-	pub friction:f32,
-	pub walk_accel:f32,
-	pub gravity:glam::Vec3,
+	pub mv:Planar64,
+	pub walkspeed:Planar64,
+	pub friction:Planar64,
+	pub walk_accel:Planar64,
+	pub gravity:Planar64Vec3,
 	pub strafe_tick_num:TIME,
 	pub strafe_tick_den:TIME,
-	pub hitbox_halfsize:glam::Vec3,
+	pub hitbox_halfsize:Planar64Vec3,
 }
 impl std::default::Default for StyleModifiers{
 	fn default() -> Self {
@@ -222,12 +224,12 @@ impl std::default::Default for StyleModifiers{
 			controls_held: 0,
 			strafe_tick_num: 100,//100t
 			strafe_tick_den: 1_000_000_000,
-			gravity: glam::vec3(0.0,-100.0,0.0),
+			gravity: Planar64Vec3::new(0,100,0),
 			friction: 1.2,
 			walk_accel: 90.0,
-			mv: 2.7,
+			mv: Planar64::new(27)/10,
 			walkspeed: 18.0,
-			hitbox_halfsize: glam::vec3(1.0,2.5,1.0),
+			hitbox_halfsize: Planar64Vec3::new(2,5,2)/2,
 		}
 	}
 }
@@ -241,17 +243,17 @@ impl StyleModifiers{
 	const CONTROL_JUMP:u32 = 0b01000000;
 	const CONTROL_ZOOM:u32 = 0b10000000;
 
-	const FORWARD_DIR:glam::Vec3 = glam::Vec3::NEG_Z;
-	const RIGHT_DIR:glam::Vec3 = glam::Vec3::X;
-	const UP_DIR:glam::Vec3 = glam::Vec3::Y;
+	const FORWARD_DIR:Planar64Vec3 = Planar64Vec3::NEG_Z;
+	const RIGHT_DIR:Planar64Vec3 = Planar64Vec3::X;
+	const UP_DIR:Planar64Vec3 = Planar64Vec3::Y;
 
 	fn get_control(&self,control:u32,controls:u32)->bool{
 		controls&self.controls_mask&control==control
 	}
 
-	fn get_control_dir(&self,controls:u32)->glam::Vec3{
+	fn get_control_dir(&self,controls:u32)->Planar64Vec3{
 		//don't get fancy just do it
-		let mut control_dir:glam::Vec3 = glam::Vec3::ZERO;
+		let mut control_dir:Planar64Vec3 = Planar64Vec3::ZERO;
 		//Disallow strafing if held controls are not held
 		if controls&self.controls_held!=self.controls_held{
 			return control_dir;
@@ -303,7 +305,7 @@ pub struct PhysicsState{
 	pub mode_from_mode_id:std::collections::HashMap::<u32,usize>,
 	//the spawn point is where you spawn when you load into the map.
 	//This is not the same as Reset which teleports you to Spawn0
-	pub spawn_point:glam::Vec3,
+	pub spawn_point:Planar64Vec3,
 }
 #[derive(Clone)]
 pub struct PhysicsOutputState{
@@ -311,8 +313,8 @@ pub struct PhysicsOutputState{
 	body:Body,
 }
 impl PhysicsOutputState{
-	pub fn adjust_mouse(&self,mouse:&MouseState)->(glam::Vec3,glam::Vec2){
-		(self.body.extrapolated_position(mouse.time)+self.camera.offset,self.camera.simulate_move_angles(mouse.pos).as_vec2())
+	pub fn adjust_mouse(&self,mouse:&MouseState)->(Planar64Vec3,Angle32Vec2){
+		(self.body.extrapolated_position(mouse.time)+self.camera.offset,self.camera.simulate_move_angles(mouse.pos))
 	}
 }
 
@@ -343,7 +345,7 @@ impl ModelPhysics {
 	fn from_model_transform_attributes(model:&crate::model::IndexedModel,transform:&glam::Affine3A,attributes:PhysicsCollisionAttributes)->Self{
 		let mut aabb=TreyMesh::new();
 		for indexed_vertex in &model.unique_vertices {
-			aabb.grow(transform.transform_point3(glam::Vec3::from_array(model.unique_pos[indexed_vertex.pos as usize])));
+			aabb.grow(transform.transform_point3(Planar64Vec3::from_array(model.unique_pos[indexed_vertex.pos as usize])));
 		}
 		Self{
 			mesh:aabb,
@@ -358,7 +360,7 @@ impl ModelPhysics {
 			crate::model::CollisionAttributes::Decoration=>None,
 		}
 	}
-	pub fn unit_vertices(&self) -> [glam::Vec3;8] {
+	pub fn unit_vertices(&self) -> [Planar64Vec3;8] {
 		TreyMesh::unit_vertices()
 	}
 	pub fn mesh(&self) -> &TreyMesh {
@@ -367,7 +369,7 @@ impl ModelPhysics {
 	pub fn face_mesh(&self,face:TreyMeshFace)->TreyMesh{
 		self.mesh.face(face)
 	}
-	pub fn face_normal(&self,face:TreyMeshFace) -> glam::Vec3 {
+	pub fn face_normal(&self,face:TreyMeshFace) -> Planar64Vec3 {
 		TreyMesh::normal(face)//this is wrong for scale
 	}
 }
@@ -387,7 +389,7 @@ impl RelativeCollision {
 	pub fn mesh(&self,models:&Vec<ModelPhysics>) -> TreyMesh {
 		return self.model(models).unwrap().face_mesh(self.face).clone()
 	}
-	pub fn normal(&self,models:&Vec<ModelPhysics>) -> glam::Vec3 {
+	pub fn normal(&self,models:&Vec<ModelPhysics>) -> Planar64Vec3 {
 		return self.model(models).unwrap().face_normal(self.face)
 	}
 }
@@ -395,7 +397,7 @@ impl RelativeCollision {
 pub type TIME = i64;
 
 impl Body {
-	pub fn with_pva(position:glam::Vec3,velocity:glam::Vec3,acceleration:glam::Vec3) -> Self {
+	pub fn with_pva(position:Planar64Vec3,velocity:Planar64Vec3,acceleration:Planar64Vec3) -> Self {
 		Self{
 			position,
 			velocity,
@@ -403,11 +405,11 @@ impl Body {
 			time: 0,
 		}
 	}
-	pub fn extrapolated_position(&self,time: TIME)->glam::Vec3{
+	pub fn extrapolated_position(&self,time: TIME)->Planar64Vec3{
 		let dt=(time-self.time) as f64/1_000_000_000f64;
 		self.position+self.velocity*(dt as f32)+self.acceleration*((0.5*dt*dt) as f32)
 	}
-	pub fn extrapolated_velocity(&self,time: TIME)->glam::Vec3{
+	pub fn extrapolated_velocity(&self,time: TIME)->Planar64Vec3{
 		let dt=(time-self.time) as f64/1_000_000_000f64;
 		self.velocity+self.acceleration*(dt as f32)
 	}
@@ -648,12 +650,12 @@ impl PhysicsState {
 	}
 	fn jump(&mut self){
 		self.grounded=false;//do I need this?
-		let mut v=self.body.velocity+glam::Vec3::new(0.0,0.715588/2.0*100.0,0.0);
+		let mut v=self.body.velocity+Planar64Vec3::new(0.0,0.715588/2.0*100.0,0.0);
 		self.contact_constrain_velocity(&mut v);
 		self.body.velocity=v;
 	}
 
-	fn contact_constrain_velocity(&self,velocity:&mut glam::Vec3){
+	fn contact_constrain_velocity(&self,velocity:&mut Planar64Vec3){
 		for (_,contact) in &self.contacts {
 			let n=contact.normal(&self.models);
 			let d=velocity.dot(n);
@@ -662,7 +664,7 @@ impl PhysicsState {
 			}
 		}
 	}
-	fn contact_constrain_acceleration(&self,acceleration:&mut glam::Vec3){
+	fn contact_constrain_acceleration(&self,acceleration:&mut Planar64Vec3){
 		for (_,contact) in &self.contacts {
 			let n=contact.normal(&self.models);
 			let d=acceleration.dot(n);
@@ -717,8 +719,8 @@ impl PhysicsState {
 			self.contact_constrain_velocity(&mut v);
 			let mut target_diff=v-self.body.velocity;
 			target_diff.y=0f32;
-			if target_diff==glam::Vec3::ZERO{
-				let mut a=glam::Vec3::ZERO;
+			if target_diff==Planar64Vec3::ZERO{
+				let mut a=Planar64Vec3::ZERO;
 				self.contact_constrain_acceleration(&mut a);
 				self.body.acceleration=a;
 				self.walk.state=WalkEnum::Reached;
@@ -1111,7 +1113,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						if let Some(mode)=self.get_mode(stage_element.mode_id){
 							if let Some(&spawn)=mode.get_spawn_model_id(self.game.stage_id){
 								if let Some(model)=self.models.get(spawn as usize){
-									self.body.position=model.transform.transform_point3(glam::Vec3::Y)+glam::Vec3::Y*(self.style.hitbox_halfsize.y+0.1);
+									self.body.position=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(self.style.hitbox_halfsize.y+0.1);
 									//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
 									self.contacts.clear();
 									self.intersects.clear();
@@ -1159,7 +1161,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						if let Some(mode)=self.get_mode(stage_element.mode_id){
 							if let Some(&spawn)=mode.get_spawn_model_id(self.game.stage_id){
 								if let Some(model)=self.models.get(spawn as usize){
-									self.body.position=model.transform.transform_point3(glam::Vec3::Y)+glam::Vec3::Y*(self.style.hitbox_halfsize.y+0.1);
+									self.body.position=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(self.style.hitbox_halfsize.y+0.1);
 									//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
 									self.contacts.clear();
 									self.intersects.clear();
@@ -1212,7 +1214,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			}
 			PhysicsInstruction::ReachWalkTargetVelocity => {
 				//precisely set velocity
-				let mut a=glam::Vec3::ZERO;
+				let mut a=Planar64Vec3::ZERO;
 				self.contact_constrain_acceleration(&mut a);
 				self.body.acceleration=a;
 				let mut v=self.walk.target_velocity;
@@ -1252,7 +1254,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsInputInstruction::Reset => {
 						//temp
 						self.body.position=self.spawn_point;
-						self.body.velocity=glam::Vec3::ZERO;
+						self.body.velocity=Planar64Vec3::ZERO;
 						//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
 						self.contacts.clear();
 						self.body.acceleration=self.style.gravity;
