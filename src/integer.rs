@@ -57,12 +57,84 @@ pub struct Ratio64{
 	den:std::num::NonZeroU64,
 }
 impl Ratio64{
+	pub const ZERO:Self=Ratio64{num:0,den:unsafe{std::num::NonZeroU64::new_unchecked(1)}};
 	pub const ONE:Self=Ratio64{num:1,den:unsafe{std::num::NonZeroU64::new_unchecked(1)}};
+	pub fn new(num:i64,den:u64)->Option<Ratio64>{
+		match std::num::NonZeroU64::new(den){
+			Some(den)=>{
+				//TODO: gcd
+				Some(Self{num,den})
+			},
+			None=>None,
+		}
+	}
 	pub fn mul_int(self,rhs:i64)->i64{
 		rhs*self.num/self.den.get() as i64
 	}
 	pub fn rhs_div_int(self,rhs:i64)->i64{
 		rhs*self.den.get() as i64/self.num
+	}
+}
+//from num_traits crate
+#[inline]
+fn integer_decode_f64(f: f64) -> (u64, i16, i8) {
+    let bits: u64 = f.to_bits();
+    let sign: i8 = if bits >> 63 == 0 { 1 } else { -1 };
+    let mut exponent: i16 = ((bits >> 52) & 0x7ff) as i16;
+    let mantissa = if exponent == 0 {
+        (bits & 0xfffffffffffff) << 1
+    } else {
+        (bits & 0xfffffffffffff) | 0x10000000000000
+    };
+    // Exponent bias + mantissa shift
+    exponent -= 1023 + 52;
+    (mantissa, exponent, sign)
+}
+#[derive(Debug)]
+enum Ratio64TryFromFloat64Error{
+	Nan,
+	Infinite,
+	Subnormal,
+	HighlyNegativeExponent(i16),
+	HighlyPositiveExponent(i16),
+}
+impl TryFrom<f64> for Ratio64{
+	type Error=Ratio64TryFromFloat64Error;
+	fn try_from(value:f64)->Result<Self,Self::Error>{
+		match value.classify(){
+			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
+			std::num::FpCategory::Infinite=>Err(Self::Error::Infinite),
+			std::num::FpCategory::Zero=>Ok(Self::ZERO),
+			std::num::FpCategory::Subnormal=>Err(Self::Error::Subnormal),
+			std::num::FpCategory::Normal=>{
+				let (m,e,s)=integer_decode_f64(value);
+				if e< -127{
+					//bye bye
+					Err(Self::Error::HighlyNegativeExponent(e))
+				}else if e< -63{
+					//TODO
+					Err(Self::Error::HighlyNegativeExponent(e))
+				}else if e<0{
+					Ok(Ratio64::new((m as i64)*(s as i64),1<<-e).unwrap())
+				}else if e<62-52{
+					Ok(Ratio64::new((m as i64)*(s as i64)*(1<<e),1).unwrap())
+				}else{
+					Err(Self::Error::HighlyPositiveExponent(e))
+				}
+			},
+		}
+	}
+}
+impl std::ops::Mul<Ratio64> for Ratio64{
+	type Output=Ratio64;
+	#[inline]
+	fn mul(self,rhs:Ratio64)->Self::Output{
+		let (num,den)=(self.num*rhs.num,self.den.get()*rhs.den.get());
+		//TODO: gcd
+		Self{
+			num,
+			den:unsafe{std::num::NonZeroU64::new_unchecked(den)},
+		}
 	}
 }
 impl std::ops::Mul<i64> for Ratio64{
@@ -92,6 +164,9 @@ pub struct Ratio64Vec2{
 }
 impl Ratio64Vec2{
 	pub const ONE:Self=Self{x:Ratio64::ONE,y:Ratio64::ONE};
+	pub fn new(x:Ratio64,y:Ratio64)->Self{
+		Self{x,y}
+	}
 	pub fn mul_int(self,rhs:glam::I64Vec2)->glam::I64Vec2{
 		glam::i64vec2(
 			self.x.mul_int(rhs.x),
