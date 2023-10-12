@@ -219,12 +219,12 @@ impl std::default::Default for StyleModifiers{
 			controls_mask: !0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held: 0,
 			strafe_tick_rate:Ratio64::ONE.rhs_div_ratio(100),
-			gravity: Planar64Vec3::new(0,100,0),
-			friction: Planar64::new(12)/10,
-			walk_accel: Planar64::new(90),
-			mv: Planar64::new(27)/10,
-			walkspeed: Planar64::new(18),
-			hitbox_halfsize: Planar64Vec3::new(2,5,2)/2,
+			gravity: Planar64Vec3::int(0,100,0),
+			friction: Planar64::int(12)/10,
+			walk_accel: Planar64::int(90),
+			mv: Planar64::int(27)/10,
+			walkspeed: Planar64::int(18),
+			hitbox_halfsize: Planar64Vec3::int(2,5,2)/2,
 		}
 	}
 }
@@ -416,8 +416,8 @@ impl Body {
 impl Default for PhysicsState{
 	fn default() -> Self {
  		Self{
-			spawn_point:Planar64Vec3::new(0,50,0),
-			body: Body::with_pva(Planar64Vec3::new(0,50,0),Planar64Vec3::new(0,0,0),Planar64Vec3::new(0,-100,0)),
+			spawn_point:Planar64Vec3::int(0,50,0),
+			body: Body::with_pva(Planar64Vec3::int(0,50,0),Planar64Vec3::int(0,0,0),Planar64Vec3::int(0,-100,0)),
 			time: Time::ZERO,
 			style:StyleModifiers::default(),
 			grounded: false,
@@ -426,7 +426,7 @@ impl Default for PhysicsState{
 			models: Vec::new(),
 			bvh:crate::bvh::BvhNode::default(),
 			walk: WalkState::new(),
-			camera: PhysicsCamera::from_offset(Planar64Vec3::new(0,2,0)),//4.5-2.5=2
+			camera: PhysicsCamera::from_offset(Planar64Vec3::int(0,2,0)),//4.5-2.5=2
 			next_mouse: MouseState::default(),
 			controls: 0,
 			world:WorldState{},
@@ -643,7 +643,7 @@ impl PhysicsState {
 	}
 	fn jump(&mut self){
 		self.grounded=false;//do I need this?
-		let mut v=self.body.velocity+Planar64Vec3::new(0,715588,0)/20000;//0.715588/2.0*100.0
+		let mut v=self.body.velocity+Planar64Vec3::int(0,715588,0)/20000;//0.715588/2.0*100.0
 		self.contact_constrain_velocity(&mut v);
 		self.body.velocity=v;
 	}

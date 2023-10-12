@@ -214,7 +214,7 @@ pub struct Unit64Mat3{
 pub struct Planar64(i64);
 impl Planar64{
 	pub const ONE:Self=Self(2<<32);
-	pub fn new(num:i32)->Self{
+	pub fn int(num:i32)->Self{
 		Self(Self::ONE.0*num as i64)
 	}
 	pub fn from_ratio(num:i64,den:std::num::NonZeroU64)->Self{
@@ -254,6 +254,13 @@ impl std::ops::Div<i64> for Planar64{
 		Planar64(self.0/rhs)
 	}
 }
+impl std::ops::Div<Planar64> for Planar64{
+	type Output=Planar64;
+	#[inline]
+	fn div(self, rhs: Planar64) -> Self::Output {
+		Planar64((((self.0 as i128)<<64)/rhs.0 as i128) as i64)
+	}
+}
 
 
 ///[-1.0,1.0] = [-2^32,2^32]
@@ -268,7 +275,7 @@ impl Planar64Vec3{
 	pub const NEG_X:Self=Planar64Vec3(glam::I64Vec3::NEG_X);
 	pub const NEG_Y:Self=Planar64Vec3(glam::I64Vec3::NEG_Y);
 	pub const NEG_Z:Self=Planar64Vec3(glam::I64Vec3::NEG_Z);
-	pub fn new(x:i32,y:i32,z:i32)->Self{
+	pub fn int(x:i32,y:i32,z:i32)->Self{
 		Self(glam::i64vec3((x as i64)<<32,(y as i64)<<32,(z as i64)<<32))
 	}
 	#[inline]
