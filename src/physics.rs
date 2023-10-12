@@ -420,9 +420,9 @@ impl Body {
 impl Default for PhysicsState{
 	fn default() -> Self {
  		Self{
-			spawn_point:glam::vec3(0.0,50.0,0.0),
-			body: Body::with_pva(glam::vec3(0.0,50.0,0.0),glam::vec3(0.0,0.0,0.0),glam::vec3(0.0,-100.0,0.0)),
 			time: 0,
+			spawn_point:Planar64Vec3::new(0,50,0),
+			body: Body::with_pva(Planar64Vec3::new(0,50,0),Planar64Vec3::new(0,0,0),Planar64Vec3::new(0,-100,0)),
 			style:StyleModifiers::default(),
 			grounded: false,
 			contacts: std::collections::HashMap::new(),
@@ -430,7 +430,7 @@ impl Default for PhysicsState{
 			models: Vec::new(),
 			bvh:crate::bvh::BvhNode::default(),
 			walk: WalkState::new(),
-			camera: PhysicsCamera::from_offset(glam::vec3(0.0,4.5-2.5,0.0)),
+			camera: PhysicsCamera::from_offset(Planar64Vec3::new(0,2,0)),//4.5-2.5=2
 			next_mouse: MouseState::default(),
 			controls: 0,
 			world:WorldState{},
