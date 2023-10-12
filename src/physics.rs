@@ -218,7 +218,7 @@ impl std::default::Default for StyleModifiers{
 		Self{
 			controls_mask: !0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held: 0,
-			strafe_tick_rate:Ratio64::ONE.div_ratio(100),
+			strafe_tick_rate:Ratio64::ONE.rhs_div_ratio(100),
 			gravity: Planar64Vec3::new(0,100,0),
 			friction: Planar64::new(12)/10,
 			walk_accel: Planar64::new(90),
@@ -308,8 +308,8 @@ pub struct PhysicsOutputState{
 	body:Body,
 }
 impl PhysicsOutputState{
-	pub fn adjust_mouse(&self,mouse:&MouseState)->(Planar64Vec3,Angle32Vec2){
-		(self.body.extrapolated_position(mouse.time)+self.camera.offset,self.camera.simulate_move_angles(mouse.pos))
+	pub fn adjust_mouse(&self,mouse:&MouseState)->(glam::Vec3,glam::Vec2){
+		((self.body.extrapolated_position(mouse.time)+self.camera.offset).into(),self.camera.simulate_move_angles(mouse.pos))
 	}
 }
 
@@ -643,7 +643,7 @@ impl PhysicsState {
 	}
 	fn jump(&mut self){
 		self.grounded=false;//do I need this?
-		let mut v=self.body.velocity+Planar64Vec3::new(0.0,0.715588/2.0*100.0,0.0);
+		let mut v=self.body.velocity+Planar64Vec3::new(0,715588,0)/20000;//0.715588/2.0*100.0
 		self.contact_constrain_velocity(&mut v);
 		self.body.velocity=v;
 	}
@@ -668,7 +668,7 @@ impl PhysicsState {
 	}
 	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		return Some(TimedInstruction{
-			time:self.style.strafe_tick_rate.div_int(self.style.strafe_tick_rate.mul_int(self.time)+1),
+			time:self.style.strafe_tick_rate.rhs_div_int(self.style.strafe_tick_rate.mul_int(self.time)+1),
 			//only poll the physics if there is a before and after mouse event
 			instruction:PhysicsInstruction::StrafeTick
 		});
@@ -1200,7 +1200,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				let control_dir=camera_mat*self.style.get_control_dir(self.controls);
 				let d=self.body.velocity.dot(control_dir);
 				if d<self.style.mv {
-					let mut v=self.body.velocity+(self.style.mv-d)*control_dir;
+					let mut v=self.body.velocity+control_dir*(self.style.mv-d);
 					self.contact_constrain_velocity(&mut v);
 					self.body.velocity=v;
 				}
@@ -1262,7 +1262,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					if refresh_walk_target_velocity{
 						let camera_mat=self.camera.simulate_move_rotation_y(self.camera.mouse.lerp(&self.next_mouse,self.time).x);
 						let control_dir=camera_mat*self.style.get_control_dir(self.controls);
-						self.walk.target_velocity=self.style.walkspeed*control_dir;
+						self.walk.target_velocity=control_dir*self.style.walkspeed;
 					}
 					self.refresh_walk_target();
 				}

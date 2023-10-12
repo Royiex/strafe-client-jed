@@ -221,6 +221,11 @@ impl Planar64{
 		Self(Self::ONE.0*num/den.get() as i64)
 	}
 }
+impl Into<f32> for Planar64{
+	fn into(self)->f32{
+		self.0 as f32/(2<<32) as f32
+	}
+}
 impl std::ops::Add<Planar64> for Planar64{
 	type Output=Planar64;
 	#[inline]
@@ -279,6 +284,15 @@ impl Planar64Vec3{
 		Planar64(self.0.z)
 	}
 }
+impl Into<glam::Vec3> for Planar64Vec3{
+	fn into(self)->glam::Vec3{
+		glam::vec3(
+			self.0.x as f32/(2<<32) as f32,
+			self.0.y as f32/(2<<32) as f32,
+			self.0.z as f32/(2<<32) as f32,
+		)
+	}
+}
 impl std::ops::Add<Planar64Vec3> for Planar64Vec3{
 	type Output=Planar64Vec3;
 	#[inline]
@@ -334,6 +348,15 @@ pub struct Planar64Mat3{
 	x_axis:Planar64Vec3,
 	y_axis:Planar64Vec3,
 	z_axis:Planar64Vec3,
+}
+impl std::ops::Mul<Planar64Vec3> for Planar64Mat3{
+	type Output=Planar64Vec3;
+	#[inline]
+	fn mul(self,rhs:Planar64Vec3) -> Self::Output {
+		self.x_axis*rhs.x()
+		+self.y_axis*rhs.y()
+		+self.z_axis*rhs.z()
+	}
 }
 
 impl Planar64Mat3{
