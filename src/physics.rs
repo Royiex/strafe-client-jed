@@ -496,7 +496,7 @@ impl PhysicsState {
 					//shitty mice are 125Hz which is 8ms so this should cover that.
 					//setting this to 100us still doesn't print even though it's 10x lower than the polling rate,
 					//so mouse events are probably not handled separately from drawing and fire right before it :(
-					if 10_000_000<ins.time-self.next_mouse.time{
+					if Time::from_millis(10)<ins.time-self.next_mouse.time{
 						//push an event to extrapolate no movement from
 						timeline.push_front(TimedInstruction{
 							time:last_mouse_time,
