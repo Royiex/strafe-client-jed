@@ -202,23 +202,38 @@ impl Angle32{
 	pub const PI:Self=Self(-1<<32);
 	#[inline]
 	pub fn wrap_from_i64(theta:i64)->Self{
-		//TODO: make this good
-		Self((theta.wrapping_add(1<<31).rem_euclid(1<<32)-(1<<31)) as i32)
+		//take lower bits
+		//note: this was checked on compiler explorer and compiles to 1 instruction!
+		Self(i32::from_ne_bytes(((theta&((1<<32)-1)) as u32).to_ne_bytes()))
 	}
 	#[inline]
 	pub fn clamp_from_i64(theta:i64)->Self{
-		//TODO: make this good
+		//the assembly is a bit confusing for this, I thought it was checking the same thing twice
+		//but it's just checking and then overwriting the value for both upper and lower bounds.
 		Self(theta.clamp(i32::MIN as i64,i32::MAX as i64) as i32)
 	}
 	#[inline]
 	pub fn get(&self)->i32{
 		self.0
 	}
-	/// Note that theta_min can be larger than theta_max and it will clamp the other way
+	/// Clamps the value towards the midpoint of the range.
+	/// Note that theta_min can be larger than theta_max and it will wrap clamp the other way around
 	#[inline]
 	pub fn clamp(&self,theta_min:Self,theta_max:Self)->Self{
-		//TODO: make this good
-		theta_min+Self::wrap_from_i64((self.0.wrapping_sub(theta_min.0) as i64).rem_euclid(1<<32).clamp(0,(theta_max.0.wrapping_sub(theta_min.0) as i64).rem_euclid(1<<32)))
+		//((max-min as u32)/2 as i32)+min
+		let midpoint=((
+			u32::from_ne_bytes(theta_max.0.to_ne_bytes())
+			.wrapping_sub(u32::from_ne_bytes(theta_min.0.to_ne_bytes()))
+			/2
+		) as i32)//(u32::MAX/2) as i32 ALWAYS works
+		.wrapping_add(theta_min.0);
+		//(theta-mid).clamp(max-mid,min-mid)+mid
+		Self(
+			self.0.wrapping_sub(midpoint)
+			.max(theta_min.0.wrapping_sub(midpoint))
+			.min(theta_max.0.wrapping_sub(midpoint))
+			.wrapping_add(midpoint)
+		)
 	}
 	#[inline]
 	pub fn cos(&self)->Unit32{
