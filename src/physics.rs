@@ -159,7 +159,7 @@ impl PhysicsCamera {
 	pub fn from_offset(offset:Planar64Vec3) -> Self {
 		Self{
 			offset,
-			sensitivity:Ratio64Vec2::ONE.mul_ratio(200_000),
+			sensitivity:Ratio64Vec2::ONE*200_000,
 			mouse:MouseState{pos:glam::IVec2::ZERO,time:-Time::ONE_NANOSECOND},//escape initialization hell divide by zero
 			clamped_mouse_pos:glam::IVec2::ZERO,
 			angle_pitch_lower_limit:-Angle32::FRAC_PI_2,
@@ -218,7 +218,7 @@ impl std::default::Default for StyleModifiers{
 		Self{
 			controls_mask: !0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held: 0,
-			strafe_tick_rate:Ratio64::ONE.rhs_div_ratio(100),
+			strafe_tick_rate:Ratio64::ONE/100,
 			gravity: Planar64Vec3::int(0,100,0),
 			friction: Planar64::int(12)/10,
 			walk_accel: Planar64::int(90),

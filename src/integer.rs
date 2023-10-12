@@ -58,17 +58,31 @@ pub struct Ratio64{
 }
 impl Ratio64{
 	pub const ONE:Self=Ratio64{num:1,den:unsafe{std::num::NonZeroU64::new_unchecked(1)}};
-	pub fn mul_ratio(self,rhs:i64)->Self{
-		Self{
-			num:self.num*rhs,
-			den:self.den
-		}
-	}
 	pub fn mul_int(self,rhs:i64)->i64{
 		rhs*self.num/self.den.get() as i64
 	}
 	pub fn rhs_div_int(self,rhs:i64)->i64{
 		rhs*self.den.get() as i64/self.num
+	}
+}
+impl std::ops::Mul<i64> for Ratio64{
+	type Output=Ratio64;
+	#[inline]
+	fn mul(self,rhs:i64)->Self::Output {
+		Self{
+			num:self.num*rhs,
+			den:self.den,
+		}
+	}
+}
+impl std::ops::Div<u64> for Ratio64{
+	type Output=Ratio64;
+	#[inline]
+	fn div(self,rhs:u64)->Self::Output {
+		Self{
+			num:self.num,
+			den:std::num::NonZeroU64::new(self.den.get()*rhs).unwrap(),
+		}
 	}
 }
 #[derive(Clone,Hash)]
@@ -78,17 +92,21 @@ pub struct Ratio64Vec2{
 }
 impl Ratio64Vec2{
 	pub const ONE:Self=Self{x:Ratio64::ONE,y:Ratio64::ONE};
-	pub fn mul_ratio(self,rhs:i64)->Self{
-		Self{
-			x:self.x.mul_ratio(rhs),
-			y:self.y.mul_ratio(rhs),
-		}
-	}
 	pub fn mul_int(self,rhs:glam::I64Vec2)->glam::I64Vec2{
 		glam::i64vec2(
 			self.x.mul_int(rhs.x),
 			self.y.mul_int(rhs.y),
 		)
+	}
+}
+impl std::ops::Mul<i64> for Ratio64Vec2{
+	type Output=Ratio64Vec2;
+	#[inline]
+	fn mul(self,rhs:i64)->Self::Output {
+		Self{
+			x:self.x*rhs,
+			y:self.y*rhs,
+		}
 	}
 }
 
