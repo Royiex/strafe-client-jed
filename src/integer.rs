@@ -224,6 +224,14 @@ impl std::ops::Div<i64> for Planar64{
 #[derive(Clone,Copy,Hash)]
 pub struct Planar64Vec3(glam::I64Vec3);
 impl Planar64Vec3{
+	pub const ZERO:Self=Planar64Vec3(glam::I64Vec3::ZERO);
+	pub const ONE:Self=Planar64Vec3(glam::I64Vec3::ONE);
+	pub const X:Self=Planar64Vec3(glam::I64Vec3::X);
+	pub const Y:Self=Planar64Vec3(glam::I64Vec3::Y);
+	pub const Z:Self=Planar64Vec3(glam::I64Vec3::Z);
+	pub const NEG_X:Self=Planar64Vec3(glam::I64Vec3::NEG_X);
+	pub const NEG_Y:Self=Planar64Vec3(glam::I64Vec3::NEG_Y);
+	pub const NEG_Z:Self=Planar64Vec3(glam::I64Vec3::NEG_Z);
 	pub fn new(x:i32,y:i32,z:i32)->Self{
 		Self(glam::i64vec3((x as i64)<<32,(y as i64)<<32,(z as i64)<<32))
 	}
@@ -240,6 +248,32 @@ impl Planar64Vec3{
 		Planar64(self.0.z)
 	}
 }
+impl std::ops::Add<Planar64Vec3> for Planar64Vec3{
+	type Output=Planar64Vec3;
+	#[inline]
+	fn add(self,rhs:Planar64Vec3) -> Self::Output {
+		Planar64Vec3(self.0+rhs.0)
+	}
+}
+impl std::ops::AddAssign<Planar64Vec3> for Planar64Vec3{
+	#[inline]
+	fn add_assign(&mut self,rhs:Planar64Vec3){
+		*self=*self+rhs
+	}
+}
+impl std::ops::Sub<Planar64Vec3> for Planar64Vec3{
+	type Output=Planar64Vec3;
+	#[inline]
+	fn sub(self,rhs:Planar64Vec3) -> Self::Output {
+		Planar64Vec3(self.0-rhs.0)
+	}
+}
+impl std::ops::SubAssign<Planar64Vec3> for Planar64Vec3{
+	#[inline]
+	fn sub_assign(&mut self,rhs:Planar64Vec3){
+		*self=*self-rhs
+	}
+}
 impl std::ops::Mul<Planar64> for Planar64Vec3{
 	type Output=Planar64Vec3;
 	#[inline]
@@ -248,6 +282,17 @@ impl std::ops::Mul<Planar64> for Planar64Vec3{
 			(((self.0.x as i128)*(rhs.0 as i128))>>64) as i64,
 			(((self.0.y as i128)*(rhs.0 as i128))>>64) as i64,
 			(((self.0.z as i128)*(rhs.0 as i128))>>64) as i64
+		))
+	}
+}
+impl std::ops::Div<i64> for Planar64Vec3{
+	type Output=Planar64Vec3;
+	#[inline]
+	fn div(self,rhs:i64)->Self::Output{
+		Planar64Vec3(glam::i64vec3(
+			self.0.x/rhs,
+			self.0.y/rhs,
+			self.0.z/rhs,
 		))
 	}
 }

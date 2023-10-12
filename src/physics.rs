@@ -222,27 +222,27 @@ impl std::default::Default for StyleModifiers{
 			strafe_tick_num: 100,//100t
 			strafe_tick_den: 1_000_000_000,
 			gravity: Planar64Vec3::new(0,100,0),
-			friction: 1.2,
-			walk_accel: 90.0,
+			friction: Planar64::new(12)/10,
+			walk_accel: Planar64::new(90),
 			mv: Planar64::new(27)/10,
-			walkspeed: 18.0,
+			walkspeed: Planar64::new(18),
 			hitbox_halfsize: Planar64Vec3::new(2,5,2)/2,
 		}
 	}
 }
 impl StyleModifiers{
-	const CONTROL_MOVEFORWARD:u32 = 0b00000001;
-	const CONTROL_MOVEBACK:u32 = 0b00000010;
-	const CONTROL_MOVERIGHT:u32 = 0b00000100;
-	const CONTROL_MOVELEFT:u32 = 0b00001000;
-	const CONTROL_MOVEUP:u32 = 0b00010000;
-	const CONTROL_MOVEDOWN:u32 = 0b00100000;
-	const CONTROL_JUMP:u32 = 0b01000000;
-	const CONTROL_ZOOM:u32 = 0b10000000;
+	const CONTROL_MOVEFORWARD:u32=0b00000001;
+	const CONTROL_MOVEBACK:u32=0b00000010;
+	const CONTROL_MOVERIGHT:u32=0b00000100;
+	const CONTROL_MOVELEFT:u32=0b00001000;
+	const CONTROL_MOVEUP:u32=0b00010000;
+	const CONTROL_MOVEDOWN:u32=0b00100000;
+	const CONTROL_JUMP:u32=0b01000000;
+	const CONTROL_ZOOM:u32=0b10000000;
 
-	const FORWARD_DIR:Planar64Vec3 = Planar64Vec3::NEG_Z;
-	const RIGHT_DIR:Planar64Vec3 = Planar64Vec3::X;
-	const UP_DIR:Planar64Vec3 = Planar64Vec3::Y;
+	const RIGHT_DIR:Planar64Vec3=Planar64Vec3::X;
+	const UP_DIR:Planar64Vec3=Planar64Vec3::Y;
+	const FORWARD_DIR:Planar64Vec3=Planar64Vec3::NEG_Z;
 
 	fn get_control(&self,control:u32,controls:u32)->bool{
 		controls&self.controls_mask&control==control
@@ -261,10 +261,10 @@ impl StyleModifiers{
 			control_dir+=Self::FORWARD_DIR;
 		}
 		if controls & Self::CONTROL_MOVEBACK == Self::CONTROL_MOVEBACK {
-			control_dir+=-Self::FORWARD_DIR;
+			control_dir-=Self::FORWARD_DIR;
 		}
 		if controls & Self::CONTROL_MOVELEFT == Self::CONTROL_MOVELEFT {
-			control_dir+=-Self::RIGHT_DIR;
+			control_dir-=Self::RIGHT_DIR;
 		}
 		if controls & Self::CONTROL_MOVERIGHT == Self::CONTROL_MOVERIGHT {
 			control_dir+=Self::RIGHT_DIR;
@@ -273,7 +273,7 @@ impl StyleModifiers{
 			control_dir+=Self::UP_DIR;
 		}
 		if controls & Self::CONTROL_MOVEDOWN == Self::CONTROL_MOVEDOWN {
-			control_dir+=-Self::UP_DIR;
+			control_dir-=Self::UP_DIR;
 		}
 		return control_dir
 	}
