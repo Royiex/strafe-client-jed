@@ -123,12 +123,12 @@ impl Unit32{
 #[derive(Clone,Copy,Hash)]
 pub struct Angle32(i32);
 impl Angle32{
-	pub const FRAC_PI_2:Self=Self(2<<31);
-	pub const PI:Self=Self(-2<<32);
+	pub const FRAC_PI_2:Self=Self(1<<31);
+	pub const PI:Self=Self(-1<<32);
 	#[inline]
 	pub fn wrap_from_i64(theta:i64)->Self{
 		//TODO: make this good
-		Self((theta.wrapping_add(2<<31).rem_euclid(2<<32)-(2<<31)) as i32)
+		Self((theta.wrapping_add(1<<31).rem_euclid(1<<32)-(1<<31)) as i32)
 	}
 	#[inline]
 	pub fn clamp_from_i64(theta:i64)->Self{
@@ -143,17 +143,17 @@ impl Angle32{
 	#[inline]
 	pub fn clamp(&self,theta_min:Self,theta_max:Self)->Self{
 		//TODO: make this good
-		theta_min+Self::wrap_from_i64((self.0.wrapping_sub(theta_min.0) as i64).rem_euclid(2<<32).clamp(0,(theta_max.0.wrapping_sub(theta_min.0) as i64).rem_euclid(2<<32)))
+		theta_min+Self::wrap_from_i64((self.0.wrapping_sub(theta_min.0) as i64).rem_euclid(1<<32).clamp(0,(theta_max.0.wrapping_sub(theta_min.0) as i64).rem_euclid(1<<32)))
 	}
 	#[inline]
 	pub fn cos(&self)->Unit32{
 		//TODO: fix this rounding towards 0
-		Unit32(unsafe{((self.0 as f64*(std::f64::consts::PI/((2<<31) as f64))).cos()*((2<<30) as f64)).to_int_unchecked()})
+		Unit32(unsafe{((self.0 as f64*(std::f64::consts::PI/((1<<31) as f64))).cos()*((1<<30) as f64)).to_int_unchecked()})
 	}
 	#[inline]
 	pub fn sin(&self)->Unit32{
 		//TODO: fix this rounding towards 0
-		Unit32(unsafe{((self.0 as f64*(std::f64::consts::PI/((2<<31) as f64))).sin()*((2<<30) as f64)).to_int_unchecked()})
+		Unit32(unsafe{((self.0 as f64*(std::f64::consts::PI/((1<<31) as f64))).sin()*((1<<30) as f64)).to_int_unchecked()})
 	}
 }
 impl Into<f32> for Angle32{
@@ -232,7 +232,7 @@ pub struct Unit64Mat3{
 pub struct Planar64(i64);
 impl Planar64{
 	pub const ZERO:Self=Self(0);
-	pub const ONE:Self=Self(2<<32);
+	pub const ONE:Self=Self(1<<32);
 	pub fn int(num:i32)->Self{
 		Self(Self::ONE.0*num as i64)
 	}
@@ -248,7 +248,7 @@ impl Planar64{
 }
 impl Into<f32> for Planar64{
 	fn into(self)->f32{
-		self.0 as f32/(2<<32) as f32
+		self.0 as f32/(1<<32) as f32
 	}
 }
 impl std::ops::Neg for Planar64{
@@ -333,9 +333,9 @@ impl Planar64Vec3{
 impl Into<glam::Vec3> for Planar64Vec3{
 	fn into(self)->glam::Vec3{
 		glam::vec3(
-			self.0.x as f32/(2<<32) as f32,
-			self.0.y as f32/(2<<32) as f32,
-			self.0.z as f32/(2<<32) as f32,
+			self.0.x as f32/(1<<32) as f32,
+			self.0.y as f32/(1<<32) as f32,
+			self.0.z as f32/(1<<32) as f32,
 		)
 	}
 }
@@ -416,9 +416,9 @@ impl Planar64Mat3{
 	}
 	#[inline]
 	pub fn from_rotation_y(angle:Angle32)->Self{
-		let theta=angle.0 as f64*(std::f64::consts::PI/((2<<31) as f64));
+		let theta=angle.0 as f64*(std::f64::consts::PI/((1<<31) as f64));
 		let (s,c)=theta.sin_cos();
-		let (c,s)=(c*((2<<32) as f64),s*((2<<32) as f64));
+		let (c,s)=(c*((1<<32) as f64),s*((1<<32) as f64));
 		//TODO: fix this rounding towards 0
 		let (c,s):(i64,i64)=(unsafe{c.to_int_unchecked()},unsafe{s.to_int_unchecked()});
 		Self::from_cols(
