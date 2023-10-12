@@ -70,6 +70,12 @@ impl std::ops::Div<i64> for Time{
 	}
 }
 
+fn gcd(mut a:u64,mut b:u64)->u64{
+	while b!=0{
+		(a,b)=(b,a.rem_euclid(b));
+	};
+	a
+}
 #[derive(Clone,Copy,Hash)]
 pub struct Ratio64{
 	num:i64,
@@ -80,9 +86,9 @@ impl Ratio64{
 	pub const ONE:Self=Ratio64{num:1,den:unsafe{std::num::NonZeroU64::new_unchecked(1)}};
 	pub fn new(num:i64,den:u64)->Option<Ratio64>{
 		match std::num::NonZeroU64::new(den){
-			Some(den)=>{
-				//TODO: gcd
-				Some(Self{num,den})
+			Some(_)=>{
+				let d=gcd(num.unsigned_abs(),den);
+				Some(Self{num:num/d as i64,den:unsafe{std::num::NonZeroU64::new_unchecked(den/d)}})
 			},
 			None=>None,
 		}
@@ -149,10 +155,10 @@ impl std::ops::Mul<Ratio64> for Ratio64{
 	#[inline]
 	fn mul(self,rhs:Ratio64)->Self::Output{
 		let (num,den)=(self.num*rhs.num,self.den.get()*rhs.den.get());
-		//TODO: gcd
+		let d=gcd(num.unsigned_abs(),den);
 		Self{
-			num,
-			den:unsafe{std::num::NonZeroU64::new_unchecked(den)},
+			num:num/d as i64,
+			den:unsafe{std::num::NonZeroU64::new_unchecked(den/d)},
 		}
 	}
 }
