@@ -332,12 +332,12 @@ pub struct ModelPhysics {
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
 	mesh: TreyMesh,
-	transform:glam::Affine3A,
+	transform:crate::integer::Planar64Affine3,
 	attributes:PhysicsCollisionAttributes,
 }
 
 impl ModelPhysics {
-	fn from_model_transform_attributes(model:&crate::model::IndexedModel,transform:&glam::Affine3A,attributes:PhysicsCollisionAttributes)->Self{
+	fn from_model_transform_attributes(model:&crate::model::IndexedModel,transform:&crate::integer::Planar64Affine3,attributes:PhysicsCollisionAttributes)->Self{
 		let mut aabb=TreyMesh::default();
 		for indexed_vertex in &model.unique_vertices {
 			aabb.grow(transform.transform_point3(Planar64Vec3::from_array(model.unique_pos[indexed_vertex.pos as usize])));
