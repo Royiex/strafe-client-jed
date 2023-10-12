@@ -1,6 +1,6 @@
 use crate::{instruction::{InstructionEmitter, InstructionConsumer, TimedInstruction}, zeroes::zeroes2};
 
-use crate::integer::{Planar64,Planar64Vec3,Angle32Vec2};
+use crate::integer::{Planar64,Planar64Vec3,Planar64Mat3,Angle32,Angle32Vec2,Ratio64Vec2};
 
 #[derive(Debug)]
 pub enum PhysicsInstruction {
@@ -153,41 +153,57 @@ impl WalkState {
 	}
 }
 
+
+
 #[derive(Clone)]
 pub struct PhysicsCamera {
 	offset: Planar64Vec3,
-	angles: glam::DVec2,//YAW AND THEN PITCH
 	//punch: Planar64Vec3,
 	//punch_velocity: Planar64Vec3,
-	sensitivity: glam::DVec2,
-	mouse:MouseState,
+	sensitivity:Ratio64Vec2,//dots to Angle32 ratios
+	mouse:MouseState,//last seen absolute mouse pos
+	clamped_mouse_pos:glam::IVec2,//angles are calculated from this cumulative value
+	angle_pitch_lower_limit:Angle32,
+	angle_pitch_upper_limit:Angle32,
+	//angle limits could be an enum + struct that defines whether it's limited and selects clamp or wrap depending
+	// enum AngleLimit{
+	// 	Unlimited,
+	// 	Limited(Angle32,Angle32),
+	// }
+	//pitch_limit:AngleLimit,
+	//yaw_limit:AngleLimit,
 }
 
-#[inline]
-fn mat3_from_rotation_y_f64(angle: f64) -> glam::Mat3 {
-	let (sina, cosa) = angle.sin_cos();
-	glam::Mat3::from_cols(
-		Planar64Vec3::new(cosa as f32, 0.0, -sina as f32),
-		Planar64Vec3::Y,
-		Planar64Vec3::new(sina as f32, 0.0, cosa as f32),
-	)
-}
 impl PhysicsCamera {
 	pub fn from_offset(offset:Planar64Vec3) -> Self {
 		Self{
 			offset,
-			angles: glam::DVec2::ZERO,
-			sensitivity: glam::dvec2(1.0/1024.0,1.0/1024.0),
+			sensitivity:Ratio64Vec2::ONE.mul_ratio(200_000),
 			mouse:MouseState{pos:glam::IVec2::ZERO,time:-1},//escape initialization hell divide by zero
+			clamped_mouse_pos:glam::IVec2::ZERO,
+			angle_pitch_lower_limit:-Angle32::FRAC_PI_2,
+			angle_pitch_upper_limit:Angle32::FRAC_PI_2,
 		}
 	}
-	pub fn simulate_move_angles(&self, mouse_pos: glam::IVec2) -> glam::DVec2 {
-		let mut a=self.angles-self.sensitivity*(mouse_pos-self.mouse.pos).as_dvec2();
-		a.y=a.y.clamp(-std::f64::consts::FRAC_PI_2, std::f64::consts::FRAC_PI_2);
-		return a
+	pub fn move_mouse(&mut self,mouse_pos:glam::IVec2){
+		let mut unclamped_mouse_pos=self.clamped_mouse_pos+mouse_pos-self.mouse.pos;
+		unclamped_mouse_pos.y=unclamped_mouse_pos.y.clamp(
+			self.sensitivity.x.rhs_div_int(self.angle_pitch_lower_limit.get() as i64) as i32,
+			self.sensitivity.y.rhs_div_int(self.angle_pitch_upper_limit.get() as i64) as i32,
+		);
+		self.clamped_mouse_pos=unclamped_mouse_pos;
 	}
-	fn simulate_move_rotation_y(&self, mouse_pos_x: i32) -> glam::Mat3 {
-		mat3_from_rotation_y_f64(self.angles.x-self.sensitivity.x*((mouse_pos_x-self.mouse.pos.x) as f64))
+	pub fn simulate_move_angles(&self,mouse_pos:glam::IVec2)->glam::Vec2 {
+		let a=self.sensitivity.mul_int((mouse_pos-self.mouse.pos+self.clamped_mouse_pos).as_i64vec2());
+		let ax=Angle32::wrap_from_i64(a.x);
+		let ay=Angle32::clamp_from_i64(a.y)
+			//clamp to actual vertical cam limit
+			.clamp(self.angle_pitch_lower_limit,self.angle_pitch_upper_limit);
+		return glam::vec2(ax.into(),ay.into());
+	}
+	fn simulate_move_rotation_y(&self,mouse_pos_x:i32)->Planar64Mat3{
+		let ax=self.sensitivity.x.mul_int((mouse_pos_x-self.mouse.pos.x+self.clamped_mouse_pos.x) as i64);
+		Planar64Mat3::from_rotation_y(Angle32::wrap_from_i64(ax))
 	}
 }
 
@@ -1227,11 +1243,11 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				let mut refresh_walk_target_velocity=true;
 				match input_instruction{
 					PhysicsInputInstruction::SetNextMouse(m) => {
-						self.camera.angles=self.camera.simulate_move_angles(self.next_mouse.pos);
+						self.camera.move_mouse(self.next_mouse.pos);
 						(self.camera.mouse,self.next_mouse)=(self.next_mouse.clone(),m);
 					},
 					PhysicsInputInstruction::ReplaceMouse(m0,m1) => {
-						self.camera.angles=self.camera.simulate_move_angles(m0.pos);
+						self.camera.move_mouse(m0.pos);
 						(self.camera.mouse,self.next_mouse)=(m0,m1);
 					},
 					PhysicsInputInstruction::SetMoveForward(s) => self.set_control(StyleModifiers::CONTROL_MOVEFORWARD,s),
