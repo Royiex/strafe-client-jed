@@ -1,6 +1,6 @@
 use crate::{instruction::{InstructionEmitter, InstructionConsumer, TimedInstruction}, zeroes::zeroes2};
 
-use crate::integer::{Planar64,Planar64Vec3,Planar64Mat3,Angle32,Angle32Vec2,Ratio64Vec2};
+use crate::integer::{Time,Planar64,Planar64Vec3,Planar64Mat3,Angle32,Ratio64,Ratio64Vec2};
 
 #[derive(Debug)]
 pub enum PhysicsInstruction {
@@ -54,7 +54,7 @@ pub struct Body {
 	position: Planar64Vec3,//I64 where 2^32 = 1 u
 	velocity: Planar64Vec3,//I64 where 2^32 = 1 u/s
 	acceleration: Planar64Vec3,//I64 where 2^32 = 1 u/s/s
-	time: TIME,//nanoseconds x xxxxD!
+	time:Time,//nanoseconds x xxxxD!
 }
 
 pub enum MoveRestriction {
@@ -75,7 +75,7 @@ impl InputState {
 	}
 }
 impl crate::instruction::InstructionEmitter<InputInstruction> for InputState{
-	fn next_instruction(&self, time_limit:crate::body::TIME) -> Option<TimedInstruction<InputInstruction>> {
+	fn next_instruction(&self, time_limit:crate::body::Time) -> Option<TimedInstruction<InputInstruction>> {
 		//this is polled by PhysicsState for actions like Jump
 		//no, it has to be the other way around. physics is run up until the jump instruction, and then the jump instruction is pushed.
 		self.queue.get(0)
@@ -93,24 +93,24 @@ impl crate::instruction::InstructionConsumer<InputInstruction> for InputState{
 #[derive(Clone,Debug)]
 pub struct MouseState {
 	pub pos: glam::IVec2,
-	pub time: TIME,
+	pub time:Time,
 }
 impl Default for MouseState{
 	fn default() -> Self {
 		Self {
-			time:0,
+			time:Time::ZERO,
 			pos:glam::IVec2::ZERO,
 		}
 	}
 }
 impl MouseState {
-	pub fn lerp(&self,target:&MouseState,time:TIME)->glam::IVec2 {
+	pub fn lerp(&self,target:&MouseState,time:Time)->glam::IVec2 {
 		let m0=self.pos.as_i64vec2();
 		let m1=target.pos.as_i64vec2();
 		//these are deltas
-		let t1t=(target.time-time) as i64;
-		let tt0=(time-self.time) as i64;
-		let dt=(target.time-self.time) as i64;
+		let t1t=(target.time-time).nanos();
+		let tt0=(time-self.time).nanos();
+		let dt=(target.time-self.time).nanos();
 		((m0*t1t+m1*tt0)/dt).as_ivec2()
 	}
 }
@@ -121,14 +121,14 @@ pub enum WalkEnum{
 }
 pub struct WalkState {
 	pub target_velocity: Planar64Vec3,
-	pub target_time: TIME,
+	pub target_time: Time,
 	pub state: WalkEnum,
 }
 impl WalkState {
 	pub fn new() -> Self {
 		Self{
 			target_velocity:Planar64Vec3::ZERO,
-			target_time:0,
+			target_time:Time::ZERO,
 			state:WalkEnum::Reached,
 		}
 	}
@@ -160,7 +160,7 @@ impl PhysicsCamera {
 		Self{
 			offset,
 			sensitivity:Ratio64Vec2::ONE.mul_ratio(200_000),
-			mouse:MouseState{pos:glam::IVec2::ZERO,time:-1},//escape initialization hell divide by zero
+			mouse:MouseState{pos:glam::IVec2::ZERO,time:-Time::ONE_NANOSECOND},//escape initialization hell divide by zero
 			clamped_mouse_pos:glam::IVec2::ZERO,
 			angle_pitch_lower_limit:-Angle32::FRAC_PI_2,
 			angle_pitch_upper_limit:Angle32::FRAC_PI_2,
@@ -210,8 +210,7 @@ pub struct StyleModifiers{
 	pub friction:Planar64,
 	pub walk_accel:Planar64,
 	pub gravity:Planar64Vec3,
-	pub strafe_tick_num:TIME,
-	pub strafe_tick_den:TIME,
+	pub strafe_tick_rate:Ratio64,
 	pub hitbox_halfsize:Planar64Vec3,
 }
 impl std::default::Default for StyleModifiers{
@@ -219,8 +218,7 @@ impl std::default::Default for StyleModifiers{
 		Self{
 			controls_mask: !0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held: 0,
-			strafe_tick_num: 100,//100t
-			strafe_tick_den: 1_000_000_000,
+			strafe_tick_rate:Ratio64::ONE.div_ratio(100),
 			gravity: Planar64Vec3::new(0,100,0),
 			friction: Planar64::new(12)/10,
 			walk_accel: Planar64::new(90),
@@ -280,7 +278,7 @@ impl StyleModifiers{
 }
 
 pub struct PhysicsState{
-	pub time:TIME,
+	pub time:Time,
 	pub body:Body,
 	pub world:WorldState,//currently there is only one state the world can be in
 	pub game:GameMechanicsState,
@@ -391,26 +389,24 @@ impl RelativeCollision {
 	}
 }
 
-pub type TIME = i64;
-
 impl Body {
 	pub fn with_pva(position:Planar64Vec3,velocity:Planar64Vec3,acceleration:Planar64Vec3) -> Self {
 		Self{
 			position,
 			velocity,
 			acceleration,
-			time: 0,
+			time:Time::ZERO,
 		}
 	}
-	pub fn extrapolated_position(&self,time: TIME)->Planar64Vec3{
-		let dt=(time-self.time) as f64/1_000_000_000f64;
-		self.position+self.velocity*(dt as f32)+self.acceleration*((0.5*dt*dt) as f32)
+	pub fn extrapolated_position(&self,time:Time)->Planar64Vec3{
+		let dt=time-self.time;
+		self.position+self.velocity*dt+self.acceleration*(dt*dt*0.5)
 	}
-	pub fn extrapolated_velocity(&self,time: TIME)->Planar64Vec3{
-		let dt=(time-self.time) as f64/1_000_000_000f64;
-		self.velocity+self.acceleration*(dt as f32)
+	pub fn extrapolated_velocity(&self,time:Time)->Planar64Vec3{
+		let dt=time-self.time;
+		self.velocity+self.acceleration*dt
 	}
-	pub fn advance_time(&mut self, time: TIME){
+	pub fn advance_time(&mut self,time:Time){
 		self.position=self.extrapolated_position(time);
 		self.velocity=self.extrapolated_velocity(time);
 		self.time=time;
@@ -420,9 +416,9 @@ impl Body {
 impl Default for PhysicsState{
 	fn default() -> Self {
  		Self{
-			time: 0,
 			spawn_point:Planar64Vec3::new(0,50,0),
 			body: Body::with_pva(Planar64Vec3::new(0,50,0),Planar64Vec3::new(0,0,0),Planar64Vec3::new(0,-100,0)),
+			time: Time::ZERO,
 			style:StyleModifiers::default(),
 			grounded: false,
 			contacts: std::collections::HashMap::new(),
@@ -628,7 +624,7 @@ impl PhysicsState {
 		}
 	}
 	//tickless gaming
-	pub fn run(&mut self, time_limit:TIME){
+	pub fn run(&mut self, time_limit:Time){
 		//prepare is ommitted - everything is done via instructions.
 		while let Some(instruction) = self.next_instruction(time_limit) {//collect
 			//process
@@ -637,7 +633,7 @@ impl PhysicsState {
 		}
 	}
 
-	pub fn advance_time(&mut self, time: TIME){
+	pub fn advance_time(&mut self, time: Time){
 		self.body.advance_time(time);
 		self.time=time;
 	}
@@ -672,7 +668,7 @@ impl PhysicsState {
 	}
 	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		return Some(TimedInstruction{
-			time:(self.time*self.style.strafe_tick_num/self.style.strafe_tick_den+1)*self.style.strafe_tick_den/self.style.strafe_tick_num,
+			time:self.style.strafe_tick_rate.div_int(self.style.strafe_tick_rate.mul_int(self.time)+1),
 			//only poll the physics if there is a before and after mouse event
 			instruction:PhysicsInstruction::StrafeTick
 		});
@@ -727,7 +723,7 @@ impl PhysicsState {
 				let mut a=target_diff/time_delta;
 				self.contact_constrain_acceleration(&mut a);
 				self.body.acceleration=a;
-				self.walk.target_time=self.body.time+((time_delta as f64)*1_000_000_000f64) as TIME;
+				self.walk.target_time=self.body.time+Time::from(time_delta);
 				self.walk.state=WalkEnum::Transient;
 			}
 		}else{
@@ -755,7 +751,7 @@ impl PhysicsState {
 		}
 		aabb
 	}
-	fn predict_collision_end(&self,time:TIME,time_limit:TIME,collision_data:&RelativeCollision) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn predict_collision_end(&self,time:Time,time_limit:Time,collision_data:&RelativeCollision) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//must treat cancollide false objects differently: you may not exit through the same face you entered.
 		//RelativeCollsion must reference the full model instead of a particular face
 		//this is Ctrl+C Ctrl+V of predict_collision_start but with v=-v before the calc and t=-t after the calc
@@ -773,7 +769,7 @@ impl PhysicsState {
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
+					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as Time;
 					if time<=t_time&&t_time<best_time&&0f32<v.x+a.x*-t{
 						//collect valid t
 						best_time=t_time;
@@ -786,7 +782,7 @@ impl PhysicsState {
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
+					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as Time;
 					if time<=t_time&&t_time<best_time&&v.x+a.x*-t<0f32{
 						//collect valid t
 						best_time=t_time;
@@ -818,7 +814,7 @@ impl PhysicsState {
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
+					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as Time;
 					if time<=t_time&&t_time<best_time&&0f32<v.y+a.y*-t{
 						//collect valid t
 						best_time=t_time;
@@ -831,7 +827,7 @@ impl PhysicsState {
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
+					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as Time;
 					if time<=t_time&&t_time<best_time&&v.y+a.y*-t<0f32{
 						//collect valid t
 						best_time=t_time;
@@ -863,7 +859,7 @@ impl PhysicsState {
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
+					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as Time;
 					if time<=t_time&&t_time<best_time&&0f32<v.z+a.z*-t{
 						//collect valid t
 						best_time=t_time;
@@ -876,7 +872,7 @@ impl PhysicsState {
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as TIME;
+					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as Time;
 					if time<=t_time&&t_time<best_time&&v.z+a.z*-t<0f32{
 						//collect valid t
 						best_time=t_time;
@@ -909,7 +905,7 @@ impl PhysicsState {
 		}
 		None
 	}
-	fn predict_collision_start(&self,time:TIME,time_limit:TIME,model_id:u32) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn predict_collision_start(&self,time:Time,time_limit:Time,model_id:u32) -> Option<TimedInstruction<PhysicsInstruction>> {
 		let mesh0=self.mesh();
 		let mesh1=self.models.get(model_id as usize).unwrap().mesh();
 		let (p,v,a,body_time)=(self.body.position,self.body.velocity,self.body.acceleration,self.body.time);
@@ -921,7 +917,7 @@ impl PhysicsState {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as TIME;
+			let t_time=body_time+((t as f64)*1_000_000_000f64) as Time;
 			if time<=t_time&&t_time<best_time&&0f32<v.x+a.x*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
@@ -937,7 +933,7 @@ impl PhysicsState {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as TIME;
+			let t_time=body_time+((t as f64)*1_000_000_000f64) as Time;
 			if time<=t_time&&t_time<best_time&&v.x+a.x*t<0f32{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
@@ -954,7 +950,7 @@ impl PhysicsState {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as TIME;
+			let t_time=body_time+((t as f64)*1_000_000_000f64) as Time;
 			if time<=t_time&&t_time<best_time&&0f32<v.y+a.y*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
@@ -970,7 +966,7 @@ impl PhysicsState {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as TIME;
+			let t_time=body_time+((t as f64)*1_000_000_000f64) as Time;
 			if time<=t_time&&t_time<best_time&&v.y+a.y*t<0f32{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
@@ -987,7 +983,7 @@ impl PhysicsState {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as TIME;
+			let t_time=body_time+((t as f64)*1_000_000_000f64) as Time;
 			if time<=t_time&&t_time<best_time&&0f32<v.z+a.z*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
@@ -1003,7 +999,7 @@ impl PhysicsState {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as TIME;
+			let t_time=body_time+((t as f64)*1_000_000_000f64) as Time;
 			if time<=t_time&&t_time<best_time&&v.z+a.z*t<0f32{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
@@ -1031,7 +1027,7 @@ impl PhysicsState {
 
 impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState {
 	//this little next instruction function can cache its return value and invalidate the cached value by watching the State.
-	fn next_instruction(&self,time_limit:TIME) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn next_instruction(&self,time_limit:Time) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//JUST POLLING!!! NO MUTATION
 		let mut collector = crate::instruction::InstructionCollector::new(time_limit);
 		//check for collision stop instructions with curent contacts

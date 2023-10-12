@@ -1,6 +1,8 @@
 //integer units
+#[derive(Clone,Copy,Hash,Debug)]
 pub struct Time(i64);
 impl Time{
+	pub const ZERO:Self=Self(0);
 	pub const ONE_SECOND:Self=Self(1_000_000_000);
 	pub const ONE_MILLISECOND:Self=Self(1_000_000);
 	pub const ONE_MICROSECOND:Self=Self(1_000);
@@ -18,6 +20,35 @@ impl Time{
 		Self(Self::ONE_NANOSECOND.0*num)
 	}
 	//should I have checked subtraction? force all time variables to be positive?
+	pub fn nanos(&self)->i64{
+		self.0
+	}
+}
+impl std::fmt::Display for Time{
+	fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{
+		write!(f,"{}s+{}ns",self.0/Self::ONE_SECOND.0,self.0%Self::ONE_SECOND.0)
+	}
+}
+impl std::ops::Neg for Time{
+	type Output=Time;
+	#[inline]
+	fn neg(self)->Self::Output {
+		Time(-self.0)
+	}
+}
+impl std::ops::Add<Time> for Time{
+	type Output=Time;
+	#[inline]
+	fn add(self,rhs:Self)->Self::Output {
+		Time(self.0+rhs.0)
+	}
+}
+impl std::ops::Sub<Time> for Time{
+	type Output=Time;
+	#[inline]
+	fn sub(self,rhs:Self)->Self::Output {
+		Time(self.0-rhs.0)
+	}
 }
 
 #[derive(Clone,Copy,Hash)]
