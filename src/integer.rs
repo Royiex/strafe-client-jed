@@ -24,6 +24,11 @@ impl Time{
 		self.0
 	}
 }
+impl From<Planar64> for Time{
+	fn from(value:Planar64)->Self{
+		Time((((value.0 as i128)*1_000_000_000)>>32) as i64)
+	}
+}
 impl std::fmt::Display for Time{
 	fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{
 		write!(f,"{}s+{}ns",self.0/Self::ONE_SECOND.0,self.0%Self::ONE_SECOND.0)
@@ -48,6 +53,20 @@ impl std::ops::Sub<Time> for Time{
 	#[inline]
 	fn sub(self,rhs:Self)->Self::Output {
 		Time(self.0-rhs.0)
+	}
+}
+impl std::ops::Mul<Time> for Time{
+	type Output=Time;
+	#[inline]
+	fn mul(self,rhs:Time)->Self::Output{
+		Self((((self.0 as i128)*(rhs.0 as i128))/1_000_000_000) as i64)
+	}
+}
+impl std::ops::Div<i64> for Time{
+	type Output=Time;
+	#[inline]
+	fn div(self,rhs:i64)->Self::Output {
+		Time(self.0/rhs)
 	}
 }
 
@@ -323,22 +342,29 @@ pub struct Planar64(i64);
 impl Planar64{
 	pub const ZERO:Self=Self(0);
 	pub const ONE:Self=Self(1<<32);
+	#[inline]
 	pub fn int(num:i32)->Self{
 		Self(Self::ONE.0*num as i64)
 	}
+	#[inline]
 	pub fn raw(num:i64)->Self{
 		Self(num)
 	}
+	#[inline]
 	pub fn get(&self)->i64{
 		self.0
 	}
-	pub fn from_ratio(num:i64,den:std::num::NonZeroU64)->Self{
-		Self(Self::ONE.0*num/den.get() as i64)
-	}
 }
 impl Into<f32> for Planar64{
+	#[inline]
 	fn into(self)->f32{
 		self.0 as f32/(1<<32) as f32
+	}
+}
+impl From<Ratio64> for Planar64{
+	#[inline]
+	fn from(ratio:Ratio64)->Self{
+		Self(Self::ONE.0*ratio.num/ratio.den.get() as i64)
 	}
 }
 impl std::ops::Neg for Planar64{
@@ -390,6 +416,11 @@ impl std::ops::Div<Planar64> for Planar64{
 		Planar64((((self.0 as i128)<<64)/rhs.0 as i128) as i64)
 	}
 }
+// impl PartialOrd<i64> for Planar64{
+// 	fn partial_cmp(&self, other: &i64) -> Option<std::cmp::Ordering> {
+// 		self.0.partial_cmp(other)
+// 	}
+// }
 
 
 ///[-1.0,1.0] = [-2^32,2^32]
@@ -422,7 +453,7 @@ impl Planar64Vec3{
 		Planar64(self.0.z)
 	}
 	#[inline]
-	pub fn min(self,rhs:Self)->Self{
+	pub fn min(&self,rhs:Self)->Self{
 		Self(glam::i64vec3(
 			self.0.x.min(rhs.0.x),
 			self.0.y.min(rhs.0.y),
@@ -430,7 +461,7 @@ impl Planar64Vec3{
 		))
 	}
 	#[inline]
-	pub fn max(self,rhs:Self)->Self{
+	pub fn max(&self,rhs:Self)->Self{
 		Self(glam::i64vec3(
 			self.0.x.max(rhs.0.x),
 			self.0.y.max(rhs.0.y),
@@ -438,14 +469,39 @@ impl Planar64Vec3{
 		))
 	}
 	#[inline]
-	pub fn midpoint(self,rhs:Self)->Self{
+	pub fn midpoint(&self,rhs:Self)->Self{
 		Self((self.0+rhs.0)/2)
 	}
 	#[inline]
-	pub fn cmplt(self,rhs:Self)->glam::BVec3{
+	pub fn cmplt(&self,rhs:Self)->glam::BVec3{
 		self.0.cmplt(rhs.0)
 	}
-
+	#[inline]
+	pub fn dot(&self,rhs:Self)->Planar64{
+		Planar64(((
+			(self.0.x as i128)*(rhs.0.x as i128)+
+			(self.0.y as i128)*(rhs.0.y as i128)+
+			(self.0.z as i128)*(rhs.0.z as i128)
+		)>>64) as i64)
+	}
+	#[inline]
+	pub fn length(&self)->Planar64{
+		let radicand=(self.0.x as i128)*(self.0.x as i128)+(self.0.y as i128)*(self.0.y as i128)+(self.0.z as i128)*(self.0.z as i128);
+		Planar64(unsafe{(radicand as f64).sqrt().to_int_unchecked()})
+	}
+	#[inline]
+	pub fn with_length(&self,length:Planar64)->Self{
+		let radicand=(self.0.x as i128)*(self.0.x as i128)+(self.0.y as i128)*(self.0.y as i128)+(self.0.z as i128)*(self.0.z as i128);
+		let self_length:i128=unsafe{(radicand as f64).sqrt().to_int_unchecked()};
+		//self.0*length/self_length
+		Planar64Vec3(
+			glam::i64vec3(
+				((self.0.x as i128)*(length.0 as i128)/self_length) as i64,
+				((self.0.y as i128)*(length.0 as i128)/self_length) as i64,
+				((self.0.z as i128)*(length.0 as i128)/self_length) as i64,
+			)
+		)
+	}
 }
 impl Into<glam::Vec3> for Planar64Vec3{
 	fn into(self)->glam::Vec3{
@@ -454,6 +510,13 @@ impl Into<glam::Vec3> for Planar64Vec3{
 			self.0.y as f32/(1<<32) as f32,
 			self.0.z as f32/(1<<32) as f32,
 		)
+	}
+}
+impl std::ops::Neg for Planar64Vec3{
+	type Output=Planar64Vec3;
+	#[inline]
+	fn neg(self)->Self::Output{
+		Planar64Vec3(-self.0)
 	}
 }
 impl std::ops::Add<Planar64Vec3> for Planar64Vec3{
@@ -490,6 +553,17 @@ impl std::ops::Mul<Planar64> for Planar64Vec3{
 			(((self.0.x as i128)*(rhs.0 as i128))>>64) as i64,
 			(((self.0.y as i128)*(rhs.0 as i128))>>64) as i64,
 			(((self.0.z as i128)*(rhs.0 as i128))>>64) as i64
+		))
+	}
+}
+impl std::ops::Mul<Time> for Planar64Vec3{
+	type Output=Planar64Vec3;
+	#[inline]
+	fn mul(self,rhs:Time)->Self::Output{
+		Planar64Vec3(glam::i64vec3(
+			(((self.0.x as i128)*(rhs.0 as i128))/1_000_000_000) as i64,
+			(((self.0.y as i128)*(rhs.0 as i128))/1_000_000_000) as i64,
+			(((self.0.z as i128)*(rhs.0 as i128))/1_000_000_000) as i64
 		))
 	}
 }

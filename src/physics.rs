@@ -149,7 +149,7 @@ pub struct PhysicsCamera {
 	//angle limits could be an enum + struct that defines whether it's limited and selects clamp or wrap depending
 	// enum AngleLimit{
 	// 	Unlimited,
-	// 	Limited(Angle32,Angle32),
+	// 	Limited{lower:Angle32,upper:Angle32},
 	// }
 	//pitch_limit:AngleLimit,
 	//yaw_limit:AngleLimit,
@@ -178,8 +178,8 @@ impl PhysicsCamera {
 		let a=self.sensitivity.mul_int((mouse_pos-self.mouse.pos+self.clamped_mouse_pos).as_i64vec2());
 		let ax=Angle32::wrap_from_i64(a.x);
 		let ay=Angle32::clamp_from_i64(a.y)
-			//clamp to actual vertical cam limit
-			.clamp(self.angle_pitch_lower_limit,self.angle_pitch_upper_limit);
+		//clamp to actual vertical cam limit
+		.clamp(self.angle_pitch_lower_limit,self.angle_pitch_upper_limit);
 		return glam::vec2(ax.into(),ay.into());
 	}
 	fn simulate_move_rotation_y(&self,mouse_pos_x:i32)->Planar64Mat3{
@@ -218,7 +218,7 @@ impl std::default::Default for StyleModifiers{
 		Self{
 			controls_mask: !0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held: 0,
-			strafe_tick_rate:Ratio64::ONE/100,
+			strafe_tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
 			gravity: Planar64Vec3::int(0,100,0),
 			friction: Planar64::int(12)/10,
 			walk_accel: Planar64::int(90),
@@ -400,7 +400,7 @@ impl Body {
 	}
 	pub fn extrapolated_position(&self,time:Time)->Planar64Vec3{
 		let dt=time-self.time;
-		self.position+self.velocity*dt+self.acceleration*(dt*dt*0.5)
+		self.position+self.velocity*dt+self.acceleration*(dt*dt/2)
 	}
 	pub fn extrapolated_velocity(&self,time:Time)->Planar64Vec3{
 		let dt=time-self.time;
@@ -643,7 +643,7 @@ impl PhysicsState {
 	}
 	fn jump(&mut self){
 		self.grounded=false;//do I need this?
-		let mut v=self.body.velocity+Planar64Vec3::int(0,715588,0)/20000;//0.715588/2.0*100.0
+		let mut v=self.body.velocity+Planar64Vec3::int(0,715588,0)/(2*1000000/100);//0.715588/2.0*100.0
 		self.contact_constrain_velocity(&mut v);
 		self.body.velocity=v;
 	}
@@ -652,8 +652,8 @@ impl PhysicsState {
 		for (_,contact) in &self.contacts {
 			let n=contact.normal(&self.models);
 			let d=velocity.dot(n);
-			if d<0f32{
-				(*velocity)-=d/n.length_squared()*n;
+			if d<Planar64::ZERO{
+				(*velocity)-=n*(d/n.dot(n));
 			}
 		}
 	}
@@ -661,14 +661,14 @@ impl PhysicsState {
 		for (_,contact) in &self.contacts {
 			let n=contact.normal(&self.models);
 			let d=acceleration.dot(n);
-			if d<0f32{
-				(*acceleration)-=d/n.length_squared()*n;
+			if d<Planar64::ZERO{
+				(*acceleration)-=n*(d/n.dot(n));
 			}
 		}
 	}
 	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		return Some(TimedInstruction{
-			time:self.style.strafe_tick_rate.rhs_div_int(self.style.strafe_tick_rate.mul_int(self.time)+1),
+			time:Time::from_nanos(self.style.strafe_tick_rate.rhs_div_int(self.style.strafe_tick_rate.mul_int(self.time.nanos())+1)),
 			//only poll the physics if there is a before and after mouse event
 			instruction:PhysicsInstruction::StrafeTick
 		});
@@ -711,16 +711,18 @@ impl PhysicsState {
 			let mut v=self.walk.target_velocity;
 			self.contact_constrain_velocity(&mut v);
 			let mut target_diff=v-self.body.velocity;
-			target_diff.y=0f32;
+			//remove normal component
+			target_diff-=Planar64Vec3::Y*target_diff.y();
 			if target_diff==Planar64Vec3::ZERO{
 				let mut a=Planar64Vec3::ZERO;
 				self.contact_constrain_acceleration(&mut a);
 				self.body.acceleration=a;
 				self.walk.state=WalkEnum::Reached;
 			}else{
-				let accel=self.style.walk_accel.min(self.style.gravity.length()*self.style.friction);
+				//normal friction acceleration is clippedAcceleration.dot(normal)*friction
+				let accel=self.style.walk_accel.min(self.style.gravity.dot(Planar64Vec3::NEG_Y)*self.style.friction);
 				let time_delta=target_diff.length()/accel;
-				let mut a=target_diff/time_delta;
+				let mut a=target_diff.with_length(accel);
 				self.contact_constrain_acceleration(&mut a);
 				self.body.acceleration=a;
 				self.walk.target_time=self.body.time+Time::from(time_delta);
@@ -764,26 +766,26 @@ impl PhysicsState {
 		//collect x
 		match collision_data.face {
 			TreyMeshFace::Top|TreyMeshFace::Back|TreyMeshFace::Bottom|TreyMeshFace::Front=>{
-				for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,0.5*a.x) {
+				for t in zeroes2(mesh0.max.x()-mesh1.min.x(),v.x(),a.x()/2) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as Time;
-					if time<=t_time&&t_time<best_time&&0f32<v.x+a.x*-t{
+					let t_time=self.body.time-Time::from(t);
+					if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.x()+a.x()*-t{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Left);
 						break;
 					}
 				}
-				for t in zeroes2(mesh0.min.x-mesh1.max.x,v.x,0.5*a.x) {
+				for t in zeroes2(mesh0.min.x()-mesh1.max.x(),v.x(),a.x()/2) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as Time;
-					if time<=t_time&&t_time<best_time&&v.x+a.x*-t<0f32{
+					let t_time=self.body.time-Time::from(t);
+					if time<=t_time&&t_time<best_time&&v.x()+a.x()*-t<Planar64::ZERO{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Right);
@@ -793,14 +795,14 @@ impl PhysicsState {
 			},
 			TreyMeshFace::Left=>{
 				//generate event if v.x<0||a.x<0
-				if -v.x<0f32{
+				if -v.x()<Planar64::ZERO{
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Left);
 				}
 			},
 			TreyMeshFace::Right=>{
 				//generate event if 0<v.x||0<a.x
-				if 0f32<(-v.x){
+				if Planar64::ZERO<(-v.x()){
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Right);
 				}
@@ -809,26 +811,26 @@ impl PhysicsState {
 		//collect y
 		match collision_data.face {
 			TreyMeshFace::Left|TreyMeshFace::Back|TreyMeshFace::Right|TreyMeshFace::Front=>{
-				for t in zeroes2(mesh0.max.y-mesh1.min.y,v.y,0.5*a.y) {
+				for t in zeroes2(mesh0.max.y()-mesh1.min.y(),v.y(),a.y()/2) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as Time;
-					if time<=t_time&&t_time<best_time&&0f32<v.y+a.y*-t{
+					let t_time=self.body.time-Time::from(t);
+					if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.y()+a.y()*-t{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Bottom);
 						break;
 					}
 				}
-				for t in zeroes2(mesh0.min.y-mesh1.max.y,v.y,0.5*a.y) {
+				for t in zeroes2(mesh0.min.y()-mesh1.max.y(),v.y(),a.y()/2) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as Time;
-					if time<=t_time&&t_time<best_time&&v.y+a.y*-t<0f32{
+					let t_time=self.body.time-Time::from(t);
+					if time<=t_time&&t_time<best_time&&v.y()+a.y()*-t<Planar64::ZERO{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Top);
@@ -838,14 +840,14 @@ impl PhysicsState {
 			},
 			TreyMeshFace::Bottom=>{
 				//generate event if v.y<0||a.y<0
-				if -v.y<0f32{
+				if -v.y()<Planar64::ZERO{
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Bottom);
 				}
 			},
 			TreyMeshFace::Top=>{
 				//generate event if 0<v.y||0<a.y
-				if 0f32<(-v.y){
+				if Planar64::ZERO<(-v.y()){
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Top);
 				}
@@ -854,26 +856,26 @@ impl PhysicsState {
 		//collect z
 		match collision_data.face {
 			TreyMeshFace::Left|TreyMeshFace::Bottom|TreyMeshFace::Right|TreyMeshFace::Top=>{
-				for t in zeroes2(mesh0.max.z-mesh1.min.z,v.z,0.5*a.z) {
+				for t in zeroes2(mesh0.max.z()-mesh1.min.z(),v.z(),a.z()/2) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as Time;
-					if time<=t_time&&t_time<best_time&&0f32<v.z+a.z*-t{
+					let t_time=self.body.time-Time::from(t);
+					if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.z()+a.z()*-t{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Front);
 						break;
 					}
 				}
-				for t in zeroes2(mesh0.min.z-mesh1.max.z,v.z,0.5*a.z) {
+				for t in zeroes2(mesh0.min.z()-mesh1.max.z(),v.z(),a.z()/2) {
 					//negative t = back in time
 					//must be moving towards surface to collide
 					//must beat the current soonest collision time
 					//must be moving towards surface
-					let t_time=self.body.time+((-t as f64)*1_000_000_000f64) as Time;
-					if time<=t_time&&t_time<best_time&&v.z+a.z*-t<0f32{
+					let t_time=self.body.time-Time::from(t);
+					if time<=t_time&&t_time<best_time&&v.z()+a.z()*-t<Planar64::ZERO{
 						//collect valid t
 						best_time=t_time;
 						exit_face=Some(TreyMeshFace::Back);
@@ -883,14 +885,14 @@ impl PhysicsState {
 			},
 			TreyMeshFace::Front=>{
 				//generate event if v.z<0||a.z<0
-				if -v.z<0f32{
+				if -v.z()<Planar64::ZERO{
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Front);
 				}
 			},
 			TreyMeshFace::Back=>{
 				//generate event if 0<v.z||0<a.z
-				if 0f32<(-v.z){
+				if Planar64::ZERO<(-v.z()){
 					best_time=time;
 					exit_face=Some(TreyMeshFace::Back);
 				}
@@ -913,15 +915,15 @@ impl PhysicsState {
 		let mut best_time=time_limit;
 		let mut best_face:Option<TreyMeshFace>=None;
 		//collect x
-		for t in zeroes2(mesh0.max.x-mesh1.min.x,v.x,0.5*a.x) {
+		for t in zeroes2(mesh0.max.x()-mesh1.min.x(),v.x(),a.x()/2) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as Time;
-			if time<=t_time&&t_time<best_time&&0f32<v.x+a.x*t{
+			let t_time=body_time+Time::from(t);
+			if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.x()+a.x()*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
+				if mesh1.min.y()<mesh0.max.y()+dp.y()&&mesh0.min.y()+dp.y()<mesh1.max.y()&&mesh1.min.z()<mesh0.max.z()+dp.z()&&mesh0.min.z()+dp.z()<mesh1.max.z() {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Left);
@@ -929,15 +931,15 @@ impl PhysicsState {
 				}
 			}
 		}
-		for t in zeroes2(mesh0.min.x-mesh1.max.x,v.x,0.5*a.x) {
+		for t in zeroes2(mesh0.min.x()-mesh1.max.x(),v.x(),a.x()/2) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as Time;
-			if time<=t_time&&t_time<best_time&&v.x+a.x*t<0f32{
+			let t_time=body_time+Time::from(t);
+			if time<=t_time&&t_time<best_time&&v.x()+a.x()*t<Planar64::ZERO{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
+				if mesh1.min.y()<mesh0.max.y()+dp.y()&&mesh0.min.y()+dp.y()<mesh1.max.y()&&mesh1.min.z()<mesh0.max.z()+dp.z()&&mesh0.min.z()+dp.z()<mesh1.max.z() {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Right);
@@ -946,15 +948,15 @@ impl PhysicsState {
 			}
 		}
 		//collect y
-		for t in zeroes2(mesh0.max.y-mesh1.min.y,v.y,0.5*a.y) {
+		for t in zeroes2(mesh0.max.y()-mesh1.min.y(),v.y(),a.y()/2) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as Time;
-			if time<=t_time&&t_time<best_time&&0f32<v.y+a.y*t{
+			let t_time=body_time+Time::from(t);
+			if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.y()+a.y()*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
+				if mesh1.min.x()<mesh0.max.x()+dp.x()&&mesh0.min.x()+dp.x()<mesh1.max.x()&&mesh1.min.z()<mesh0.max.z()+dp.z()&&mesh0.min.z()+dp.z()<mesh1.max.z() {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Bottom);
@@ -962,15 +964,15 @@ impl PhysicsState {
 				}
 			}
 		}
-		for t in zeroes2(mesh0.min.y-mesh1.max.y,v.y,0.5*a.y) {
+		for t in zeroes2(mesh0.min.y()-mesh1.max.y(),v.y(),a.y()/2) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as Time;
-			if time<=t_time&&t_time<best_time&&v.y+a.y*t<0f32{
+			let t_time=body_time+Time::from(t);
+			if time<=t_time&&t_time<best_time&&v.y()+a.y()*t<Planar64::ZERO{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x&&mesh1.min.z<mesh0.max.z+dp.z&&mesh0.min.z+dp.z<mesh1.max.z {
+				if mesh1.min.x()<mesh0.max.x()+dp.x()&&mesh0.min.x()+dp.x()<mesh1.max.x()&&mesh1.min.z()<mesh0.max.z()+dp.z()&&mesh0.min.z()+dp.z()<mesh1.max.z() {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Top);
@@ -979,15 +981,15 @@ impl PhysicsState {
 			}
 		}
 		//collect z
-		for t in zeroes2(mesh0.max.z-mesh1.min.z,v.z,0.5*a.z) {
+		for t in zeroes2(mesh0.max.z()-mesh1.min.z(),v.z(),a.z()/2) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as Time;
-			if time<=t_time&&t_time<best_time&&0f32<v.z+a.z*t{
+			let t_time=body_time+Time::from(t);
+			if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.z()+a.z()*t{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x {
+				if mesh1.min.y()<mesh0.max.y()+dp.y()&&mesh0.min.y()+dp.y()<mesh1.max.y()&&mesh1.min.x()<mesh0.max.x()+dp.x()&&mesh0.min.x()+dp.x()<mesh1.max.x() {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Front);
@@ -995,15 +997,15 @@ impl PhysicsState {
 				}
 			}
 		}
-		for t in zeroes2(mesh0.min.z-mesh1.max.z,v.z,0.5*a.z) {
+		for t in zeroes2(mesh0.min.z()-mesh1.max.z(),v.z(),a.z()/2) {
 			//must collide now or in the future
 			//must beat the current soonest collision time
 			//must be moving towards surface
-			let t_time=body_time+((t as f64)*1_000_000_000f64) as Time;
-			if time<=t_time&&t_time<best_time&&v.z+a.z*t<0f32{
+			let t_time=body_time+Time::from(t);
+			if time<=t_time&&t_time<best_time&&v.z()+a.z()*t<Planar64::ZERO{
 				let dp=self.body.extrapolated_position(t_time)-p;
 				//faces must be overlapping
-				if mesh1.min.y<mesh0.max.y+dp.y&&mesh0.min.y+dp.y<mesh1.max.y&&mesh1.min.x<mesh0.max.x+dp.x&&mesh0.min.x+dp.x<mesh1.max.x {
+				if mesh1.min.y()<mesh0.max.y()+dp.y()&&mesh0.min.y()+dp.y()<mesh1.max.y()&&mesh1.min.x()<mesh0.max.x()+dp.x()&&mesh0.min.x()+dp.x()<mesh1.max.x() {
 					//collect valid t
 					best_time=t_time;
 					best_face=Some(TreyMeshFace::Back);
@@ -1106,7 +1108,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						if let Some(mode)=self.get_mode(stage_element.mode_id){
 							if let Some(&spawn)=mode.get_spawn_model_id(self.game.stage_id){
 								if let Some(model)=self.models.get(spawn as usize){
-									self.body.position=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(self.style.hitbox_halfsize.y+0.1);
+									self.body.position=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(self.style.hitbox_halfsize.y()+Planar64::ONE/16);
 									//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
 									self.contacts.clear();
 									self.intersects.clear();
@@ -1154,7 +1156,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						if let Some(mode)=self.get_mode(stage_element.mode_id){
 							if let Some(&spawn)=mode.get_spawn_model_id(self.game.stage_id){
 								if let Some(model)=self.models.get(spawn as usize){
-									self.body.position=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(self.style.hitbox_halfsize.y+0.1);
+									self.body.position=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(self.style.hitbox_halfsize.y()+Planar64::ONE/16);
 									//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
 									self.contacts.clear();
 									self.intersects.clear();
