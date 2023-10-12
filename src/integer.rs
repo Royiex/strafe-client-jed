@@ -1,5 +1,5 @@
 //integer units
-#[derive(Clone,Copy,Hash,Debug)]
+#[derive(Clone,Copy,Hash,PartialEq,PartialOrd,Debug)]
 pub struct Time(i64);
 impl Time{
 	pub const ZERO:Self=Self(0);
@@ -228,12 +228,19 @@ pub struct Unit64Mat3{
 
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy,Hash)]
+#[derive(Clone,Copy,Hash,PartialEq,PartialOrd)]
 pub struct Planar64(i64);
 impl Planar64{
+	pub const ZERO:Self=Self(0);
 	pub const ONE:Self=Self(2<<32);
 	pub fn int(num:i32)->Self{
 		Self(Self::ONE.0*num as i64)
+	}
+	pub fn raw(num:i64)->Self{
+		Self(num)
+	}
+	pub fn get(&self)->i64{
+		self.0
 	}
 	pub fn from_ratio(num:i64,den:std::num::NonZeroU64)->Self{
 		Self(Self::ONE.0*num/den.get() as i64)
@@ -244,11 +251,25 @@ impl Into<f32> for Planar64{
 		self.0 as f32/(2<<32) as f32
 	}
 }
+impl std::ops::Neg for Planar64{
+	type Output=Planar64;
+	#[inline]
+	fn neg(self)->Self::Output{
+		Planar64(-self.0)
+	}
+}
 impl std::ops::Add<Planar64> for Planar64{
 	type Output=Planar64;
 	#[inline]
 	fn add(self, rhs: Self) -> Self::Output {
 		Planar64(self.0+rhs.0)
+	}
+}
+impl std::ops::Sub<Planar64> for Planar64{
+	type Output=Planar64;
+	#[inline]
+	fn sub(self, rhs: Self) -> Self::Output {
+		Planar64(self.0-rhs.0)
 	}
 }
 impl std::ops::Mul<i64> for Planar64{

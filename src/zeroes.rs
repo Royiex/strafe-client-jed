@@ -1,26 +1,30 @@
 //find roots of polynomials
+use crate::integer::Planar64;
+
 #[inline]
-pub fn zeroes2(a0:f32,a1:f32,a2:f32) -> Vec<f32>{
-	if a2==0f32{
+pub fn zeroes2(a0:Planar64,a1:Planar64,a2:Planar64) -> Vec<Planar64>{
+	if a2==Planar64::ZERO{
 		return zeroes1(a0, a1);
 	}
-	let mut radicand=a1*a1-4f32*a2*a0;
-	if 0f32<radicand {
-		radicand=radicand.sqrt();
-		if 0f32<a2 {
-			return vec![(-a1-radicand)/(2f32*a2),(-a1+radicand)/(2f32*a2)];
+	let mut radicand=a1.get() as i128*a1.get() as i128-a2.get() as i128*a0.get() as i128*4;
+	if 0<radicand {
+		//start with f64 sqrt
+		let planar_radicand=Planar64::raw(unsafe{(radicand as f64).sqrt().to_int_unchecked()});
+		//TODO: one or two newtons
+		if Planar64::ZERO<a2 {
+			return vec![(-a1-planar_radicand)/(a2*2),(-a1+planar_radicand)/(a2*2)];
 		} else {
-			return vec![(-a1+radicand)/(2f32*a2),(-a1-radicand)/(2f32*a2)];
+			return vec![(-a1+planar_radicand)/(a2*2),(-a1-planar_radicand)/(a2*2)];
 		}
-	} else if radicand==0f32 {
-		return vec![-a1/(2f32*a2)];
+	} else if radicand==0 {
+		return vec![a1/(a2*-2)];
 	} else {
 		return vec![];
 	}
 }
 #[inline]
-pub fn zeroes1(a0:f32,a1:f32) -> Vec<f32> {
-	if a1==0f32{
+pub fn zeroes1(a0:Planar64,a1:Planar64) -> Vec<Planar64> {
+	if a1==Planar64::ZERO{
 		return vec![];
 	} else {
 		return vec![-a0/a1];
