@@ -338,7 +338,7 @@ pub struct ModelPhysics {
 
 impl ModelPhysics {
 	fn from_model_transform_attributes(model:&crate::model::IndexedModel,transform:&glam::Affine3A,attributes:PhysicsCollisionAttributes)->Self{
-		let mut aabb=TreyMesh::new();
+		let mut aabb=TreyMesh::default();
 		for indexed_vertex in &model.unique_vertices {
 			aabb.grow(transform.transform_point3(Planar64Vec3::from_array(model.unique_pos[indexed_vertex.pos as usize])));
 		}
@@ -361,9 +361,9 @@ impl ModelPhysics {
 	pub fn mesh(&self) -> &TreyMesh {
 		return &self.mesh;
 	}
-	pub fn face_mesh(&self,face:TreyMeshFace)->TreyMesh{
-		self.mesh.face(face)
-	}
+	// pub fn face_mesh(&self,face:TreyMeshFace)->TreyMesh{
+	// 	self.mesh.face(face)
+	// }
 	pub fn face_normal(&self,face:TreyMeshFace) -> Planar64Vec3 {
 		TreyMesh::normal(face)//this is wrong for scale
 	}
@@ -381,9 +381,9 @@ impl RelativeCollision {
 	pub fn model<'a>(&self,models:&'a Vec<ModelPhysics>)->Option<&'a ModelPhysics>{
 		models.get(self.model as usize)
 	}
-	pub fn mesh(&self,models:&Vec<ModelPhysics>) -> TreyMesh {
-		return self.model(models).unwrap().face_mesh(self.face).clone()
-	}
+	// pub fn mesh(&self,models:&Vec<ModelPhysics>) -> TreyMesh {
+	// 	return self.model(models).unwrap().face_mesh(self.face).clone()
+	// }
 	pub fn normal(&self,models:&Vec<ModelPhysics>) -> Planar64Vec3 {
 		return self.model(models).unwrap().face_normal(self.face)
 	}
@@ -745,7 +745,7 @@ impl PhysicsState {
 		}
 	}
 	fn mesh(&self) -> TreyMesh {
-		let mut aabb=TreyMesh::new();
+		let mut aabb=TreyMesh::default();
 		for vertex in TreyMesh::unit_vertices(){
 			aabb.grow(self.body.position+self.style.hitbox_halfsize*vertex);
 		}
@@ -1038,7 +1038,7 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 		// 	collector.collect(self.predict_collision_end2(self.time,time_limit,collision_data));
 		// }
 		//check for collision start instructions (against every part in the game with no optimization!!)
-		let mut aabb=crate::aabb::Aabb::new();
+		let mut aabb=crate::aabb::Aabb::default();
 		aabb.grow(self.body.extrapolated_position(self.time));
 		aabb.grow(self.body.extrapolated_position(time_limit));
 		aabb.inflate(self.style.hitbox_halfsize);

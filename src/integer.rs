@@ -228,7 +228,7 @@ pub struct Unit64Mat3{
 
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy,Hash,PartialEq,PartialOrd)]
+#[derive(Clone,Copy,Hash,Eq,Ord,PartialEq,PartialOrd)]
 pub struct Planar64(i64);
 impl Planar64{
 	pub const ZERO:Self=Self(0);
@@ -303,7 +303,7 @@ impl std::ops::Div<Planar64> for Planar64{
 
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy,Hash)]
+#[derive(Clone,Copy,Hash,Eq,PartialEq)]
 pub struct Planar64Vec3(glam::I64Vec3);
 impl Planar64Vec3{
 	pub const ZERO:Self=Planar64Vec3(glam::I64Vec3::ZERO);
@@ -314,6 +314,8 @@ impl Planar64Vec3{
 	pub const NEG_X:Self=Planar64Vec3(glam::I64Vec3::NEG_X);
 	pub const NEG_Y:Self=Planar64Vec3(glam::I64Vec3::NEG_Y);
 	pub const NEG_Z:Self=Planar64Vec3(glam::I64Vec3::NEG_Z);
+	pub const MIN:Self=Planar64Vec3(glam::I64Vec3::MIN);
+	pub const MAX:Self=Planar64Vec3(glam::I64Vec3::MAX);
 	pub fn int(x:i32,y:i32,z:i32)->Self{
 		Self(glam::i64vec3((x as i64)<<32,(y as i64)<<32,(z as i64)<<32))
 	}
@@ -329,6 +331,31 @@ impl Planar64Vec3{
 	pub fn z(&self)->Planar64{
 		Planar64(self.0.z)
 	}
+	#[inline]
+	pub fn min(self,rhs:Self)->Self{
+		Self(glam::i64vec3(
+			self.0.x.min(rhs.0.x),
+			self.0.y.min(rhs.0.y),
+			self.0.z.min(rhs.0.z),
+		))
+	}
+	#[inline]
+	pub fn max(self,rhs:Self)->Self{
+		Self(glam::i64vec3(
+			self.0.x.max(rhs.0.x),
+			self.0.y.max(rhs.0.y),
+			self.0.z.max(rhs.0.z),
+		))
+	}
+	#[inline]
+	pub fn midpoint(self,rhs:Self)->Self{
+		Self((self.0+rhs.0)/2)
+	}
+	#[inline]
+	pub fn cmplt(self,rhs:Self)->glam::BVec3{
+		self.0.cmplt(rhs.0)
+	}
+
 }
 impl Into<glam::Vec3> for Planar64Vec3{
 	fn into(self)->glam::Vec3{
