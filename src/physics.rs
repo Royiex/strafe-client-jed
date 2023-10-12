@@ -49,31 +49,12 @@ pub enum InputInstruction {
 		//for interpolation / networking / playback reasons, most playback heads will always want
 		//to be 1 instruction ahead to generate the next state for interpolation.
 }
-#[derive(Clone)]
+#[derive(Clone,Hash)]
 pub struct Body {
 	position: Planar64Vec3,//I64 where 2^32 = 1 u
 	velocity: Planar64Vec3,//I64 where 2^32 = 1 u/s
 	acceleration: Planar64Vec3,//I64 where 2^32 = 1 u/s/s
 	time: TIME,//nanoseconds x xxxxD!
-}
-trait MyHash{
-	fn hash(&self) -> u64;
-}
-impl MyHash for Body {
-	fn hash(&self) -> u64 {
-		let mut hasher=std::collections::hash_map::DefaultHasher::new();
-		for &el in self.position.as_ref().iter() {
-			std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
-		}
-		for &el in self.velocity.as_ref().iter() {
-			std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
-		}
-		for &el in self.acceleration.as_ref().iter() {
-			 std::hash::Hasher::write(&mut hasher, el.to_ne_bytes().as_slice());
-		}
-		std::hash::Hasher::write(&mut hasher, self.time.to_ne_bytes().as_slice());
-		return std::hash::Hasher::finish(&hasher);//hash check to see if walk target is valid
-	}
 }
 
 pub enum MoveRestriction {

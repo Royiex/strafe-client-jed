@@ -179,7 +179,7 @@ pub struct Unit64Mat3{
 
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Hash)]
 pub struct Planar64(i64);
 impl Planar64{
 	pub const ONE:Self=Self(2<<32);
@@ -221,7 +221,7 @@ impl std::ops::Div<i64> for Planar64{
 
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Hash)]
 pub struct Planar64Vec3(glam::I64Vec3);
 impl Planar64Vec3{
 	pub fn new(x:i32,y:i32,z:i32)->Self{
