@@ -583,6 +583,17 @@ impl TryFrom<[f32;3]> for Planar64Vec3{
 		)))
 	}
 }
+impl TryFrom<glam::Vec3A> for Planar64Vec3{
+	type Error=Planar64TryFromFloatError;
+	#[inline]
+	fn try_from(value:glam::Vec3A)->Result<Self,Self::Error>{
+		Ok(Self(glam::i64vec3(
+			Planar64::try_from(value.x)?.0,
+			Planar64::try_from(value.y)?.0,
+			Planar64::try_from(value.z)?.0,
+		)))
+	}
+}
 impl std::ops::Neg for Planar64Vec3{
 	type Output=Planar64Vec3;
 	#[inline]
@@ -710,25 +721,67 @@ impl Planar64Mat3{
 		)
 	}
 }
+impl Into<glam::Mat3> for Planar64Mat3{
+	#[inline]
+	fn into(self)->glam::Mat3{
+		glam::Mat3::from_cols(
+			self.x_axis.into(),
+			self.y_axis.into(),
+			self.z_axis.into(),
+		)
+	}
+}
+impl TryFrom<glam::Mat3A> for Planar64Mat3{
+	type Error=Planar64TryFromFloatError;
+	#[inline]
+	fn try_from(value:glam::Mat3A)->Result<Self,Self::Error>{
+		Ok(Self{
+			x_axis:Planar64Vec3::try_from(value.x_axis)?,
+			y_axis:Planar64Vec3::try_from(value.y_axis)?,
+			z_axis:Planar64Vec3::try_from(value.z_axis)?,
+		})
+	}
+}
 
 ///[-1.0,1.0] = [-2^32,2^32]
 #[derive(Clone,Copy,Default)]
 pub struct Planar64Affine3{
-	matrix3:Planar64Mat3,//includes scale above 1
-	transform:Planar64Vec3,
+	pub matrix3:Planar64Mat3,//includes scale above 1
+	pub translation:Planar64Vec3,
 }
 
 impl Planar64Affine3{
-	pub fn new(matrix3:Planar64Mat3,transform:Planar64Vec3)->Self{
-		Self{matrix3,transform}
+	#[inline]
+	pub fn new(matrix3:Planar64Mat3,translation:Planar64Vec3)->Self{
+		Self{matrix3,translation}
 	}
 	#[inline]
 	pub fn transform_point3(&self,point:Planar64Vec3) -> Planar64Vec3{
 		Planar64Vec3(
-			self.transform.0
+			self.translation.0
 			+(self.matrix3.x_axis*point.x()).0
 			+(self.matrix3.y_axis*point.y()).0
 			+(self.matrix3.z_axis*point.z()).0
 		)
+	}
+}
+impl Into<glam::Mat4> for Planar64Affine3{
+	#[inline]
+	fn into(self)->glam::Mat4{
+		glam::Mat4::from_cols_array(&[
+			self.matrix3.x_axis.0.x as f32,self.matrix3.x_axis.0.x as f32,self.matrix3.x_axis.0.x as f32,0.0,
+			self.matrix3.y_axis.0.x as f32,self.matrix3.y_axis.0.x as f32,self.matrix3.y_axis.0.x as f32,0.0,
+			self.matrix3.z_axis.0.x as f32,self.matrix3.z_axis.0.x as f32,self.matrix3.z_axis.0.x as f32,0.0,
+			self.translation.0.x as f32,self.translation.0.y as f32,self.translation.0.z as f32,(1<<32) as f32
+		])*(1.0/(1<<32) as f32)
+	}
+}
+impl TryFrom<glam::Affine3A> for Planar64Affine3{
+	type Error=Planar64TryFromFloatError;
+	fn try_from(value: glam::Affine3A)->Result<Self, Self::Error> {
+		Ok(Self{
+			matrix3:Planar64Mat3::try_from(value.matrix3)?,
+			translation:Planar64Vec3::try_from(value.translation)?
+		})
 	}
 }
