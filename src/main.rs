@@ -556,7 +556,7 @@ impl framework::Example for GlobalState {
 		// Create the render pipeline
 		let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
 			label: None,
-			source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+			source: wgpu::ShaderSource::SpirV(Cow::Borrowed(include_wgsl_to_spv!("shader.wgsl"))),
 		});
 
 		//load textures
