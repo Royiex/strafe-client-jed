@@ -102,6 +102,20 @@ impl Ratio64{
 }
 //from num_traits crate
 #[inline]
+fn integer_decode_f32(f: f32) -> (u64, i16, i8) {
+    let bits: u32 = f.to_bits();
+    let sign: i8 = if bits >> 31 == 0 { 1 } else { -1 };
+    let mut exponent: i16 = ((bits >> 23) & 0xff) as i16;
+    let mantissa = if exponent == 0 {
+        (bits & 0x7fffff) << 1
+    } else {
+        (bits & 0x7fffff) | 0x800000
+    };
+    // Exponent bias + mantissa shift
+    exponent -= 127 + 23;
+    (mantissa as u64, exponent, sign)
+}
+#[inline]
 fn integer_decode_f64(f: f64) -> (u64, i16, i8) {
     let bits: u64 = f.to_bits();
     let sign: i8 = if bits >> 63 == 0 { 1 } else { -1 };
@@ -116,37 +130,49 @@ fn integer_decode_f64(f: f64) -> (u64, i16, i8) {
     (mantissa, exponent, sign)
 }
 #[derive(Debug)]
-enum Ratio64TryFromFloat64Error{
+enum Ratio64TryFromFloatError{
 	Nan,
 	Infinite,
 	Subnormal,
 	HighlyNegativeExponent(i16),
 	HighlyPositiveExponent(i16),
 }
+fn ratio64_from_mes((m,e,s):(u64,i16,i8))->Result<Ratio64,Ratio64TryFromFloatError>{
+	if e< -127{
+		//bye bye
+		Err(Ratio64TryFromFloatError::HighlyNegativeExponent(e))
+	}else if e< -63{
+		//TODO
+		Err(Ratio64TryFromFloatError::HighlyNegativeExponent(e))
+	}else if e<0{
+		Ok(Ratio64::new((m as i64)*(s as i64),1<<-e).unwrap())
+	}else if e<62-52{
+		Ok(Ratio64::new((m as i64)*(s as i64)*(1<<e),1).unwrap())
+	}else{
+		Err(Ratio64TryFromFloatError::HighlyPositiveExponent(e))
+	}
+}
+impl TryFrom<f32> for Ratio64{
+	type Error=Ratio64TryFromFloatError;
+	fn try_from(value:f32)->Result<Self,Self::Error>{
+		match value.classify(){
+			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
+			std::num::FpCategory::Infinite=>Err(Self::Error::Infinite),
+			std::num::FpCategory::Zero=>Ok(Self::ZERO),
+			std::num::FpCategory::Subnormal=>Err(Self::Error::Subnormal),
+			std::num::FpCategory::Normal=>ratio64_from_mes(integer_decode_f32(value)),
+		}
+	}
+}
 impl TryFrom<f64> for Ratio64{
-	type Error=Ratio64TryFromFloat64Error;
+	type Error=Ratio64TryFromFloatError;
 	fn try_from(value:f64)->Result<Self,Self::Error>{
 		match value.classify(){
 			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
 			std::num::FpCategory::Infinite=>Err(Self::Error::Infinite),
 			std::num::FpCategory::Zero=>Ok(Self::ZERO),
 			std::num::FpCategory::Subnormal=>Err(Self::Error::Subnormal),
-			std::num::FpCategory::Normal=>{
-				let (m,e,s)=integer_decode_f64(value);
-				if e< -127{
-					//bye bye
-					Err(Self::Error::HighlyNegativeExponent(e))
-				}else if e< -63{
-					//TODO
-					Err(Self::Error::HighlyNegativeExponent(e))
-				}else if e<0{
-					Ok(Ratio64::new((m as i64)*(s as i64),1<<-e).unwrap())
-				}else if e<62-52{
-					Ok(Ratio64::new((m as i64)*(s as i64)*(1<<e),1).unwrap())
-				}else{
-					Err(Self::Error::HighlyPositiveExponent(e))
-				}
-			},
+			std::num::FpCategory::Normal=>ratio64_from_mes(integer_decode_f64(value)),
 		}
 	}
 }
