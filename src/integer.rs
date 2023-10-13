@@ -236,15 +236,6 @@ impl std::ops::Mul<i64> for Ratio64Vec2{
 	}
 }
 
-///[-1.0,1.0] = [-2^30,2^30]
-pub struct Unit32(i32);
-impl Unit32{
-	#[inline]
-	pub fn as_planar64(&self) -> Planar64{
-		Planar64(4*(self.0 as i64))
-	}
-}
-
 ///[-pi,pi) = [-2^31,2^31-1]
 #[derive(Clone,Copy,Hash)]
 pub struct Angle32(i32);
@@ -286,6 +277,7 @@ impl Angle32{
 			.wrapping_add(midpoint)
 		)
 	}
+	/*
 	#[inline]
 	pub fn cos(&self)->Unit32{
 		//TODO: fix this rounding towards 0
@@ -296,6 +288,7 @@ impl Angle32{
 		//TODO: fix this rounding towards 0
 		Unit32(unsafe{((self.0 as f64*(std::f64::consts::PI/((1<<31) as f64))).sin()*((1<<30) as f64)).to_int_unchecked()})
 	}
+	*/
 }
 impl Into<f32> for Angle32{
 	fn into(self)->f32{
@@ -338,35 +331,30 @@ impl std::ops::Mul<Angle32> for Angle32{
 		Angle32(self.0.wrapping_mul(rhs.0))
 	}
 }
-///[-pi,pi) = [-2^31,2^31-1]
-pub struct Angle32Vec2(glam::IVec2);
-impl Angle32Vec2{
-	//?
+
+/* Unit type unused for now, may revive it for map files
+///[-1.0,1.0] = [-2^30,2^30]
+pub struct Unit32(i32);
+impl Unit32{
+	#[inline]
+	pub fn as_planar64(&self) -> Planar64{
+		Planar64(4*(self.0 as i64))
+	}
 }
 
 ///[-1.0,1.0] = [-2^30,2^30]
 pub struct Unit32Vec3(glam::IVec3);
-///[-1.0,1.0] = [-2^30,2^30]
-pub struct Unit32Mat3{
-	x_axis:Unit32Vec3,
-	y_axis:Unit32Vec3,
-	z_axis:Unit32Vec3,
+impl TryFrom<[f32;3]> for Unit32Vec3{
+	type Error=Unit32TryFromFloatError;
+	fn try_from(value:[f32;3])->Result<Self,Self::Error>{
+		Ok(Self(glam::ivec3(
+			Unit32::try_from(Planar64::try_from(value[0])?)?.0,
+			Unit32::try_from(Planar64::try_from(value[1])?)?.0,
+			Unit32::try_from(Planar64::try_from(value[2])?)?.0,
+		)))
+	}
 }
-
-///[-1.0,1.0] = [-2^62,2^62]
-pub struct Unit64(i64);
-///[-pi,pi) = [-2^63,2^63-1]
-pub struct Angle64(i64);
-
-///[-1.0,1.0] = [-2^62,2^62]
-pub struct Unit64Vec3(glam::IVec3);
-///[-1.0,1.0] = [-2^62,2^62]
-pub struct Unit64Mat3{
-	x_axis:Unit64Vec3,
-	y_axis:Unit64Vec3,
-	z_axis:Unit64Vec3,
-}
-
+*/
 
 ///[-1.0,1.0] = [-2^32,2^32]
 #[derive(Clone,Copy,Hash,Eq,Ord,PartialEq,PartialOrd)]
