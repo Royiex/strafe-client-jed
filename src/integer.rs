@@ -7,29 +7,36 @@ impl Time{
 	pub const ONE_MILLISECOND:Self=Self(1_000_000);
 	pub const ONE_MICROSECOND:Self=Self(1_000);
 	pub const ONE_NANOSECOND:Self=Self(1);
+	#[inline]
 	pub fn from_secs(num:i64)->Self{
 		Self(Self::ONE_SECOND.0*num)
 	}
+	#[inline]
 	pub fn from_millis(num:i64)->Self{
 		Self(Self::ONE_MILLISECOND.0*num)
 	}
+	#[inline]
 	pub fn from_micros(num:i64)->Self{
 		Self(Self::ONE_MICROSECOND.0*num)
 	}
+	#[inline]
 	pub fn from_nanos(num:i64)->Self{
 		Self(Self::ONE_NANOSECOND.0*num)
 	}
 	//should I have checked subtraction? force all time variables to be positive?
+	#[inline]
 	pub fn nanos(&self)->i64{
 		self.0
 	}
 }
 impl From<Planar64> for Time{
+	#[inline]
 	fn from(value:Planar64)->Self{
 		Time((((value.0 as i128)*1_000_000_000)>>32) as i64)
 	}
 }
 impl std::fmt::Display for Time{
+	#[inline]
 	fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{
 		write!(f,"{}s+{}ns",self.0/Self::ONE_SECOND.0,self.0%Self::ONE_SECOND.0)
 	}
@@ -70,6 +77,7 @@ impl std::ops::Div<i64> for Time{
 	}
 }
 
+#[inline]
 fn gcd(mut a:u64,mut b:u64)->u64{
 	while b!=0{
 		(a,b)=(b,a.rem_euclid(b));
@@ -84,6 +92,7 @@ pub struct Ratio64{
 impl Ratio64{
 	pub const ZERO:Self=Ratio64{num:0,den:unsafe{std::num::NonZeroU64::new_unchecked(1)}};
 	pub const ONE:Self=Ratio64{num:1,den:unsafe{std::num::NonZeroU64::new_unchecked(1)}};
+	#[inline]
 	pub fn new(num:i64,den:u64)->Option<Ratio64>{
 		match std::num::NonZeroU64::new(den){
 			Some(_)=>{
@@ -93,9 +102,11 @@ impl Ratio64{
 			None=>None,
 		}
 	}
+	#[inline]
 	pub fn mul_int(self,rhs:i64)->i64{
 		rhs*self.num/self.den.get() as i64
 	}
+	#[inline]
 	pub fn rhs_div_int(self,rhs:i64)->i64{
 		rhs*self.den.get() as i64/self.num
 	}
@@ -137,6 +148,7 @@ enum Ratio64TryFromFloatError{
 	HighlyNegativeExponent(i16),
 	HighlyPositiveExponent(i16),
 }
+#[inline]
 fn ratio64_from_mes((m,e,s):(u64,i16,i8))->Result<Ratio64,Ratio64TryFromFloatError>{
 	if e< -127{
 		//bye bye
@@ -154,6 +166,7 @@ fn ratio64_from_mes((m,e,s):(u64,i16,i8))->Result<Ratio64,Ratio64TryFromFloatErr
 }
 impl TryFrom<f32> for Ratio64{
 	type Error=Ratio64TryFromFloatError;
+	#[inline]
 	fn try_from(value:f32)->Result<Self,Self::Error>{
 		match value.classify(){
 			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
@@ -166,6 +179,7 @@ impl TryFrom<f32> for Ratio64{
 }
 impl TryFrom<f64> for Ratio64{
 	type Error=Ratio64TryFromFloatError;
+	#[inline]
 	fn try_from(value:f64)->Result<Self,Self::Error>{
 		match value.classify(){
 			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
@@ -215,9 +229,11 @@ pub struct Ratio64Vec2{
 }
 impl Ratio64Vec2{
 	pub const ONE:Self=Self{x:Ratio64::ONE,y:Ratio64::ONE};
+	#[inline]
 	pub fn new(x:Ratio64,y:Ratio64)->Self{
 		Self{x,y}
 	}
+	#[inline]
 	pub fn mul_int(self,rhs:glam::I64Vec2)->glam::I64Vec2{
 		glam::i64vec2(
 			self.x.mul_int(rhs.x),
@@ -291,6 +307,7 @@ impl Angle32{
 	*/
 }
 impl Into<f32> for Angle32{
+	#[inline]
 	fn into(self)->f32{
 		//TODO: make this good
 		(self.0 as f64/-(i32::MIN as f64)*std::f64::consts::PI) as f32
@@ -395,6 +412,7 @@ enum Planar64TryFromFloatError{
 	HighlyNegativeExponent(i16),
 	HighlyPositiveExponent(i16),
 }
+#[inline]
 fn planar64_from_mes((m,e,s):(u64,i16,i8))->Result<Planar64,Planar64TryFromFloatError>{
 	if e< -32{
 		Err(Planar64TryFromFloatError::HighlyNegativeExponent(e))
@@ -406,6 +424,7 @@ fn planar64_from_mes((m,e,s):(u64,i16,i8))->Result<Planar64,Planar64TryFromFloat
 }
 impl TryFrom<f32> for Planar64{
 	type Error=Planar64TryFromFloatError;
+	#[inline]
 	fn try_from(value:f32)->Result<Self,Self::Error>{
 		match value.classify(){
 			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
@@ -418,6 +437,7 @@ impl TryFrom<f32> for Planar64{
 }
 impl TryFrom<f64> for Planar64{
 	type Error=Planar64TryFromFloatError;
+	#[inline]
 	fn try_from(value:f64)->Result<Self,Self::Error>{
 		match value.classify(){
 			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
@@ -498,6 +518,7 @@ impl Planar64Vec3{
 	pub const NEG_Z:Self=Planar64Vec3(glam::I64Vec3::NEG_Z);
 	pub const MIN:Self=Planar64Vec3(glam::I64Vec3::MIN);
 	pub const MAX:Self=Planar64Vec3(glam::I64Vec3::MAX);
+	#[inline]
 	pub fn int(x:i32,y:i32,z:i32)->Self{
 		Self(glam::i64vec3((x as i64)<<32,(y as i64)<<32,(z as i64)<<32))
 	}
@@ -565,6 +586,7 @@ impl Planar64Vec3{
 	}
 }
 impl Into<glam::Vec3> for Planar64Vec3{
+	#[inline]
 	fn into(self)->glam::Vec3{
 		glam::vec3(
 			self.0.x as f32,
@@ -575,6 +597,7 @@ impl Into<glam::Vec3> for Planar64Vec3{
 }
 impl TryFrom<[f32;3]> for Planar64Vec3{
 	type Error=Planar64TryFromFloatError;
+	#[inline]
 	fn try_from(value:[f32;3])->Result<Self,Self::Error>{
 		Ok(Self(glam::i64vec3(
 			Planar64::try_from(value[0])?.0,
@@ -680,6 +703,7 @@ pub struct Planar64Mat3{
 	z_axis:Planar64Vec3,
 }
 impl Default for Planar64Mat3{
+	#[inline]
 	fn default() -> Self {
 		Self{
 			x_axis:Planar64Vec3::X,
