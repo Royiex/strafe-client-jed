@@ -256,8 +256,8 @@ impl std::ops::Mul<i64> for Ratio64Vec2{
 #[derive(Clone,Copy,Hash)]
 pub struct Angle32(i32);
 impl Angle32{
-	pub const FRAC_PI_2:Self=Self(1<<31);
-	pub const PI:Self=Self(-1<<32);
+	pub const FRAC_PI_2:Self=Self(1<<30);
+	pub const PI:Self=Self(-1<<31);
 	#[inline]
 	pub fn wrap_from_i64(theta:i64)->Self{
 		//take lower bits
