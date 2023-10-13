@@ -1,12 +1,13 @@
 use std::{borrow::Cow, time::Instant};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
-use model::{Vertex,ModelInstance,ModelGraphicsInstance};
+use model_graphics::{GraphicsVertex,ModelGraphicsInstance};
 use physics::{InputInstruction, PhysicsInstruction};
 use instruction::{TimedInstruction, InstructionConsumer};
 
 mod bvh;
 mod aabb;
 mod model;
+mod model_graphics;
 mod zeroes;
 mod worker;
 mod physics;
@@ -227,8 +228,8 @@ impl GlobalState{
 					None
 				}else{
 					Some(ModelGraphicsInstance{
-						transform: glam::Mat4::from(instance.transform),
-						normal_transform: glam::Mat3::from(instance.transform.matrix3.inverse().transpose()),
+						transform: instance.transform.into(),
+						normal_transform: Into::<glam::Mat3>::into(instance.transform.matrix3).inverse().transpose(),
 						color: instance.color,
 					})
 				}
@@ -244,11 +245,11 @@ impl GlobalState{
 					//create new texture_index
 					let texture_index=unique_textures.len();
 					unique_textures.push(group.texture);
-					unique_texture_models.push(model::IndexedModelSingleTexture{
-						unique_pos:model.unique_pos.clone(),
-						unique_tex:model.unique_tex.clone(),
-						unique_normal:model.unique_normal.clone(),
-						unique_color:model.unique_color.clone(),
+					unique_texture_models.push(model_graphics::IndexedModelGraphicsSingleTexture{
+						unique_pos:model.unique_pos.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
+						unique_tex:model.unique_tex.iter().map(|v|*v.as_ref()).collect(),
+						unique_normal:model.unique_normal.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
+						unique_color:model.unique_color.iter().map(|v|*v.as_ref()).collect(),
 						unique_vertices:model.unique_vertices.clone(),
 						texture:group.texture,
 						groups:Vec::new(),
@@ -256,7 +257,7 @@ impl GlobalState{
 					});
 					texture_index
 				};
-				unique_texture_models[id+texture_index].groups.push(model::IndexedGroupFixedTexture{
+				unique_texture_models[id+texture_index].groups.push(model_graphics::IndexedGroupFixedTexture{
 					polys:group.polys,
 				});
 			}
@@ -279,7 +280,7 @@ impl GlobalState{
 							}else{
 								let i=vertices.len() as u16;
 								let vertex=&model.unique_vertices[vertex_index as usize];
-								vertices.push(Vertex {
+								vertices.push(model_graphics::GraphicsVertex{
 									pos: model.unique_pos[vertex.pos as usize],
 									tex: model.unique_tex[vertex.tex as usize],
 									normal: model.unique_normal[vertex.normal as usize],
@@ -293,7 +294,7 @@ impl GlobalState{
 				}
 			}
 				entities.push(indices);
-			models.push(model::ModelSingleTexture{
+			models.push(model_graphics::ModelGraphicsSingleTexture{
 				instances:model.instances,
 				vertices,
 				entities,
@@ -418,50 +419,50 @@ impl framework::Example for GlobalState {
 		//wee
 		let user_settings=settings::read_user_settings();
 		let mut indexed_models = Vec::new();
-		indexed_models.append(&mut model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap(),*glam::Vec4::ONE.as_ref()));
+		indexed_models.append(&mut model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap(),glam::Vec4::ONE));
 		indexed_models.push(primitives::unit_sphere());
 		indexed_models.push(primitives::unit_cylinder());
 		indexed_models.push(primitives::unit_cube());
 		println!("models.len = {:?}", indexed_models.len());
-		indexed_models[0].instances.push(ModelInstance{
-			transform:glam::Affine3A::from_translation(glam::vec3(10.,0.,-10.)),
+		indexed_models[0].instances.push(model::ModelInstance{
+			transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(10.,0.,-10.))).unwrap(),
 			..Default::default()
 		});
 		//quad monkeys
-		indexed_models[1].instances.push(ModelInstance{
-			transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,10.)),
+		indexed_models[1].instances.push(model::ModelInstance{
+			transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(10.,5.,10.))).unwrap(),
 			..Default::default()
 		});
-		indexed_models[1].instances.push(ModelInstance{
-			transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,10.)),
+		indexed_models[1].instances.push(model::ModelInstance{
+			transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(20.,5.,10.))).unwrap(),
 			color:glam::vec4(1.0,0.0,0.0,1.0),
 			..Default::default()
 		});
-		indexed_models[1].instances.push(ModelInstance{
-			transform:glam::Affine3A::from_translation(glam::vec3(10.,5.,20.)),
+		indexed_models[1].instances.push(model::ModelInstance{
+			transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(10.,5.,20.))).unwrap(),
 			color:glam::vec4(0.0,1.0,0.0,1.0),
 			..Default::default()
 		});
-		indexed_models[1].instances.push(ModelInstance{
-			transform:glam::Affine3A::from_translation(glam::vec3(20.,5.,20.)),
+		indexed_models[1].instances.push(model::ModelInstance{
+			transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(20.,5.,20.))).unwrap(),
 			color:glam::vec4(0.0,0.0,1.0,1.0),
 			..Default::default()
 		});
 		//decorative monkey
-		indexed_models[1].instances.push(ModelInstance{
-			transform:glam::Affine3A::from_translation(glam::vec3(15.,10.,15.)),
+		indexed_models[1].instances.push(model::ModelInstance{
+			transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(15.,10.,15.))).unwrap(),
 			color:glam::vec4(0.5,0.5,0.5,0.5),
 			attributes:model::CollisionAttributes::Decoration,
 			..Default::default()
 		});
 		//teapot
-		indexed_models[2].instances.push(ModelInstance{
-			transform:glam::Affine3A::from_scale_rotation_translation(glam::vec3(0.5, 1.0, 0.2),glam::quat(-0.22248298016985793,-0.839457167990537,-0.05603504040830783,-0.49261857546227916),glam::vec3(-10.,7.,10.)),
+		indexed_models[2].instances.push(model::ModelInstance{
+			transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_scale_rotation_translation(glam::vec3(0.5, 1.0, 0.2),glam::quat(-0.22248298016985793,-0.839457167990537,-0.05603504040830783,-0.49261857546227916),glam::vec3(-10.,7.,10.))).unwrap(),
 			..Default::default()
 		});
 		//ground
-		indexed_models[3].instances.push(ModelInstance{
-			transform:glam::Affine3A::from_translation(glam::vec3(0.,0.,0.))*glam::Affine3A::from_scale(glam::vec3(160.0, 1.0, 160.0)),
+		indexed_models[3].instances.push(model::ModelInstance{
+			transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(0.,0.,0.))*glam::Affine3A::from_scale(glam::vec3(160.0, 1.0, 160.0))).unwrap(),
 			..Default::default()
 		});
 
@@ -729,7 +730,7 @@ impl framework::Example for GlobalState {
 				module: &shader,
 				entry_point: "vs_entity_texture",
 				buffers: &[wgpu::VertexBufferLayout {
-					array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+					array_stride: std::mem::size_of::<GraphicsVertex>() as wgpu::BufferAddress,
 					step_mode: wgpu::VertexStepMode::Vertex,
 					attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Float32x3, 3 => Float32x4],
 				}],
@@ -819,7 +820,7 @@ impl framework::Example for GlobalState {
 		let indexed_model_instances=model::IndexedModelInstances{
 			textures:Vec::new(),
 			models:indexed_models,
-			spawn_point:glam::Vec3::Y*50.0,
+			spawn_point:integer::Planar64Vec3::Y*50,
 			modes:Vec::new(),
 		};
 
@@ -919,7 +920,7 @@ impl framework::Example for GlobalState {
 
 	#[allow(clippy::single_match)]
 	fn update(&mut self, window: &winit::window::Window, device: &wgpu::Device, queue: &wgpu::Queue, event: winit::event::WindowEvent) {
-		let time=self.start_time.elapsed().as_nanos() as i64;
+		let time=integer::Time::from_nanos(self.start_time.elapsed().as_nanos() as i64);
 		match event {
 			winit::event::WindowEvent::DroppedFile(path) => self.load_file(path,device,queue),
 			winit::event::WindowEvent::Focused(state)=>{
@@ -1011,7 +1012,7 @@ impl framework::Example for GlobalState {
 
 	fn device_event(&mut self, window: &winit::window::Window, event: winit::event::DeviceEvent) {
 		//there's no way this is the best way get a timestamp.
-		let time=self.start_time.elapsed().as_nanos() as i64;
+		let time=integer::Time::from_nanos(self.start_time.elapsed().as_nanos() as i64);
 		match event {
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine
@@ -1066,7 +1067,7 @@ impl framework::Example for GlobalState {
 		_spawner: &framework::Spawner,
 	) {
 		//ideally this would be scheduled to execute and finish right before the render.
-		let time=self.start_time.elapsed().as_nanos() as i64;
+		let time=integer::Time::from_nanos(self.start_time.elapsed().as_nanos() as i64);
 		self.physics_thread.send(TimedInstruction{
 			time,
 			instruction:InputInstruction::Idle,
