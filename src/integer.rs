@@ -430,7 +430,7 @@ impl std::ops::Div<Planar64> for Planar64{
 
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy,Hash,Eq,PartialEq)]
+#[derive(Clone,Copy,Default,Hash,Eq,PartialEq)]
 pub struct Planar64Vec3(glam::I64Vec3);
 impl Planar64Vec3{
 	pub const ZERO:Self=Planar64Vec3(glam::I64Vec3::ZERO);
@@ -592,6 +592,15 @@ pub struct Planar64Mat3{
 	y_axis:Planar64Vec3,
 	z_axis:Planar64Vec3,
 }
+impl Default for Planar64Mat3{
+	fn default() -> Self {
+		Self{
+			x_axis:Planar64Vec3::X,
+			y_axis:Planar64Vec3::Y,
+			z_axis:Planar64Vec3::Z,
+		}
+	}
+}
 impl std::ops::Mul<Planar64Vec3> for Planar64Mat3{
 	type Output=Planar64Vec3;
 	#[inline]
@@ -627,7 +636,7 @@ impl Planar64Mat3{
 }
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Default)]
 pub struct Planar64Affine3{
 	matrix3:Planar64Mat3,//includes scale above 1
 	transform:Planar64Vec3,
