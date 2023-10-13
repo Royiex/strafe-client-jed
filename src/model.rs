@@ -1,10 +1,10 @@
-use crate::integer::{Unit32Vec3,Planar64,Planar64Vec3,Planar64Affine3};
-pub struct TextureCoordinate([f32;2]);
-pub struct Color4(glam::Vec4);
+use crate::integer::{Planar64,Planar64Vec3,Planar64Affine3};
+pub type TextureCoordinate=glam::Vec2;
+pub type Color4=glam::Vec4;
 
 pub struct ModelVertex {
 	pub pos:Planar64Vec3,
-	pub normal:Unit32Vec3,
+	pub normal:Planar64Vec3,
 	pub tex:TextureCoordinate,
 	pub color:Color4,
 }
@@ -23,10 +23,10 @@ pub struct IndexedGroup{
 	pub polys:Vec<IndexedPolygon>,
 }
 pub struct IndexedModel{
-	pub unique_pos:Vec<[f32; 3]>,
-	pub unique_tex:Vec<[f32; 2]>,
-	pub unique_normal:Vec<[f32; 3]>,
-	pub unique_color:Vec<[f32; 4]>,
+	pub unique_pos:Vec<Planar64Vec3>,
+	pub unique_normal:Vec<Planar64Vec3>,
+	pub unique_tex:Vec<TextureCoordinate>,
+	pub unique_color:Vec<Color4>,
 	pub unique_vertices:Vec<IndexedVertex>,
 	pub groups: Vec<IndexedGroup>,
 	pub instances:Vec<ModelInstance>,
@@ -41,7 +41,7 @@ pub struct ModelInstance{
 impl std::default::Default for ModelInstance{
 	fn default() -> Self {
 		Self{
-			color:Color4(glam::Vec4::ONE),
+			color:Color4::ONE,
 			transform:Default::default(),
 			attributes:Default::default(),
 			temp_indexing:Default::default(),
@@ -203,7 +203,7 @@ impl std::default::Default for CollisionAttributes{
 	}
 }
 
-pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:[f32;4]) -> Vec<IndexedModel>{
+pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:Color4)->Vec<IndexedModel>{
 	let mut unique_vertex_index = std::collections::HashMap::<obj::IndexTuple,u32>::new();
 	return data.objects.iter().map(|object|{
 		unique_vertex_index.clear();
@@ -233,9 +233,9 @@ pub fn generate_indexed_model_list_from_obj(data:obj::ObjData,color:[f32;4]) -> 
 			}
 		}).collect();
 		IndexedModel{
-			unique_pos: data.position.clone(),
-			unique_tex: data.texture.clone(),
-			unique_normal: data.normal.clone(),
+			unique_pos: data.position.iter().map(|&v|Planar64Vec3::try_from(v).unwrap()).collect(),
+			unique_tex: data.texture.iter().map(|&v|TextureCoordinate::from_array(v)).collect(),
+			unique_normal: data.normal.iter().map(|&v|Planar64Vec3::try_from(v).unwrap()).collect(),
 			unique_color: vec![color],
 			unique_vertices,
 			groups,
