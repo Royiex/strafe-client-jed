@@ -18,7 +18,12 @@ pub enum CubeFace{
 	Bottom,
 	Front,
 }
-const CUBE_DEFAULT_TEXTURE_COORDS:[TextureCoordinate;4]=[[0.0,0.0].into(),[1.0,0.0].into(),[1.0,1.0].into(),[0.0,1.0].into()];
+const CUBE_DEFAULT_TEXTURE_COORDS:[TextureCoordinate;4]=[
+	TextureCoordinate::new(0.0,0.0),
+	TextureCoordinate::new(1.0,0.0),
+	TextureCoordinate::new(1.0,1.0),
+	TextureCoordinate::new(0.0,1.0),
+];
 const CUBE_DEFAULT_VERTICES:[Planar64Vec3;8]=[
 	Planar64Vec3::int(-1,-1, 1),//0 left bottom back
 	Planar64Vec3::int( 1,-1, 1),//1 right bottom back
@@ -140,11 +145,11 @@ pub fn unit_cube()->crate::model::IndexedModel{
 	t.insert(CubeFace::Front,FaceDescription::default());
 	generate_partial_unit_cube(t)
 }
-const TEAPOT_TRANSFORM:crate::integer::Planar64Mat3=crate::integer::Planar64Mat3::int_from_cols_array([0,1,0, -1,0,0, 0,0,1])/10;
+const TEAPOT_TRANSFORM:crate::integer::Planar64Mat3=crate::integer::Planar64Mat3::int_from_cols_array([0,1,0, -1,0,0, 0,0,1]);
 pub fn unit_cylinder()->crate::model::IndexedModel{
 	let mut indexed_model=crate::model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap(),Color4::ONE).remove(0);
 	for pos in indexed_model.unique_pos.iter_mut(){
-		*pos=TEAPOT_TRANSFORM*(*pos);
+		*pos=TEAPOT_TRANSFORM*(*pos)/10;
 	}
 	indexed_model
 }

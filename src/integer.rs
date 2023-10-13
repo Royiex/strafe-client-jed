@@ -78,7 +78,7 @@ impl std::ops::Div<i64> for Time{
 }
 
 #[inline]
-fn gcd(mut a:u64,mut b:u64)->u64{
+const fn gcd(mut a:u64,mut b:u64)->u64{
 	while b!=0{
 		(a,b)=(b,a.rem_euclid(b));
 	};
@@ -93,7 +93,7 @@ impl Ratio64{
 	pub const ZERO:Self=Ratio64{num:0,den:unsafe{std::num::NonZeroU64::new_unchecked(1)}};
 	pub const ONE:Self=Ratio64{num:1,den:unsafe{std::num::NonZeroU64::new_unchecked(1)}};
 	#[inline]
-	pub fn new(num:i64,den:u64)->Option<Ratio64>{
+	pub const fn new(num:i64,den:u64)->Option<Ratio64>{
 		match std::num::NonZeroU64::new(den){
 			Some(_)=>{
 				let d=gcd(num.unsigned_abs(),den);
@@ -306,6 +306,7 @@ impl Angle32{
 	}
 	*/
 }
+const ANGLE32_FLOAT64_PI:f64=(1i64<<31) as f64;
 impl Into<f32> for Angle32{
 	#[inline]
 	fn into(self)->f32{
@@ -380,22 +381,25 @@ impl Planar64{
 	pub const ZERO:Self=Self(0);
 	pub const ONE:Self=Self(1<<32);
 	#[inline]
-	pub fn int(num:i32)->Self{
+	pub const fn int(num:i32)->Self{
 		Self(Self::ONE.0*num as i64)
 	}
 	#[inline]
-	pub fn raw(num:i64)->Self{
+	pub const fn raw(num:i64)->Self{
 		Self(num)
 	}
 	#[inline]
-	pub fn get(&self)->i64{
+	pub const fn get(&self)->i64{
 		self.0
 	}
 }
+const PLANAR64_FLOAT32_ONE:f32=(1u64<<32) as f32;
+const PLANAR64_FLOAT32_MUL:f32=1.0/PLANAR64_FLOAT32_ONE;
+const PLANAR64_FLOAT64_ONE:f64=(1u64<<32) as f64;
 impl Into<f32> for Planar64{
 	#[inline]
 	fn into(self)->f32{
-		self.0 as f32*(1.0/(1<<32) as f32)
+		self.0 as f32*PLANAR64_FLOAT32_MUL
 	}
 }
 impl From<Ratio64> for Planar64{
@@ -519,7 +523,7 @@ impl Planar64Vec3{
 	pub const MIN:Self=Planar64Vec3(glam::I64Vec3::MIN);
 	pub const MAX:Self=Planar64Vec3(glam::I64Vec3::MAX);
 	#[inline]
-	pub fn int(x:i32,y:i32,z:i32)->Self{
+	pub const fn int(x:i32,y:i32,z:i32)->Self{
 		Self(glam::i64vec3((x as i64)<<32,(y as i64)<<32,(z as i64)<<32))
 	}
 	#[inline]
@@ -592,7 +596,7 @@ impl Into<glam::Vec3> for Planar64Vec3{
 			self.0.x as f32,
 			self.0.y as f32,
 			self.0.z as f32,
-		)*(1.0/(1<<32) as f32)
+		)*PLANAR64_FLOAT32_MUL
 	}
 }
 impl TryFrom<[f32;3]> for Planar64Vec3{
@@ -731,7 +735,7 @@ impl Planar64Mat3{
 			z_axis,
 		}
 	}
-	pub fn int_from_cols_array(array:[i32;9])->Self{
+	pub const fn int_from_cols_array(array:[i32;9])->Self{
 		Self{
 			x_axis:Planar64Vec3::int(array[0],array[1],array[2]),
 			y_axis:Planar64Vec3::int(array[3],array[4],array[5]),
@@ -740,9 +744,9 @@ impl Planar64Mat3{
 	}
 	#[inline]
 	pub fn from_rotation_y(angle:Angle32)->Self{
-		let theta=angle.0 as f64*(std::f64::consts::PI/((1<<31) as f64));
+		let theta=angle.0 as f64*(std::f64::consts::PI/ANGLE32_FLOAT64_PI);
 		let (s,c)=theta.sin_cos();
-		let (c,s)=(c*((1<<32) as f64),s*((1<<32) as f64));
+		let (c,s)=(c*PLANAR64_FLOAT64_ONE,s*PLANAR64_FLOAT64_ONE);
 		//TODO: fix this rounding towards 0
 		let (c,s):(i64,i64)=(unsafe{c.to_int_unchecked()},unsafe{s.to_int_unchecked()});
 		Self::from_cols(
@@ -814,8 +818,8 @@ impl Into<glam::Mat4> for Planar64Affine3{
 			self.matrix3.x_axis.0.x as f32,self.matrix3.x_axis.0.x as f32,self.matrix3.x_axis.0.x as f32,0.0,
 			self.matrix3.y_axis.0.x as f32,self.matrix3.y_axis.0.x as f32,self.matrix3.y_axis.0.x as f32,0.0,
 			self.matrix3.z_axis.0.x as f32,self.matrix3.z_axis.0.x as f32,self.matrix3.z_axis.0.x as f32,0.0,
-			self.translation.0.x as f32,self.translation.0.y as f32,self.translation.0.z as f32,(1<<32) as f32
-		])*(1.0/(1<<32) as f32)
+			self.translation.0.x as f32,self.translation.0.y as f32,self.translation.0.z as f32,PLANAR64_FLOAT32_ONE
+		])*PLANAR64_FLOAT32_MUL
 	}
 }
 impl TryFrom<glam::Affine3A> for Planar64Affine3{
