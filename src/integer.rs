@@ -399,6 +399,47 @@ impl From<Ratio64> for Planar64{
 		Self(Self::ONE.0*ratio.num/ratio.den.get() as i64)
 	}
 }
+#[derive(Debug)]
+enum Planar64TryFromFloatError{
+	Nan,
+	Infinite,
+	Subnormal,
+	HighlyNegativeExponent(i16),
+	HighlyPositiveExponent(i16),
+}
+fn planar64_from_mes((m,e,s):(u64,i16,i8))->Result<Planar64,Planar64TryFromFloatError>{
+	if e< -32{
+		Err(Planar64TryFromFloatError::HighlyNegativeExponent(e))
+	}else if e<32-52{
+		Ok(Planar64((m as i64)*(s as i64)<<e))
+	}else{
+		Err(Planar64TryFromFloatError::HighlyPositiveExponent(e))
+	}
+}
+impl TryFrom<f32> for Planar64{
+	type Error=Planar64TryFromFloatError;
+	fn try_from(value:f32)->Result<Self,Self::Error>{
+		match value.classify(){
+			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
+			std::num::FpCategory::Infinite=>Err(Self::Error::Infinite),
+			std::num::FpCategory::Zero=>Ok(Self::ZERO),
+			std::num::FpCategory::Subnormal=>Err(Self::Error::Subnormal),
+			std::num::FpCategory::Normal=>planar64_from_mes(integer_decode_f32(value)),
+		}
+	}
+}
+impl TryFrom<f64> for Planar64{
+	type Error=Planar64TryFromFloatError;
+	fn try_from(value:f64)->Result<Self,Self::Error>{
+		match value.classify(){
+			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
+			std::num::FpCategory::Infinite=>Err(Self::Error::Infinite),
+			std::num::FpCategory::Zero=>Ok(Self::ZERO),
+			std::num::FpCategory::Subnormal=>Err(Self::Error::Subnormal),
+			std::num::FpCategory::Normal=>planar64_from_mes(integer_decode_f64(value)),
+		}
+	}
+}
 impl std::ops::Neg for Planar64{
 	type Output=Planar64;
 	#[inline]
@@ -542,6 +583,16 @@ impl Into<glam::Vec3> for Planar64Vec3{
 			self.0.y as f32/(1<<32) as f32,
 			self.0.z as f32/(1<<32) as f32,
 		)
+	}
+}
+impl TryFrom<[f32;3]> for Planar64Vec3{
+	type Error=Planar64TryFromFloatError;
+	fn try_from(value:[f32;3])->Result<Self,Self::Error>{
+		Ok(Self(glam::i64vec3(
+			Planar64::try_from(value[0])?.0,
+			Planar64::try_from(value[1])?.0,
+			Planar64::try_from(value[2])?.0,
+		)))
 	}
 }
 impl std::ops::Neg for Planar64Vec3{
