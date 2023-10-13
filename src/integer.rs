@@ -234,7 +234,7 @@ impl Ratio64Vec2{
 		Self{x,y}
 	}
 	#[inline]
-	pub fn mul_int(self,rhs:glam::I64Vec2)->glam::I64Vec2{
+	pub fn mul_int(&self,rhs:glam::I64Vec2)->glam::I64Vec2{
 		glam::i64vec2(
 			self.x.mul_int(rhs.x),
 			self.y.mul_int(rhs.y),
@@ -652,6 +652,17 @@ impl std::ops::SubAssign<Planar64Vec3> for Planar64Vec3{
 	#[inline]
 	fn sub_assign(&mut self,rhs:Planar64Vec3){
 		*self=*self-rhs
+	}
+}
+impl std::ops::Mul<Planar64Vec3> for Planar64Vec3{
+	type Output=Planar64Vec3;
+	#[inline]
+	fn mul(self, rhs: Planar64Vec3) -> Self::Output {
+		Planar64Vec3(glam::i64vec3(
+			(((self.0.x as i128)*(rhs.0.x as i128))>>64) as i64,
+			(((self.0.y as i128)*(rhs.0.y as i128))>>64) as i64,
+			(((self.0.z as i128)*(rhs.0.z as i128))>>64) as i64
+		))
 	}
 }
 impl std::ops::Mul<Planar64> for Planar64Vec3{
