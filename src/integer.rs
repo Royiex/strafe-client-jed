@@ -141,7 +141,7 @@ fn integer_decode_f64(f: f64) -> (u64, i16, i8) {
     (mantissa, exponent, sign)
 }
 #[derive(Debug)]
-enum Ratio64TryFromFloatError{
+pub enum Ratio64TryFromFloatError{
 	Nan,
 	Infinite,
 	Subnormal,
@@ -409,7 +409,7 @@ impl From<Ratio64> for Planar64{
 	}
 }
 #[derive(Debug)]
-enum Planar64TryFromFloatError{
+pub enum Planar64TryFromFloatError{
 	Nan,
 	Infinite,
 	Subnormal,
