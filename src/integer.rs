@@ -378,7 +378,7 @@ impl Planar64{
 impl Into<f32> for Planar64{
 	#[inline]
 	fn into(self)->f32{
-		self.0 as f32/(1<<32) as f32
+		self.0 as f32*(1.0/(1<<32) as f32)
 	}
 }
 impl From<Ratio64> for Planar64{
@@ -567,10 +567,10 @@ impl Planar64Vec3{
 impl Into<glam::Vec3> for Planar64Vec3{
 	fn into(self)->glam::Vec3{
 		glam::vec3(
-			self.0.x as f32/(1<<32) as f32,
-			self.0.y as f32/(1<<32) as f32,
-			self.0.z as f32/(1<<32) as f32,
-		)
+			self.0.x as f32,
+			self.0.y as f32,
+			self.0.z as f32,
+		)*(1.0/(1<<32) as f32)
 	}
 }
 impl TryFrom<[f32;3]> for Planar64Vec3{
