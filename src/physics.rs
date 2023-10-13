@@ -340,7 +340,7 @@ impl ModelPhysics {
 	fn from_model_transform_attributes(model:&crate::model::IndexedModel,transform:&crate::integer::Planar64Affine3,attributes:PhysicsCollisionAttributes)->Self{
 		let mut aabb=TreyMesh::default();
 		for indexed_vertex in &model.unique_vertices {
-			aabb.grow(transform.transform_point3(Planar64Vec3::from_array(model.unique_pos[indexed_vertex.pos as usize])));
+			aabb.grow(transform.transform_point3(model.unique_pos[indexed_vertex.pos as usize]));
 		}
 		Self{
 			mesh:aabb,
