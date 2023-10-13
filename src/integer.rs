@@ -627,6 +627,17 @@ impl std::ops::Mul<Planar64> for Planar64Vec3{
 		))
 	}
 }
+impl std::ops::Mul<i64> for Planar64Vec3{
+	type Output=Planar64Vec3;
+	#[inline]
+	fn mul(self,rhs:i64)->Self::Output {
+		Planar64Vec3(glam::i64vec3(
+			self.0.x*rhs,
+			self.0.y*rhs,
+			self.0.z*rhs
+		))
+	}
+}
 impl std::ops::Mul<Time> for Planar64Vec3{
 	type Output=Planar64Vec3;
 	#[inline]
@@ -708,6 +719,9 @@ pub struct Planar64Affine3{
 }
 
 impl Planar64Affine3{
+	pub fn new(matrix3:Planar64Mat3,transform:Planar64Vec3)->Self{
+		Self{matrix3,transform}
+	}
 	#[inline]
 	pub fn transform_point3(&self,point:Planar64Vec3) -> Planar64Vec3{
 		Planar64Vec3(
