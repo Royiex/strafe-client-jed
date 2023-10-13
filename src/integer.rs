@@ -731,6 +731,13 @@ impl Planar64Mat3{
 			z_axis,
 		}
 	}
+	pub fn int_from_cols_array(array:[i32;9])->Self{
+		Self{
+			x_axis:Planar64Vec3::int(array[0],array[1],array[2]),
+			y_axis:Planar64Vec3::int(array[3],array[4],array[5]),
+			z_axis:Planar64Vec3::int(array[6],array[7],array[8]),
+		}
+	}
 	#[inline]
 	pub fn from_rotation_y(angle:Angle32)->Self{
 		let theta=angle.0 as f64*(std::f64::consts::PI/((1<<31) as f64));
@@ -764,6 +771,17 @@ impl TryFrom<glam::Mat3A> for Planar64Mat3{
 			y_axis:Planar64Vec3::try_from(value.y_axis)?,
 			z_axis:Planar64Vec3::try_from(value.z_axis)?,
 		})
+	}
+}
+impl std::ops::Div<i64> for Planar64Mat3{
+	type Output=Planar64Mat3;
+	#[inline]
+	fn div(self,rhs:i64)->Self::Output{
+		Planar64Mat3{
+			x_axis:self.x_axis/rhs,
+			y_axis:self.y_axis/rhs,
+			z_axis:self.z_axis/rhs,
+		}
 	}
 }
 
