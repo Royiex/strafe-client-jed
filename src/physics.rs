@@ -219,7 +219,7 @@ impl std::default::Default for StyleModifiers{
 			controls_mask: !0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held: 0,
 			strafe_tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
-			gravity: Planar64Vec3::int(0,100,0),
+			gravity: Planar64Vec3::int(0,-100,0),
 			friction: Planar64::int(12)/10,
 			walk_accel: Planar64::int(90),
 			mv: Planar64::int(27)/10,
