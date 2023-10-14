@@ -148,17 +148,39 @@ pub enum Ratio64TryFromFloatError{
 	HighlyNegativeExponent(i16),
 	HighlyPositiveExponent(i16),
 }
+const MAX_DENOMINATOR:u128=u64::MAX as u128;
 #[inline]
 fn ratio64_from_mes((m,e,s):(u64,i16,i8))->Result<Ratio64,Ratio64TryFromFloatError>{
 	if e< -127{
-		//bye bye
+		//this can also just be zero
 		Err(Ratio64TryFromFloatError::HighlyNegativeExponent(e))
 	}else if e< -63{
-		//TODO
-		Err(Ratio64TryFromFloatError::HighlyNegativeExponent(e))
+		//approximate input ratio within denominator limit
+		let mut target_num=m as u128;
+		let mut target_den=1u128<<-e;
+
+		let mut num=1;
+		let mut den=0;
+		let mut prev_num=0;
+		let mut prev_den=1;
+
+		while target_den!=0{
+			let whole=target_num/target_den;
+			(target_num,target_den)=(target_den,target_num-whole*target_den);
+			let new_num=whole*num+prev_num;
+			let new_den=whole*den+prev_den;
+			if MAX_DENOMINATOR<new_den{
+				break;
+			}else{
+				(prev_num,prev_den)=(num,den);
+				(num,den)=(new_num,new_den);
+			}
+		}
+
+		Ok(Ratio64::new(num as i64,den as u64).unwrap())
 	}else if e<0{
 		Ok(Ratio64::new((m as i64)*(s as i64),1<<-e).unwrap())
-	}else if e<62-52{
+	}else if (64-m.leading_zeros() as i16)+e<64{
 		Ok(Ratio64::new((m as i64)*(s as i64)*(1<<e),1).unwrap())
 	}else{
 		Err(Ratio64TryFromFloatError::HighlyPositiveExponent(e))
