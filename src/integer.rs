@@ -550,13 +550,13 @@ impl std::ops::Div<Planar64> for Planar64{
 pub struct Planar64Vec3(glam::I64Vec3);
 impl Planar64Vec3{
 	pub const ZERO:Self=Planar64Vec3(glam::I64Vec3::ZERO);
-	pub const ONE:Self=Planar64Vec3(glam::I64Vec3::ONE);
-	pub const X:Self=Planar64Vec3(glam::I64Vec3::X);
-	pub const Y:Self=Planar64Vec3(glam::I64Vec3::Y);
-	pub const Z:Self=Planar64Vec3(glam::I64Vec3::Z);
-	pub const NEG_X:Self=Planar64Vec3(glam::I64Vec3::NEG_X);
-	pub const NEG_Y:Self=Planar64Vec3(glam::I64Vec3::NEG_Y);
-	pub const NEG_Z:Self=Planar64Vec3(glam::I64Vec3::NEG_Z);
+	pub const ONE:Self=Self::int(1,1,1);
+	pub const X:Self=Self::int(1,0,0);
+	pub const Y:Self=Self::int(0,1,0);
+	pub const Z:Self=Self::int(0,0,1);
+	pub const NEG_X:Self=Self::int(-1,0,0);
+	pub const NEG_Y:Self=Self::int(0,-1,0);
+	pub const NEG_Z:Self=Self::int(0,0,-1);
 	pub const MIN:Self=Planar64Vec3(glam::I64Vec3::MIN);
 	pub const MAX:Self=Planar64Vec3(glam::I64Vec3::MAX);
 	#[inline]
