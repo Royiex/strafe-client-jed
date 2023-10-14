@@ -205,12 +205,13 @@ pub struct WorldState{}
 pub struct StyleModifiers{
 	pub controls_mask:u32,//controls which are unable to be activated
 	pub controls_held:u32,//controls which must be active to be able to strafe
+	pub strafe_tick_rate:Ratio64,
+	pub jump_time:Time,
 	pub mv:Planar64,
 	pub walkspeed:Planar64,
 	pub friction:Planar64,
 	pub walk_accel:Planar64,
 	pub gravity:Planar64Vec3,
-	pub strafe_tick_rate:Ratio64,
 	pub hitbox_halfsize:Planar64Vec3,
 }
 impl std::default::Default for StyleModifiers{
@@ -219,6 +220,7 @@ impl std::default::Default for StyleModifiers{
 			controls_mask: !0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held: 0,
 			strafe_tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			jump_time: Time::from_nanos(715_588_000/2*100),//0.715588/2.0*100.0
 			gravity: Planar64Vec3::int(0,-100,0),
 			friction: Planar64::int(12)/10,
 			walk_accel: Planar64::int(90),
@@ -274,6 +276,10 @@ impl StyleModifiers{
 			control_dir-=Self::UP_DIR;
 		}
 		return control_dir
+	}
+
+	fn get_jump_power(&self)->Planar64Vec3{
+		Planar64Vec3::int(0,715588,0)/(2*1000000/100)
 	}
 }
 
@@ -643,7 +649,7 @@ impl PhysicsState {
 	}
 	fn jump(&mut self){
 		self.grounded=false;//do I need this?
-		let mut v=self.body.velocity+Planar64Vec3::int(0,715588,0)/(2*1000000/100);//0.715588/2.0*100.0
+		let mut v=self.body.velocity+self.style.get_jump_power();
 		self.contact_constrain_velocity(&mut v);
 		self.body.velocity=v;
 	}
