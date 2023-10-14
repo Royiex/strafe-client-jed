@@ -421,6 +421,9 @@ impl Planar64{
 	pub const fn get(&self)->i64{
 		self.0
 	}
+	pub fn sqrt(&self)->Self{
+		Planar64(unsafe{(((self.0 as i128)<<32) as f64).sqrt().to_int_unchecked()})
+	}
 }
 const PLANAR64_FLOAT32_ONE:f32=(1u64<<32) as f32;
 const PLANAR64_FLOAT32_MUL:f32=1.0/PLANAR64_FLOAT32_ONE;
@@ -911,4 +914,12 @@ impl std::fmt::Display for Planar64Affine3{
 			Into::<f32>::into(self.matrix3.z_axis.x()),Into::<f32>::into(self.matrix3.z_axis.y()),Into::<f32>::into(self.matrix3.z_axis.z()),
 		)
 	}
+}
+
+#[test]
+fn test_sqrt(){
+	let r=Planar64::int(400);
+	println!("r{}",r.get());
+	let s=r.sqrt();
+	println!("s{}",s.get());
 }
