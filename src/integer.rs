@@ -114,31 +114,31 @@ impl Ratio64{
 //from num_traits crate
 #[inline]
 fn integer_decode_f32(f: f32) -> (u64, i16, i8) {
-    let bits: u32 = f.to_bits();
-    let sign: i8 = if bits >> 31 == 0 { 1 } else { -1 };
-    let mut exponent: i16 = ((bits >> 23) & 0xff) as i16;
-    let mantissa = if exponent == 0 {
-        (bits & 0x7fffff) << 1
-    } else {
-        (bits & 0x7fffff) | 0x800000
-    };
-    // Exponent bias + mantissa shift
-    exponent -= 127 + 23;
-    (mantissa as u64, exponent, sign)
+	let bits: u32 = f.to_bits();
+	let sign: i8 = if bits >> 31 == 0 { 1 } else { -1 };
+	let mut exponent: i16 = ((bits >> 23) & 0xff) as i16;
+	let mantissa = if exponent == 0 {
+		(bits & 0x7fffff) << 1
+	} else {
+		(bits & 0x7fffff) | 0x800000
+	};
+	// Exponent bias + mantissa shift
+	exponent -= 127 + 23;
+	(mantissa as u64, exponent, sign)
 }
 #[inline]
 fn integer_decode_f64(f: f64) -> (u64, i16, i8) {
-    let bits: u64 = f.to_bits();
-    let sign: i8 = if bits >> 63 == 0 { 1 } else { -1 };
-    let mut exponent: i16 = ((bits >> 52) & 0x7ff) as i16;
-    let mantissa = if exponent == 0 {
-        (bits & 0xfffffffffffff) << 1
-    } else {
-        (bits & 0xfffffffffffff) | 0x10000000000000
-    };
-    // Exponent bias + mantissa shift
-    exponent -= 1023 + 52;
-    (mantissa, exponent, sign)
+	let bits: u64 = f.to_bits();
+	let sign: i8 = if bits >> 63 == 0 { 1 } else { -1 };
+	let mut exponent: i16 = ((bits >> 52) & 0x7ff) as i16;
+	let mantissa = if exponent == 0 {
+		(bits & 0xfffffffffffff) << 1
+	} else {
+		(bits & 0xfffffffffffff) | 0x10000000000000
+	};
+	// Exponent bias + mantissa shift
+	exponent -= 1023 + 52;
+	(mantissa, exponent, sign)
 }
 #[derive(Debug)]
 pub enum Ratio64TryFromFloatError{
