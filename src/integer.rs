@@ -87,28 +87,27 @@ const fn gcd(mut a:u64,mut b:u64)->u64{
 #[derive(Clone,Copy,Hash)]
 pub struct Ratio64{
 	num:i64,
-	den:std::num::NonZeroU64,
+	den:u64,
 }
 impl Ratio64{
-	pub const ZERO:Self=Ratio64{num:0,den:unsafe{std::num::NonZeroU64::new_unchecked(1)}};
-	pub const ONE:Self=Ratio64{num:1,den:unsafe{std::num::NonZeroU64::new_unchecked(1)}};
+	pub const ZERO:Self=Ratio64{num:0,den:1};
+	pub const ONE:Self=Ratio64{num:1,den:1};
 	#[inline]
 	pub const fn new(num:i64,den:u64)->Option<Ratio64>{
-		match std::num::NonZeroU64::new(den){
-			Some(_)=>{
-				let d=gcd(num.unsigned_abs(),den);
-				Some(Self{num:num/d as i64,den:unsafe{std::num::NonZeroU64::new_unchecked(den/d)}})
-			},
-			None=>None,
+		if den==0{
+			None
+		}else{
+			let d=gcd(num.unsigned_abs(),den);
+			Some(Self{num:num/d as i64,den:den/d})
 		}
 	}
 	#[inline]
 	pub fn mul_int(self,rhs:i64)->i64{
-		rhs*self.num/self.den.get() as i64
+		rhs*self.num/self.den as i64
 	}
 	#[inline]
 	pub fn rhs_div_int(self,rhs:i64)->i64{
-		rhs*self.den.get() as i64/self.num
+		rhs*self.den as i64/self.num
 	}
 }
 //from num_traits crate
@@ -216,11 +215,11 @@ impl std::ops::Mul<Ratio64> for Ratio64{
 	type Output=Ratio64;
 	#[inline]
 	fn mul(self,rhs:Ratio64)->Self::Output{
-		let (num,den)=(self.num*rhs.num,self.den.get()*rhs.den.get());
+		let (num,den)=(self.num*rhs.num,self.den*rhs.den);
 		let d=gcd(num.unsigned_abs(),den);
 		Self{
 			num:num/d as i64,
-			den:unsafe{std::num::NonZeroU64::new_unchecked(den/d)},
+			den:den/d,
 		}
 	}
 }
@@ -240,7 +239,7 @@ impl std::ops::Div<u64> for Ratio64{
 	fn div(self,rhs:u64)->Self::Output {
 		Self{
 			num:self.num,
-			den:std::num::NonZeroU64::new(self.den.get()*rhs).unwrap(),
+			den:self.den*rhs,
 		}
 	}
 }
@@ -426,7 +425,7 @@ impl Into<f32> for Planar64{
 impl From<Ratio64> for Planar64{
 	#[inline]
 	fn from(ratio:Ratio64)->Self{
-		Self(Self::ONE.0*ratio.num/ratio.den.get() as i64)
+		Self((((ratio.num as i128)<<32)/ratio.den as i128) as i64)
 	}
 }
 #[derive(Debug)]
