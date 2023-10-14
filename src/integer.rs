@@ -489,6 +489,13 @@ impl TryFrom<f64> for Planar64{
 		}
 	}
 }
+impl std::fmt::Display for Planar64{
+	fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{
+		write!(f,"{:.3}",
+			Into::<f32>::into(*self),
+		)
+	}
+}
 impl std::ops::Neg for Planar64{
 	type Output=Planar64;
 	#[inline]
@@ -830,6 +837,15 @@ impl TryFrom<glam::Mat3A> for Planar64Mat3{
 			y_axis:Planar64Vec3::try_from(value.y_axis)?,
 			z_axis:Planar64Vec3::try_from(value.z_axis)?,
 		})
+	}
+}
+impl std::fmt::Display for Planar64Mat3{
+	fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{
+		write!(f,"\n{:.3},{:.3},{:.3}\n{:.3},{:.3},{:.3}\n{:.3},{:.3},{:.3}",
+			Into::<f32>::into(self.x_axis.x()),Into::<f32>::into(self.x_axis.y()),Into::<f32>::into(self.x_axis.z()),
+			Into::<f32>::into(self.y_axis.x()),Into::<f32>::into(self.y_axis.y()),Into::<f32>::into(self.y_axis.z()),
+			Into::<f32>::into(self.z_axis.x()),Into::<f32>::into(self.z_axis.y()),Into::<f32>::into(self.z_axis.z()),
+		)
 	}
 }
 impl std::ops::Div<i64> for Planar64Mat3{
