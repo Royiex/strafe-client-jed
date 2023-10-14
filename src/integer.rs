@@ -319,21 +319,20 @@ impl Angle32{
 	#[inline]
 	pub fn cos(&self)->Unit32{
 		//TODO: fix this rounding towards 0
-		Unit32(unsafe{((self.0 as f64*(std::f64::consts::PI/((1<<31) as f64))).cos()*((1<<30) as f64)).to_int_unchecked()})
+		Unit32(unsafe{((self.0 as f64*ANGLE32_TO_FLOAT64_RADIANS).cos()*UNIT32_ONE_FLOAT64).to_int_unchecked()})
 	}
 	#[inline]
 	pub fn sin(&self)->Unit32{
 		//TODO: fix this rounding towards 0
-		Unit32(unsafe{((self.0 as f64*(std::f64::consts::PI/((1<<31) as f64))).sin()*((1<<30) as f64)).to_int_unchecked()})
+		Unit32(unsafe{((self.0 as f64*ANGLE32_TO_FLOAT64_RADIANS).sin()*UNIT32_ONE_FLOAT64).to_int_unchecked()})
 	}
 	*/
 }
-const ANGLE32_FLOAT64_PI:f64=(1i64<<31) as f64;
+const ANGLE32_TO_FLOAT64_RADIANS:f64=std::f64::consts::PI/((1i64<<31) as f64);
 impl Into<f32> for Angle32{
 	#[inline]
 	fn into(self)->f32{
-		//TODO: make this good
-		(self.0 as f64/-(i32::MIN as f64)*std::f64::consts::PI) as f32
+		(self.0 as f64*ANGLE32_TO_FLOAT64_RADIANS) as f32
 	}
 }
 impl std::ops::Neg for Angle32{
@@ -381,7 +380,7 @@ impl Unit32{
 		Planar64(4*(self.0 as i64))
 	}
 }
-
+const UNIT32_ONE_FLOAT64=((1<<30) as f64);
 ///[-1.0,1.0] = [-2^30,2^30]
 pub struct Unit32Vec3(glam::IVec3);
 impl TryFrom<[f32;3]> for Unit32Vec3{
@@ -777,7 +776,7 @@ impl Planar64Mat3{
 	}
 	#[inline]
 	pub fn from_rotation_y(angle:Angle32)->Self{
-		let theta=angle.0 as f64*(std::f64::consts::PI/ANGLE32_FLOAT64_PI);
+		let theta=angle.0 as f64*ANGLE32_TO_FLOAT64_RADIANS;
 		let (s,c)=theta.sin_cos();
 		let (c,s)=(c*PLANAR64_FLOAT64_ONE,s*PLANAR64_FLOAT64_ONE);
 		//TODO: fix this rounding towards 0
