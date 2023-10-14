@@ -169,7 +169,7 @@ impl PhysicsCamera {
 	pub fn move_mouse(&mut self,mouse_pos:glam::IVec2){
 		let mut unclamped_mouse_pos=self.clamped_mouse_pos+mouse_pos-self.mouse.pos;
 		unclamped_mouse_pos.y=unclamped_mouse_pos.y.clamp(
-			self.sensitivity.x.rhs_div_int(self.angle_pitch_lower_limit.get() as i64) as i32,
+			self.sensitivity.y.rhs_div_int(self.angle_pitch_lower_limit.get() as i64) as i32,
 			self.sensitivity.y.rhs_div_int(self.angle_pitch_upper_limit.get() as i64) as i32,
 		);
 		self.clamped_mouse_pos=unclamped_mouse_pos;
