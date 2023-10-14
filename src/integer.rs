@@ -439,11 +439,19 @@ pub enum Planar64TryFromFloatError{
 }
 #[inline]
 fn planar64_from_mes((m,e,s):(u64,i16,i8))->Result<Planar64,Planar64TryFromFloatError>{
-	if e< -32{
-		Err(Planar64TryFromFloatError::HighlyNegativeExponent(e))
-	}else if e<32-52{
-		Ok(Planar64((m as i64)*(s as i64)<<e))
-	}else{
+	let e32=e+32;
+	if e32<0&&(m>>-e32)==0{//shifting m will underflow to 0
+		Ok(Planar64::ZERO)
+		// println!("m{} e{} s{}",m,e,s);
+		// println!("f={}",(m as f64)*(2.0f64.powf(e as f64))*(s as f64));
+		// Err(Planar64TryFromFloatError::HighlyNegativeExponent(e))
+	}else if (64-m.leading_zeros() as i16)+e32<64{//shifting m will not overflow
+		if e32<0{
+			Ok(Planar64((m as i64)*(s as i64)>>-e32))
+		}else{
+			Ok(Planar64((m as i64)*(s as i64)<<e32))
+		}
+	}else{//if shifting m will overflow (prev check failed)
 		Err(Planar64TryFromFloatError::HighlyPositiveExponent(e))
 	}
 }
