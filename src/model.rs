@@ -1,13 +1,6 @@
 use crate::integer::{Planar64,Planar64Vec3,Planar64Affine3};
 pub type TextureCoordinate=glam::Vec2;
 pub type Color4=glam::Vec4;
-
-pub struct ModelVertex {
-	pub pos:Planar64Vec3,
-	pub normal:Planar64Vec3,
-	pub tex:TextureCoordinate,
-	pub color:Color4,
-}
 #[derive(Clone,Hash,PartialEq,Eq)]
 pub struct IndexedVertex{
 	pub pos:u32,
