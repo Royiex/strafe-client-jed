@@ -38,7 +38,7 @@ impl From<Planar64> for Time{
 impl std::fmt::Display for Time{
 	#[inline]
 	fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{
-		write!(f,"{}s+{}ns",self.0/Self::ONE_SECOND.0,self.0%Self::ONE_SECOND.0)
+		write!(f,"{}s+{:09}ns",self.0/Self::ONE_SECOND.0,self.0%Self::ONE_SECOND.0)
 	}
 }
 impl std::ops::Neg for Time{
