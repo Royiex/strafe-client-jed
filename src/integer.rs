@@ -871,3 +871,13 @@ impl TryFrom<glam::Affine3A> for Planar64Affine3{
 		})
 	}
 }
+impl std::fmt::Display for Planar64Affine3{
+	fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{
+		write!(f,"translation: {:.3},{:.3},{:.3}\nmatrix3:\n{:.3},{:.3},{:.3}\n{:.3},{:.3},{:.3}\n{:.3},{:.3},{:.3}",
+			Into::<f32>::into(self.translation.x()),Into::<f32>::into(self.translation.y()),Into::<f32>::into(self.translation.z()),
+			Into::<f32>::into(self.matrix3.x_axis.x()),Into::<f32>::into(self.matrix3.x_axis.y()),Into::<f32>::into(self.matrix3.x_axis.z()),
+			Into::<f32>::into(self.matrix3.y_axis.x()),Into::<f32>::into(self.matrix3.y_axis.y()),Into::<f32>::into(self.matrix3.y_axis.z()),
+			Into::<f32>::into(self.matrix3.z_axis.x()),Into::<f32>::into(self.matrix3.z_axis.y()),Into::<f32>::into(self.matrix3.z_axis.z()),
+		)
+	}
+}
