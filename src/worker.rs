@@ -100,7 +100,7 @@ fn test_worker() {
 	};
 	worker.send(task).unwrap();
 
-	println!("value={:?}",worker.grab_clone());
+	println!("value={}",worker.grab_clone());
 
 	// wait long enough to see print from final task
 	thread::sleep(std::time::Duration::from_secs(1));

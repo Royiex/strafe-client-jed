@@ -418,6 +418,11 @@ impl Body {
 		self.time=time;
 	}
 }
+impl std::fmt::Display for Body{
+	fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{
+		write!(f,"p({}) v({}) a({}) t({})",self.position,self.velocity,self.acceleration,self.time)
+	}
+}
 
 impl Default for PhysicsState{
 	fn default() -> Self {
