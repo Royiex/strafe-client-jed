@@ -425,13 +425,13 @@ impl Planar64{
 		Planar64(unsafe{(((self.0 as i128)<<32) as f64).sqrt().to_int_unchecked()})
 	}
 }
-const PLANAR64_FLOAT32_ONE:f32=(1u64<<32) as f32;
-const PLANAR64_FLOAT32_MUL:f32=1.0/PLANAR64_FLOAT32_ONE;
-const PLANAR64_FLOAT64_ONE:f64=(1u64<<32) as f64;
+const PLANAR64_ONE_FLOAT32:f32=(1u64<<32) as f32;
+const PLANAR64_CONVERT_TO_FLOAT32:f32=1.0/PLANAR64_ONE_FLOAT32;
+const PLANAR64_ONE_FLOAT64:f64=(1u64<<32) as f64;
 impl Into<f32> for Planar64{
 	#[inline]
 	fn into(self)->f32{
-		self.0 as f32*PLANAR64_FLOAT32_MUL
+		self.0 as f32*PLANAR64_CONVERT_TO_FLOAT32
 	}
 }
 impl From<Ratio64> for Planar64{
@@ -643,7 +643,7 @@ impl Into<glam::Vec3> for Planar64Vec3{
 			self.0.x as f32,
 			self.0.y as f32,
 			self.0.z as f32,
-		)*PLANAR64_FLOAT32_MUL
+		)*PLANAR64_CONVERT_TO_FLOAT32
 	}
 }
 impl TryFrom<[f32;3]> for Planar64Vec3{
@@ -811,7 +811,7 @@ impl Planar64Mat3{
 	pub fn from_rotation_y(angle:Angle32)->Self{
 		let theta=angle.0 as f64*ANGLE32_TO_FLOAT64_RADIANS;
 		let (s,c)=theta.sin_cos();
-		let (c,s)=(c*PLANAR64_FLOAT64_ONE,s*PLANAR64_FLOAT64_ONE);
+		let (c,s)=(c*PLANAR64_ONE_FLOAT64,s*PLANAR64_ONE_FLOAT64);
 		//TODO: fix this rounding towards 0
 		let (c,s):(i64,i64)=(unsafe{c.to_int_unchecked()},unsafe{s.to_int_unchecked()});
 		Self::from_cols(
@@ -892,8 +892,8 @@ impl Into<glam::Mat4> for Planar64Affine3{
 			self.matrix3.x_axis.0.x as f32,self.matrix3.x_axis.0.y as f32,self.matrix3.x_axis.0.z as f32,0.0,
 			self.matrix3.y_axis.0.x as f32,self.matrix3.y_axis.0.y as f32,self.matrix3.y_axis.0.z as f32,0.0,
 			self.matrix3.z_axis.0.x as f32,self.matrix3.z_axis.0.y as f32,self.matrix3.z_axis.0.z as f32,0.0,
-			self.translation.0.x as f32,self.translation.0.y as f32,self.translation.0.z as f32,PLANAR64_FLOAT32_ONE
-		])*PLANAR64_FLOAT32_MUL
+			self.translation.0.x as f32,self.translation.0.y as f32,self.translation.0.z as f32,PLANAR64_ONE_FLOAT32
+		])*PLANAR64_CONVERT_TO_FLOAT32
 	}
 }
 impl TryFrom<glam::Affine3A> for Planar64Affine3{
