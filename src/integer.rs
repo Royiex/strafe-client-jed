@@ -84,7 +84,7 @@ const fn gcd(mut a:u64,mut b:u64)->u64{
 	};
 	a
 }
-#[derive(Clone,Copy,Hash)]
+#[derive(Clone,Hash)]
 pub struct Ratio64{
 	num:i64,
 	den:u64,
@@ -102,12 +102,21 @@ impl Ratio64{
 		}
 	}
 	#[inline]
-	pub fn mul_int(self,rhs:i64)->i64{
+	pub fn mul_int(&self,rhs:i64)->i64{
 		rhs*self.num/self.den as i64
 	}
 	#[inline]
-	pub fn rhs_div_int(self,rhs:i64)->i64{
+	pub fn rhs_div_int(&self,rhs:i64)->i64{
 		rhs*self.den as i64/self.num
+	}
+	#[inline]
+	pub fn mul_ref(&self,rhs:&Ratio64)->Ratio64{
+		let (num,den)=(self.num*rhs.num,self.den*rhs.den);
+		let d=gcd(num.unsigned_abs(),den);
+		Self{
+			num:num/d as i64,
+			den:den/d,
+		}
 	}
 }
 //from num_traits crate

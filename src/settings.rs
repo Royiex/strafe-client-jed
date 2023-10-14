@@ -51,12 +51,12 @@ impl UserSettings{
 	}
 	pub fn calculate_sensitivity(&self)->Ratio64Vec2{
 		match &self.sensitivity{
-			&Sensitivity::Exactly{x,y}=>Ratio64Vec2::new(x,y),
+			Sensitivity::Exactly{x,y}=>Ratio64Vec2::new(x.clone(),y.clone()),
 			Sensitivity::SpecifyXDeriveY{x,y}=>match y{
-				&DerivedSensitivity::FromRatio(ratio)=>Ratio64Vec2::new(*x,*x*ratio),
+				DerivedSensitivity::FromRatio(ratio)=>Ratio64Vec2::new(x.clone(),x.mul_ref(ratio)),
 			}
 			Sensitivity::SpecifyYDeriveX{x,y}=>match x{
-				&DerivedSensitivity::FromRatio(ratio)=>Ratio64Vec2::new(*y*ratio,*y),
+				DerivedSensitivity::FromRatio(ratio)=>Ratio64Vec2::new(y.mul_ref(ratio),y.clone()),
 			}
 		}
 	}
