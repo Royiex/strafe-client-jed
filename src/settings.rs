@@ -26,7 +26,7 @@ enum Sensitivity{
 }
 impl Default for Sensitivity{
 	fn default()->Self{
-		Sensitivity::SpecifyXDeriveY{x:Ratio64::ONE/1000,y:DerivedSensitivity::FromRatio(Ratio64::ONE)}
+		Sensitivity::SpecifyXDeriveY{x:Ratio64::ONE*524288,y:DerivedSensitivity::FromRatio(Ratio64::ONE)}
 	}
 }
 
