@@ -650,6 +650,13 @@ impl TryFrom<glam::Vec3A> for Planar64Vec3{
 		)))
 	}
 }
+impl std::fmt::Display for Planar64Vec3{
+	fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{
+		write!(f,"{:.3},{:.3},{:.3}",
+			Into::<f32>::into(self.x()),Into::<f32>::into(self.y()),Into::<f32>::into(self.z()),
+		)
+	}
+}
 impl std::ops::Neg for Planar64Vec3{
 	type Output=Planar64Vec3;
 	#[inline]
