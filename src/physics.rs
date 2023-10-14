@@ -160,7 +160,7 @@ impl PhysicsCamera {
 		Self{
 			offset,
 			sensitivity:Ratio64Vec2::ONE*200_000,
-			mouse:MouseState{pos:glam::IVec2::ZERO,time:-Time::ONE_NANOSECOND},//escape initialization hell divide by zero
+			mouse:MouseState::default(),//t=0 does not cause divide by zero because it's immediately replaced
 			clamped_mouse_pos:glam::IVec2::ZERO,
 			angle_pitch_lower_limit:-Angle32::FRAC_PI_2,
 			angle_pitch_upper_limit:Angle32::FRAC_PI_2,
