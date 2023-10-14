@@ -862,9 +862,9 @@ impl Into<glam::Mat4> for Planar64Affine3{
 	#[inline]
 	fn into(self)->glam::Mat4{
 		glam::Mat4::from_cols_array(&[
-			self.matrix3.x_axis.0.x as f32,self.matrix3.x_axis.0.x as f32,self.matrix3.x_axis.0.x as f32,0.0,
-			self.matrix3.y_axis.0.x as f32,self.matrix3.y_axis.0.x as f32,self.matrix3.y_axis.0.x as f32,0.0,
-			self.matrix3.z_axis.0.x as f32,self.matrix3.z_axis.0.x as f32,self.matrix3.z_axis.0.x as f32,0.0,
+			self.matrix3.x_axis.0.x as f32,self.matrix3.x_axis.0.y as f32,self.matrix3.x_axis.0.z as f32,0.0,
+			self.matrix3.y_axis.0.x as f32,self.matrix3.y_axis.0.y as f32,self.matrix3.y_axis.0.z as f32,0.0,
+			self.matrix3.z_axis.0.x as f32,self.matrix3.z_axis.0.y as f32,self.matrix3.z_axis.0.z as f32,0.0,
 			self.translation.0.x as f32,self.translation.0.y as f32,self.translation.0.z as f32,PLANAR64_FLOAT32_ONE
 		])*PLANAR64_FLOAT32_MUL
 	}
