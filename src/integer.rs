@@ -513,7 +513,7 @@ impl std::ops::Mul<Planar64> for Planar64{
 	type Output=Planar64;
 	#[inline]
 	fn mul(self, rhs: Self) -> Self::Output {
-		Planar64((((self.0 as i128)*(rhs.0 as i128))>>64) as i64)
+		Planar64((((self.0 as i128)*(rhs.0 as i128))>>32) as i64)
 	}
 }
 impl std::ops::Div<i64> for Planar64{
@@ -527,7 +527,7 @@ impl std::ops::Div<Planar64> for Planar64{
 	type Output=Planar64;
 	#[inline]
 	fn div(self, rhs: Planar64) -> Self::Output {
-		Planar64((((self.0 as i128)<<64)/rhs.0 as i128) as i64)
+		Planar64((((self.0 as i128)<<32)/rhs.0 as i128) as i64)
 	}
 }
 // impl PartialOrd<i64> for Planar64{
@@ -597,7 +597,7 @@ impl Planar64Vec3{
 			(self.0.x as i128)*(rhs.0.x as i128)+
 			(self.0.y as i128)*(rhs.0.y as i128)+
 			(self.0.z as i128)*(rhs.0.z as i128)
-		)>>64) as i64)
+		)>>32) as i64)
 	}
 	#[inline]
 	pub fn length(&self)->Planar64{
@@ -688,9 +688,9 @@ impl std::ops::Mul<Planar64Vec3> for Planar64Vec3{
 	#[inline]
 	fn mul(self, rhs: Planar64Vec3) -> Self::Output {
 		Planar64Vec3(glam::i64vec3(
-			(((self.0.x as i128)*(rhs.0.x as i128))>>64) as i64,
-			(((self.0.y as i128)*(rhs.0.y as i128))>>64) as i64,
-			(((self.0.z as i128)*(rhs.0.z as i128))>>64) as i64
+			(((self.0.x as i128)*(rhs.0.x as i128))>>32) as i64,
+			(((self.0.y as i128)*(rhs.0.y as i128))>>32) as i64,
+			(((self.0.z as i128)*(rhs.0.z as i128))>>32) as i64
 		))
 	}
 }
@@ -699,9 +699,9 @@ impl std::ops::Mul<Planar64> for Planar64Vec3{
 	#[inline]
 	fn mul(self, rhs: Planar64) -> Self::Output {
 		Planar64Vec3(glam::i64vec3(
-			(((self.0.x as i128)*(rhs.0 as i128))>>64) as i64,
-			(((self.0.y as i128)*(rhs.0 as i128))>>64) as i64,
-			(((self.0.z as i128)*(rhs.0 as i128))>>64) as i64
+			(((self.0.x as i128)*(rhs.0 as i128))>>32) as i64,
+			(((self.0.y as i128)*(rhs.0 as i128))>>32) as i64,
+			(((self.0.z as i128)*(rhs.0 as i128))>>32) as i64
 		))
 	}
 }
