@@ -175,7 +175,7 @@ impl PhysicsCamera {
 		self.clamped_mouse_pos=unclamped_mouse_pos;
 	}
 	pub fn simulate_move_angles(&self,mouse_pos:glam::IVec2)->glam::Vec2 {
-		let a=self.sensitivity.mul_int((mouse_pos-self.mouse.pos+self.clamped_mouse_pos).as_i64vec2());
+		let a=-self.sensitivity.mul_int((mouse_pos-self.mouse.pos+self.clamped_mouse_pos).as_i64vec2());
 		let ax=Angle32::wrap_from_i64(a.x);
 		let ay=Angle32::clamp_from_i64(a.y)
 		//clamp to actual vertical cam limit
@@ -183,7 +183,7 @@ impl PhysicsCamera {
 		return glam::vec2(ax.into(),ay.into());
 	}
 	fn simulate_move_rotation_y(&self,mouse_pos_x:i32)->Planar64Mat3{
-		let ax=self.sensitivity.x.mul_int((mouse_pos_x-self.mouse.pos.x+self.clamped_mouse_pos.x) as i64);
+		let ax=-self.sensitivity.x.mul_int((mouse_pos_x-self.mouse.pos.x+self.clamped_mouse_pos.x) as i64);
 		Planar64Mat3::from_rotation_y(Angle32::wrap_from_i64(ax))
 	}
 }
