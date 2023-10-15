@@ -54,16 +54,16 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 		"Accelerator"=>{force_can_collide=false;intersecting.accelerator=Some(crate::model::IntersectingAccelerator{acceleration:velocity})},
 		"MapFinish"=>{force_can_collide=false;general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Finish})},
 		"MapAnticheat"=>{force_can_collide=false;general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Anitcheat})},
-		"Platform"=>general.stage_element=Some(crate::model::GameMechanicStageElement{
+		"Platform"=>general.teleport_behaviour=Some(crate::model::TeleportBehaviour::StageElement(crate::model::GameMechanicStageElement{
 			mode_id:0,
 			stage_id:0,
 			force:false,
 			behaviour:crate::model::StageElementBehaviour::Platform,
-		}),
+		})),
 		other=>{
 			if let Some(captures)=lazy_regex::regex!(r"^(Force)?(Spawn|SpawnAt|Trigger|Teleport|Platform)(\d+)$")
 			.captures(other){
-				general.stage_element=Some(crate::model::GameMechanicStageElement{
+				general.teleport_behaviour=Some(crate::model::TeleportBehaviour::StageElement(crate::model::GameMechanicStageElement{
 					mode_id:0,
 					stage_id:captures[3].parse::<u32>().unwrap(),
 					force:match captures.get(1){
@@ -77,7 +77,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 						"Platform"=>crate::model::StageElementBehaviour::Platform,
 						_=>panic!("regex1[2] messed up bad"),
 					}
-				})
+				}));
 			}else if let Some(captures)=lazy_regex::regex!(r"^Bonus(Finish|Anticheat)(\d+)$")
 			.captures(other){
 				force_can_collide=false;
@@ -104,7 +104,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 					.captures(other){
 						match &captures[1]{
 							"Jump"=>general.jump_limit=Some(crate::model::GameMechanicJumpLimit{count:captures[2].parse::<u32>().unwrap()}),
-							"WormholeIn"=>general.wormhole=Some(crate::model::GameMechanicWormhole{model_id:captures[2].parse::<u32>().unwrap()}),
+							"WormholeIn"=>general.teleport_behaviour=Some(crate::model::TeleportBehaviour::Wormhole(crate::model::GameMechanicWormhole{destination_model_id:captures[2].parse::<u32>().unwrap()})),
 							_=>panic!("regex3[1] messed up bad"),
 						}
 					}
@@ -116,8 +116,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 		||general.jump_limit.is_some()
 		||general.booster.is_some()
 		||general.zone.is_some()
-		||general.stage_element.is_some()
-		||general.wormhole.is_some()
+		||general.teleport_behaviour.is_some()
 		||intersecting.water.is_some()
 		||intersecting.accelerator.is_some()
 		{

@@ -1106,8 +1106,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						}
 						//check ground
 						self.contacts.insert(c.model,c);
-		match &general.stage_element{
-			Some(stage_element)=>{
+		match &general.teleport_behaviour{
+			Some(crate::model::TeleportBehaviour::StageElement(stage_element))=>{
 				if stage_element.force||self.game.stage_id<stage_element.stage_id{
 					self.game.stage_id=stage_element.stage_id;
 				}
@@ -1133,6 +1133,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					crate::model::StageElementBehaviour::Platform=>(),
 				}
 			},
+			Some(crate::model::TeleportBehaviour::Wormhole(wormhole))=>{
+				//telefart
+			}
 			None=>(),
 		}
 						//flatten v
@@ -1154,8 +1157,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
 						self.intersects.insert(c.model,c);
-		match &general.stage_element{
-			Some(stage_element)=>{
+		match &general.teleport_behaviour{
+			Some(crate::model::TeleportBehaviour::StageElement(stage_element))=>{
 				if stage_element.force||self.game.stage_id<stage_element.stage_id{
 					self.game.stage_id=stage_element.stage_id;
 				}
@@ -1181,6 +1184,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					crate::model::StageElementBehaviour::Platform=>(),
 				}
 			},
+			Some(crate::model::TeleportBehaviour::Wormhole(wormhole))=>{
+				//telefart
+			}
 			None=>(),
 		}
 					},

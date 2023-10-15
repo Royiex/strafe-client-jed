@@ -152,16 +152,24 @@ pub struct GameMechanicStageElement{
 	pub behaviour:StageElementBehaviour
 }
 #[derive(Clone)]
-pub struct GameMechanicWormhole{//(position,angles)*=origin.transform.inverse()*destination.transform
-	pub model_id:u32,
+pub struct GameMechanicWormhole{
+	//destination does not need to be another wormhole
+	//this defines a one way portal to a destination model transform
+	//two of these can create a two way wormhole
+	pub destination_model_id:u32,
+	//(position,angles)*=origin.transform.inverse()*destination.transform
+}
+#[derive(Clone)]
+pub enum TeleportBehaviour{
+	StageElement(GameMechanicStageElement),
+	Wormhole(GameMechanicWormhole),
 }
 #[derive(Default,Clone)]
 pub struct GameMechanicAttributes{
 	pub jump_limit:Option<GameMechanicJumpLimit>,
 	pub booster:Option<GameMechanicBooster>,
 	pub zone:Option<GameMechanicZone>,
-	pub stage_element:Option<GameMechanicStageElement>,
-	pub wormhole:Option<GameMechanicWormhole>,//stage_element and wormhole are in conflict
+	pub teleport_behaviour:Option<TeleportBehaviour>,
 }
 #[derive(Default,Clone)]
 pub struct ContactingAttributes{
