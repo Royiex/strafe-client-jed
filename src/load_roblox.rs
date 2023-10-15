@@ -50,7 +50,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 	let mut contacting=crate::model::ContactingAttributes::default();
 	let mut force_can_collide=can_collide;
 	match name{
-		//"Water"=>intersecting.water=Some(crate::model::IntersectingWater{density:1.0,drag:1.0}),
+		"Water"=>intersecting.water=Some(crate::model::IntersectingWater{density:Planar64::ONE,viscosity:Planar64::ONE/10,current:velocity}),
 		"Accelerator"=>{force_can_collide=false;intersecting.accelerator=Some(crate::model::IntersectingAccelerator{acceleration:velocity})},
 		"MapFinish"=>{force_can_collide=false;general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Finish})},
 		"MapAnticheat"=>{force_can_collide=false;general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Anitcheat})},
@@ -96,13 +96,18 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 	match force_can_collide{
 		true=>{
 			match name{
-				//"Bounce"=>(),
+				"Bounce"=>contacting.elasticity=Some(u32::MAX),
 				"Surf"=>contacting.surf=Some(crate::model::ContactingSurf{}),
 				"Ladder"=>contacting.ladder=Some(crate::model::ContactingLadder{sticky:true}),
 				other=>{
-					//REGEX!!!!
-					//Jump#
-					//WormholeIn#
+					if let Some(captures)=lazy_regex::regex!(r"^(Jump|WormholeIn)(\d+)$")
+					.captures(other){
+						match &captures[1]{
+							"Jump"=>general.jump_limit=Some(crate::model::GameMechanicJumpLimit{count:captures[2].parse::<u32>().unwrap()}),
+							"WormholeIn"=>general.wormhole=Some(crate::model::GameMechanicWormhole{model_id:captures[2].parse::<u32>().unwrap()}),
+							_=>panic!("regex3[1] messed up bad"),
+						}
+					}
 				}
 			}
 			crate::model::CollisionAttributes::Contact{contacting,general}
