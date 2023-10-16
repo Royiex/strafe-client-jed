@@ -174,7 +174,7 @@ pub fn unit_cornerwedge()->crate::model::IndexedModel{
 	generate_partial_unit_cornerwedge(t)
 }
 
-#[derive(Copy,Clone)]
+#[derive(Clone)]
 pub struct FaceDescription{
 	pub texture:Option<u32>,
 	pub transform:glam::Affine2,
