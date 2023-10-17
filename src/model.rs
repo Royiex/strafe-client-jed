@@ -92,10 +92,13 @@ pub enum TempIndexedAttributes{
 
 //you have this effect while in contact
 #[derive(Clone)]
-pub struct ContactingSurf{}
-#[derive(Clone)]
 pub struct ContactingLadder{
 	pub sticky:bool
+}
+#[derive(Clone)]
+pub enum ContactingBehaviour{
+    Surf,
+    Ladder(ContactingLadder),
 }
 //you have this effect while intersecting
 #[derive(Clone)]
@@ -175,8 +178,7 @@ pub struct GameMechanicAttributes{
 pub struct ContactingAttributes{
 	pub elasticity:Option<u32>,//[1/2^32,1] 0=None (elasticity+1)/2^32
 	//friction?
-	pub surf:Option<ContactingSurf>,
-	pub ladder:Option<ContactingLadder>,
+	pub contact_behaviour:Option<ContactingBehaviour>,
 }
 #[derive(Default,Clone)]
 pub struct IntersectingAttributes{
