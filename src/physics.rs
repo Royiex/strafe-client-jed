@@ -115,22 +115,54 @@ impl MouseState {
 	}
 }
 
-pub enum WalkEnum{
+enum WalkEnum{
 	Reached,
-	Transient,
+	Transient(WalkTarget),
 }
-pub struct WalkState {
-	pub target_velocity: Planar64Vec3,
-	pub target_time: Time,
-	pub state: WalkEnum,
+struct WalkTarget{
+	velocity:Planar64Vec3,
+	time:Time,
 }
-impl WalkState {
-	pub fn new() -> Self {
-		Self{
-			target_velocity:Planar64Vec3::ZERO,
-			target_time:Time::ZERO,
-			state:WalkEnum::Reached,
+struct WalkState{
+	normal:Planar64Vec3,
+	state:WalkEnum,
+}
+impl WalkEnum{
+	//so many args bruh
+	fn with_target_velocity(physics:&PhysicsState,mut velocity:Planar64Vec3,normal:&Planar64Vec3)->(WalkEnum,Planar64Vec3){
+		physics.touching.constrain_velocity(&physics.models,&mut velocity);
+		let mut target_diff=velocity-physics.body.velocity;
+		//remove normal component
+		target_diff-=normal.clone()*(normal.dot(target_diff)/normal.dot(normal.clone()));
+		if target_diff==Planar64Vec3::ZERO{
+			let mut a=Planar64Vec3::ZERO;
+			physics.touching.constrain_acceleration(&physics.models,&mut a);
+			(WalkEnum::Reached,a)
+		}else{
+			//normal friction acceleration is clippedAcceleration.dot(normal)*friction
+			let accel=physics.style.walk_accel.min(physics.style.gravity.dot(Planar64Vec3::NEG_Y)*physics.style.friction);
+			let time_delta=target_diff.length()/accel;
+			let mut a=target_diff.with_length(accel);
+			physics.touching.constrain_acceleration(&physics.models,&mut a);
+			(WalkEnum::Transient(WalkTarget{velocity,time:physics.body.time+Time::from(time_delta)}),a)
 		}
+	}
+	//(walk_enum,body.acceleration)=with_target_velocity();
+}
+impl WalkState{
+	fn ground(physics:&PhysicsState,mut velocity:Planar64Vec3)->(Self,Planar64Vec3){
+		let (walk_enum,a)=WalkEnum::with_target_velocity(physics,velocity,&Planar64Vec3::Y);
+		(Self{
+			state:walk_enum,
+			normal:Planar64Vec3::Y,
+		},a)
+	}
+	fn ladder(physics:&PhysicsState,mut velocity:Planar64Vec3,normal:&Planar64Vec3)->(Self,Planar64Vec3){
+		let (walk_enum,a)=WalkEnum::with_target_velocity(physics,velocity,normal);
+		(Self{
+			state:walk_enum,
+			normal:normal.clone(),
+		},a)
 	}
 }
 
@@ -286,8 +318,8 @@ impl StyleModifiers{
 		return control_dir
 	}
 
-	fn get_jump_power(&self)->Planar64Vec3{
-		Planar64Vec3::int(0,715588,0)/(2*1000000/100)
+	fn get_jump_power(&self)->Planar64{
+		Planar64::int(715588)/(2*1000000/100)
 	}
 }
 
@@ -712,18 +744,12 @@ impl PhysicsState {
 	}
 	fn jump(&mut self){
 		match &self.move_state{
-			MoveState::Air=>(),
-			MoveState::Walk(walk_state)=>{
-				let mut v=self.body.velocity+self.style.get_jump_power();
+			MoveState::Walk(walk_state)|MoveState::Ladder(walk_state)=>{
+				let mut v=self.body.velocity+walk_state.normal*self.style.get_jump_power();
 				self.touching.constrain_velocity(&self.models,&mut v);
 				self.body.velocity=v;
 			},
-			MoveState::Water=>(),
-			MoveState::Ladder(walk_state)=>{
-				let mut v=self.body.velocity+self.style.get_jump_power();
-				self.touching.constrain_velocity(&self.models,&mut v);
-				self.body.velocity=v;
-			},
+			MoveState::Air|MoveState::Water=>(),
 		}
 	}
 
@@ -769,13 +795,12 @@ impl PhysicsState {
 	fn refresh_walk_target(&mut self){
 		//calculate acceleration yada yada
 		match &mut self.move_state{
-			MoveState::Air=>(),
-			MoveState::Walk(walk_state)=>{
+			MoveState::Walk(walk_state)|MoveState::Ladder(walk_state)=>{
 				let mut v=walk_state.target_velocity;
 				self.touching.constrain_velocity(&self.models,&mut v);
 				let mut target_diff=v-self.body.velocity;
 				//remove normal component
-				target_diff-=Planar64Vec3::Y*target_diff.y();
+				target_diff-=walk_state.normal*(walk_state.normal.dot(target_diff)/walk_state.normal.dot(walk_state.normal));
 				if target_diff==Planar64Vec3::ZERO{
 					let mut a=Planar64Vec3::ZERO;
 					self.touching.constrain_acceleration(&self.models,&mut a);
@@ -792,10 +817,7 @@ impl PhysicsState {
 					walk_state.state=WalkEnum::Transient;
 				}
 			},
-			MoveState::Water=>(),
-			MoveState::Ladder(walk_state)=>{
-				//
-			},
+			MoveState::Air|MoveState::Water=>(),
 		}
 	}
 	fn next_move_instruction(&self)->Option<TimedInstruction<PhysicsInstruction>>{
@@ -1148,7 +1170,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 							None=>match &c.face {
 								TreyMeshFace::Top => {
 									//ground
-									self.move_state=MoveState::Walk(WalkState::new())
+									let (walk_state,a)=WalkState::ground(&self,self.get_walk_target());
+									self.move_state=MoveState::Walk(walk_state);
+									self.body.acceleration=a;
 								},
 								_ => (),
 							},
@@ -1331,17 +1355,18 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 								let camera_mat=self.camera.simulate_move_rotation_y(self.camera.mouse.lerp(&self.next_mouse,self.time).x);
 								let control_dir=camera_mat*self.style.get_control_dir(self.controls);
 								walk_state.target_velocity=control_dir*self.style.walkspeed;
+								self.refresh_walk_target();
 							},
 							MoveState::Ladder(walk_state)=>{
-								// let camera_mat=self.camera.simulate_move_rotation(self.camera.mouse.lerp(&self.next_mouse,self.time));
-								// let control_dir=camera_mat*self.style.get_control_dir(self.controls);
-								// walk_state.target_velocity=control_dir*self.style.walkspeed;
+								let camera_mat=self.camera.simulate_move_rotation(self.camera.mouse.lerp(&self.next_mouse,self.time));
+								let control_dir=camera_mat*self.style.get_control_dir(self.controls);
+								walk_state.target_velocity=control_dir*self.style.walkspeed;
+								self.refresh_walk_target();
 							},
 							MoveState::Water=>(),
 							MoveState::Air=>(),
 						}
 					}
-					self.refresh_walk_target();
 				}
 			},
 		}
