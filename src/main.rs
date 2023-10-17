@@ -428,8 +428,7 @@ impl GlobalState{
 
 		//de-index models
 		let deduplicated_models_len=deduplicated_models.len();
-		let mut models=Vec::with_capacity(deduplicated_models_len);
-		for model in deduplicated_models.into_iter(){
+		let models:Vec<model_graphics::ModelGraphicsSingleTexture>=deduplicated_models.into_iter().map(|model|{
 			let mut vertices = Vec::new();
 			let mut index_from_vertex = std::collections::HashMap::new();//::<IndexedVertex,usize>
 			let mut entities = Vec::new();
@@ -459,13 +458,13 @@ impl GlobalState{
 				}
 			}
 				entities.push(indices);
-			models.push(model_graphics::ModelGraphicsSingleTexture{
+			model_graphics::ModelGraphicsSingleTexture{
 				instances:model.instances,
 				vertices,
 				entities,
 				texture:model.texture,
-			});
-		}
+			}
+		}).collect();
 		//.into_iter() the modeldata vec so entities can be /moved/ to models.entities
 		let mut model_count=0;
 		let mut instance_count=0;
