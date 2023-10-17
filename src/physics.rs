@@ -292,22 +292,22 @@ enum MoveState{
 
 pub struct PhysicsState{
 	pub time:Time,
-	pub body:Body,
-	pub world:WorldState,//currently there is only one state the world can be in
+	body:Body,
+	world:WorldState,//currently there is only one state the world can be in
 	pub game:GameMechanicsState,
-	pub style:StyleModifiers,
+	style:StyleModifiers,
 	touching:TouchingState,
 	//camera must exist in state because wormholes modify the camera, also camera punch
-	pub camera:PhysicsCamera,
-	pub next_mouse:MouseState,//Where is the mouse headed next
-	pub controls:u32,
-	pub move_state:MoveState,
+	camera:PhysicsCamera,
+	next_mouse:MouseState,//Where is the mouse headed next
+	controls:u32,
+	move_state:MoveState,
 	//all models
-	pub models:Vec<ModelPhysics>,
-	pub bvh:crate::bvh::BvhNode,
+	models:Vec<ModelPhysics>,
+	bvh:crate::bvh::BvhNode,
 	
-	pub modes:Vec<crate::model::ModeDescription>,
-	pub mode_from_mode_id:std::collections::HashMap::<u32,usize>,
+	modes:Vec<crate::model::ModeDescription>,
+	mode_from_mode_id:std::collections::HashMap::<u32,usize>,
 	//the spawn point is where you spawn when you load into the map.
 	//This is not the same as Reset which teleports you to Spawn0
 	pub spawn_point:Planar64Vec3,

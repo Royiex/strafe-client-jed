@@ -931,7 +931,7 @@ impl framework::Example for GlobalState {
 		let screen_size=glam::uvec2(config.width,config.height);
 
 		let camera=GraphicsCamera::new(screen_size,user_settings.calculate_fov(1.0,&screen_size).as_vec2());
-		let camera_uniforms = camera.to_uniform_data(physics.output().adjust_mouse(&physics.next_mouse));
+		let camera_uniforms = camera.to_uniform_data(physics.output().adjust_mouse(&physics::MouseState::default()));
 		let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 			label: Some("Camera"),
 			contents: bytemuck::cast_slice(&camera_uniforms),
@@ -1063,6 +1063,7 @@ impl framework::Example for GlobalState {
 					self.graphics.clear();
 
 					let mut physics=physics::PhysicsState::default();
+					//physics.spawn()
 					physics.game.stage_id=0;
 					physics.spawn_point=spawn_point;
 					physics.process_instruction(instruction::TimedInstruction{
