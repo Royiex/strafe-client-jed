@@ -808,6 +808,23 @@ impl Planar64Mat3{
 		}
 	}
 	#[inline]
+	pub fn from_rotation_yx(yaw:Angle32,pitch:Angle32)->Self{
+		let xtheta=yaw.0 as f64*ANGLE32_TO_FLOAT64_RADIANS;
+		let (xs,xc)=xtheta.sin_cos();
+		let (xc,xs)=(xc*PLANAR64_ONE_FLOAT64,xs*PLANAR64_ONE_FLOAT64);
+		let ytheta=pitch.0 as f64*ANGLE32_TO_FLOAT64_RADIANS;
+		let (ys,yc)=ytheta.sin_cos();
+		let (yc,ys)=(yc*PLANAR64_ONE_FLOAT64,ys*PLANAR64_ONE_FLOAT64);
+		//TODO: fix this rounding towards 0
+		let (xc,xs):(i64,i64)=(unsafe{xc.to_int_unchecked()},unsafe{xs.to_int_unchecked()});
+		let (yc,ys):(i64,i64)=(unsafe{yc.to_int_unchecked()},unsafe{ys.to_int_unchecked()});
+		Self::from_cols(
+			Planar64Vec3(glam::i64vec3(xc,0,-xs)),
+			Planar64Vec3(glam::i64vec3(((xs as i128*ys as i128)>>32) as i64,yc,((xc as i128*ys as i128)>>32) as i64)),
+			Planar64Vec3(glam::i64vec3(((xs as i128*yc as i128)>>32) as i64,-ys,((xc as i128*yc as i128)>>32) as i64)),
+		)
+	}
+	#[inline]
 	pub fn from_rotation_y(angle:Angle32)->Self{
 		let theta=angle.0 as f64*ANGLE32_TO_FLOAT64_RADIANS;
 		let (s,c)=theta.sin_cos();
