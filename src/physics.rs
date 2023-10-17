@@ -1434,6 +1434,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						self.touching.constrain_acceleration(&self.models,&mut a);
 						self.body.acceleration=a;
 						//check ground
+						//self.touching.get_move_state();
 						match &c.face {
 							TreyMeshFace::Top => {
 								//TODO: make this more advanced checking contacts
