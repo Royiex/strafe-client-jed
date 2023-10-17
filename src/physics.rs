@@ -1311,6 +1311,7 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 		//JUST POLLING!!! NO MUTATION
 		let mut collector = crate::instruction::InstructionCollector::new(time_limit);
 		//check for collision stop instructions with curent contacts
+		//TODO: make this into a touching.next_instruction(&mut collector) member function
 		for (_,collision_data) in &self.touching.contacts {
 			collector.collect(self.predict_collision_end(self.time,time_limit,collision_data));
 		}
@@ -1475,6 +1476,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						self.touching.constrain_acceleration(&self.models,&mut a);
 						self.body.acceleration=a;
 						//check ground
+						//self.touching.get_move_state();
 						match &c.face {
 							TreyMeshFace::Top => {
 								//TODO: make this more advanced checking contacts
