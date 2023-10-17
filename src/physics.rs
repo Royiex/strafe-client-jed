@@ -135,8 +135,14 @@ impl WalkEnum{
 			(WalkEnum::Reached,a)
 		}else{
 			//normal friction acceleration is clippedAcceleration.dot(normal)*friction
-			let accel=style.walk_accel.min(style.gravity.dot(Planar64Vec3::NEG_Y)*style.friction);
-			let time_delta=target_diff.length()/accel;
+			let diff_len=target_diff.length();
+			let friction=if diff_len<style.walk_speed{
+				style.static_friction
+			}else{
+				style.kinetic_friction
+			};
+			let accel=style.walk_accel.min(style.gravity.dot(Planar64Vec3::NEG_Y)*friction);
+			let time_delta=diff_len/accel;
 			let mut a=target_diff.with_length(accel);
 			touching.constrain_acceleration(models,&mut a);
 			(WalkEnum::Transient(WalkTarget{velocity,time:body.time+Time::from(time_delta)}),a)
@@ -234,34 +240,48 @@ impl std::default::Default for GameMechanicsState{
 	}
 }
 
-pub struct WorldState{}
+struct WorldState{}
 
-pub struct StyleModifiers{
-	pub controls_mask:u32,//controls which are unable to be activated
-	pub controls_held:u32,//controls which must be active to be able to strafe
-	pub strafe_tick_rate:Ratio64,
-	pub jump_time:Time,
-	pub mv:Planar64,
-	pub walkspeed:Planar64,
-	pub friction:Planar64,
-	pub walk_accel:Planar64,
-	pub gravity:Planar64Vec3,
-	pub hitbox_halfsize:Planar64Vec3,
+enum JumpCalculation{
+	Capped,//roblox
+	Energy,//new
+	Linear,//source
+}
+
+enum JumpImpulse{
+	FromTime(Time),//jump time is invariant across mass and gravity changes
+	FromHeight(Planar64),//jump height is invariant across mass and gravity changes
+	FromDeltaV(Planar64),//jump velocity is invariant across mass and gravity changes
+	FromEnergy(Planar64),// :)
+}
+//Jumping acts on dot(walks_state.normal,body.velocity)
+//Capped means it increases the dot to the cap
+//Energy means it adds energy
+//Linear means it linearly adds on
+
+struct StyleModifiers{
+	controls_mask:u32,//controls which are unable to be activated
+	controls_held:u32,//controls which must be active to be able to strafe
+	strafe_tick_rate:Ratio64,
+	jump_impulse:JumpImpulse,
+	jump_calculation:JumpCalculation,
+	static_friction:Planar64,
+	kinetic_friction:Planar64,
+	walk_speed:Planar64,
+	walk_accel:Planar64,
+	ladder_speed:Planar64,
+	ladder_accel:Planar64,
+	ladder_dot:Planar64,
+	swim_speed:Planar64,
+	mass:Planar64,
+	mv:Planar64,
+	air_accel_limit:Option<Planar64>,
+	gravity:Planar64Vec3,
+	hitbox_halfsize:Planar64Vec3,
 }
 impl std::default::Default for StyleModifiers{
 	fn default() -> Self {
-		Self{
-			controls_mask: !0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
-			controls_held: 0,
-			strafe_tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
-			jump_time: Time::from_nanos(715_588_000/2*100),//0.715588/2.0*100.0
-			gravity: Planar64Vec3::int(0,-100,0),
-			friction: Planar64::int(12)/10,
-			walk_accel: Planar64::int(90),
-			mv: Planar64::int(27)/10,
-			walkspeed: Planar64::int(18),
-			hitbox_halfsize: Planar64Vec3::int(2,5,2)/2,
-		}
+		Self::roblox_bhop()
 	}
 }
 impl StyleModifiers{
@@ -277,6 +297,121 @@ impl StyleModifiers{
 	const RIGHT_DIR:Planar64Vec3=Planar64Vec3::X;
 	const UP_DIR:Planar64Vec3=Planar64Vec3::Y;
 	const FORWARD_DIR:Planar64Vec3=Planar64Vec3::NEG_Z;
+
+	fn new()->Self{
+		Self{
+			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
+			controls_held:0,
+			strafe_tick_rate:Ratio64::new(128,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			jump_impulse:JumpImpulse::FromEnergy(Planar64::int(512)),
+			jump_calculation:JumpCalculation::Energy,
+			gravity:Planar64Vec3::int(0,-80,0),
+			static_friction:Planar64::int(2),
+			kinetic_friction:Planar64::int(3),//unrealistic: kinetic friction is typically lower than static
+			mass:Planar64::int(1),
+			mv:Planar64::int(2),
+			air_accel_limit:None,
+			walk_speed:Planar64::int(16),
+			walk_accel:Planar64::int(80),
+			ladder_speed:Planar64::int(16),
+			ladder_accel:Planar64::int(160),
+			ladder_dot:(Planar64::int(1)/2).sqrt(),
+			swim_speed:Planar64::int(12),
+			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+		}
+	}
+
+	fn roblox_bhop()->Self{
+		Self{
+			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
+			controls_held:0,
+			strafe_tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			jump_impulse:JumpImpulse::FromTime(Time::from_micros(715_588)),
+			jump_calculation:JumpCalculation::Capped,
+			gravity:Planar64Vec3::int(0,-100,0),
+			static_friction:Planar64::int(2),
+			kinetic_friction:Planar64::int(3),//unrealistic: kinetic friction is typically lower than static
+			mass:Planar64::int(1),
+			mv:Planar64::int(27)/10,
+			air_accel_limit:None,
+			walk_speed:Planar64::int(18),
+			walk_accel:Planar64::int(90),
+			ladder_speed:Planar64::int(18),
+			ladder_accel:Planar64::int(180),
+			ladder_dot:(Planar64::int(1)/2).sqrt(),
+			swim_speed:Planar64::int(12),
+			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+		}
+	}
+	fn roblox_surf()->Self{
+		Self{
+			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
+			controls_held:0,
+			strafe_tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			jump_impulse:JumpImpulse::FromTime(Time::from_micros(715_588)),
+			jump_calculation:JumpCalculation::Capped,
+			gravity:Planar64Vec3::int(0,-50,0),
+			static_friction:Planar64::int(2),
+			kinetic_friction:Planar64::int(3),//unrealistic: kinetic friction is typically lower than static
+			mass:Planar64::int(1),
+			mv:Planar64::int(27)/10,
+			air_accel_limit:None,
+			walk_speed:Planar64::int(18),
+			walk_accel:Planar64::int(90),
+			ladder_speed:Planar64::int(18),
+			ladder_accel:Planar64::int(180),
+			ladder_dot:(Planar64::int(1)/2).sqrt(),
+			swim_speed:Planar64::int(12),
+			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+		}
+	}
+
+	fn source_bhop()->Self{
+		//camera_offset=vec3(0,64/16-73/16/2,0),
+		Self{
+			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
+			controls_held:0,
+			strafe_tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			jump_impulse:JumpImpulse::FromHeight(Planar64::raw(52<<28)),
+			jump_calculation:JumpCalculation::Linear,
+			gravity:Planar64Vec3::raw(0,-800<<28,0),
+			static_friction:Planar64::int(2),//?
+			kinetic_friction:Planar64::int(3),//?
+			mass:Planar64::int(1),
+			mv:Planar64::raw(30<<28),
+			air_accel_limit:Some(Planar64::raw(150<<28)*66),
+			walk_speed:Planar64::int(18),//?
+			walk_accel:Planar64::int(90),//?
+			ladder_speed:Planar64::int(18),//?
+			ladder_accel:Planar64::int(180),//?
+			ladder_dot:(Planar64::int(1)/2).sqrt(),//?
+			swim_speed:Planar64::int(12),//?
+			hitbox_halfsize:Planar64Vec3::raw(33<<28,73<<28,33<<28)/2,
+		}
+	}
+	fn source_surf()->Self{
+		//camera_offset=vec3(0,64/16-73/16/2,0),
+		Self{
+			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
+			controls_held:0,
+			strafe_tick_rate:Ratio64::new(66,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			jump_impulse:JumpImpulse::FromHeight(Planar64::raw(52<<28)),
+			jump_calculation:JumpCalculation::Linear,
+			gravity:Planar64Vec3::raw(0,-800<<28,0),
+			static_friction:Planar64::int(2),//?
+			kinetic_friction:Planar64::int(3),//?
+			mass:Planar64::int(1),
+			mv:Planar64::raw(30<<28),
+			air_accel_limit:Some(Planar64::raw(150<<28)*66),
+			walk_speed:Planar64::int(18),//?
+			walk_accel:Planar64::int(90),//?
+			ladder_speed:Planar64::int(18),//?
+			ladder_accel:Planar64::int(180),//?
+			ladder_dot:(Planar64::int(1)/2).sqrt(),//?
+			swim_speed:Planar64::int(12),//?
+			hitbox_halfsize:Planar64Vec3::raw(33<<28,73<<28,33<<28)/2,
+		}
+	}
 
 	fn get_control(&self,control:u32,controls:u32)->bool{
 		controls&self.controls_mask&control==control
@@ -312,19 +447,42 @@ impl StyleModifiers{
 		return control_dir
 	}
 
-	fn get_jump_power(&self)->Planar64{
-		Planar64::int(715588)/(2*1000000/100)
+	//fn get_jump_time(&self)->Planar64
+	//fn get_jump_height(&self)->Planar64
+	//fn get_jump_energy(&self)->Planar64
+	fn get_jump_deltav(&self)->Planar64{
+		match &self.jump_impulse{
+			&JumpImpulse::FromTime(time)=>self.gravity.length()*(time/2),
+			&JumpImpulse::FromHeight(height)=>(self.gravity.length()*height*2).sqrt(),
+			&JumpImpulse::FromDeltaV(deltav)=>deltav,
+			&JumpImpulse::FromEnergy(energy)=>(energy*2/self.mass).sqrt(),
+		}
 	}
 
 	fn get_walk_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
 		let camera_mat=camera.simulate_move_rotation_y(camera.mouse.lerp(&next_mouse,time).x);
 		let control_dir=camera_mat*self.get_control_dir(controls);
-		control_dir*self.walkspeed
+		control_dir*self.walk_speed
+	}
+	fn get_ladder_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
+		let camera_mat=camera.simulate_move_rotation(camera.mouse.lerp(&next_mouse,time));
+		let control_dir=camera_mat*self.get_control_dir(controls);
+		// local m=sqrt(ControlDir.length_squared())
+		// local d=dot(Normal,ControlDir)/m
+		// if d<-LadderDot then
+		// 	ControlDir=Up*m
+		// 	d=dot(Normal,Up)
+		// elseif LadderDot<d then
+		// 	ControlDir=Up*-m
+		// 	d=-dot(Normal,Up)
+		// end
+		// return cross(cross(Normal,ControlDir),Normal)/sqrt(1-d*d)
+		control_dir*self.walk_speed
 	}
 	fn get_propulsion_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
 		let camera_mat=camera.simulate_move_rotation(camera.mouse.lerp(&next_mouse,time));
 		let control_dir=camera_mat*self.get_control_dir(controls);
-		control_dir*self.walkspeed
+		control_dir*self.walk_speed
 	}
 }
 
@@ -750,7 +908,7 @@ impl PhysicsState {
 	fn jump(&mut self){
 		match &self.move_state{
 			MoveState::Walk(walk_state)|MoveState::Ladder(walk_state)=>{
-				let mut v=self.body.velocity+walk_state.normal*self.style.get_jump_power();
+				let mut v=self.body.velocity+walk_state.normal*self.style.get_jump_deltav();
 				self.touching.constrain_velocity(&self.models,&mut v);
 				self.body.velocity=v;
 			},
@@ -806,7 +964,7 @@ impl PhysicsState {
 			},
 			MoveState::Ladder(WalkState{normal,state})=>{
 				let n=normal;
-				(*state,self.body.acceleration)=WalkEnum::with_target_velocity(&self.touching,&self.body,&self.style,&self.models,self.style.get_propulsion_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
+				(*state,self.body.acceleration)=WalkEnum::with_target_velocity(&self.touching,&self.body,&self.style,&self.models,self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
 			},
 		}
 	}
@@ -1163,7 +1321,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 									self.body.velocity=Planar64Vec3::ZERO;//model.velocity
 								}
 								//ladder walkstate
-								let (walk_state,a)=WalkState::ladder(&self.touching,&self.body,&self.style,&self.models,self.style.get_propulsion_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&c.normal(&self.models));
+								let (walk_state,a)=WalkState::ladder(&self.touching,&self.body,&self.style,&self.models,self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&c.normal(&self.models));
 								self.move_state=MoveState::Ladder(walk_state);
 								self.body.acceleration=a;
 							}
