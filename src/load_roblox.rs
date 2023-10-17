@@ -97,8 +97,8 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 		true=>{
 			match name{
 				"Bounce"=>contacting.elasticity=Some(u32::MAX),
-				"Surf"=>contacting.surf=Some(crate::model::ContactingSurf{}),
-				"Ladder"=>contacting.ladder=Some(crate::model::ContactingLadder{sticky:true}),
+				"Surf"=>contacting.contact_behaviour=Some(crate::model::ContactingBehaviour::Surf),
+				"Ladder"=>contacting.contact_behaviour=Some(crate::model::ContactingBehaviour::Ladder(crate::model::ContactingLadder{sticky:true})),
 				other=>{
 					if let Some(captures)=lazy_regex::regex!(r"^(Jump|WormholeIn)(\d+)$")
 					.captures(other){

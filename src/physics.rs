@@ -1165,8 +1165,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				let model=c.model(&self.models).unwrap();
 				match &model.attributes{
 					PhysicsCollisionAttributes::Contact{contacting,general}=>{
-						match &contacting.surf{
-							Some(surf)=>println!("I'm surfing!"),
+						match &contacting.contact_behaviour{
+							Some(crate::model::ContactingBehaviour::Surf)=>println!("I'm surfing!"),
 							None=>match &c.face {
 								TreyMeshFace::Top => {
 									//ground
