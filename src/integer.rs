@@ -531,7 +531,14 @@ impl std::ops::Mul<Planar64> for Planar64{
 	type Output=Planar64;
 	#[inline]
 	fn mul(self, rhs: Self) -> Self::Output {
-		Planar64((((self.0 as i128)*(rhs.0 as i128))>>32) as i64)
+		Planar64(((self.0 as i128*rhs.0 as i128)>>32) as i64)
+	}
+}
+impl std::ops::Mul<Time> for Planar64{
+	type Output=Planar64;
+	#[inline]
+	fn mul(self,rhs:Time)->Self::Output{
+		Planar64(((self.0 as i128*rhs.0 as i128)/1_000_000_000) as i64)
 	}
 }
 impl std::ops::Div<i64> for Planar64{
@@ -572,6 +579,10 @@ impl Planar64Vec3{
 	#[inline]
 	pub const fn int(x:i32,y:i32,z:i32)->Self{
 		Self(glam::i64vec3((x as i64)<<32,(y as i64)<<32,(z as i64)<<32))
+	}
+	#[inline]
+	pub const fn raw(x:i64,y:i64,z:i64)->Self{
+		Self(glam::i64vec3(x,y,z))
 	}
 	#[inline]
 	pub fn x(&self)->Planar64{
