@@ -182,6 +182,14 @@ impl PhysicsCamera {
 		.clamp(self.angle_pitch_lower_limit,self.angle_pitch_upper_limit);
 		return glam::vec2(ax.into(),ay.into());
 	}
+	fn simulate_move_rotation(&self,mouse_pos:glam::IVec2)->Planar64Mat3{
+		let a=-self.sensitivity.mul_int((mouse_pos-self.mouse.pos+self.clamped_mouse_pos).as_i64vec2());
+		let ax=Angle32::wrap_from_i64(a.x);
+		let ay=Angle32::clamp_from_i64(a.y)
+		//clamp to actual vertical cam limit
+		.clamp(self.angle_pitch_lower_limit,self.angle_pitch_upper_limit);
+		Planar64Mat3::from_rotation_yx(ax,ay)
+	}
 	fn simulate_move_rotation_y(&self,mouse_pos_x:i32)->Planar64Mat3{
 		let ax=-self.sensitivity.x.mul_int((mouse_pos_x-self.mouse.pos.x+self.clamped_mouse_pos.x) as i64);
 		Planar64Mat3::from_rotation_y(Angle32::wrap_from_i64(ax))
