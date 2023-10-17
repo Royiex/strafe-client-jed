@@ -234,6 +234,10 @@ impl GlobalState{
 					})
 				}
 			}).collect();
+			//skip pushing a model if all instances are invisible
+			if instances.len()==0{
+				continue;
+			}
 			//check each group, if it's using a new texture then make a new clone of the model
 			let id=unique_texture_models.len();
 			let mut unique_textures=Vec::new();
