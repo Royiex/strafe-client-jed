@@ -1,4 +1,4 @@
-use crate::integer::{Planar64,Planar64Vec3,Planar64Affine3};
+use crate::integer::{Time,Planar64,Planar64Vec3,Planar64Affine3};
 pub type TextureCoordinate=glam::Vec2;
 pub type Color4=glam::Vec4;
 #[derive(Clone,Hash,PartialEq,Eq)]
@@ -99,6 +99,7 @@ pub struct ContactingLadder{
 pub enum ContactingBehaviour{
     Surf,
     Ladder(ContactingLadder),
+    Elastic(u32),//[1/2^32,1] 0=None (elasticity+1)/2^32
 }
 //you have this effect while intersecting
 #[derive(Clone)]
@@ -107,18 +108,37 @@ pub struct IntersectingWater{
 	pub density:Planar64,
 	pub current:Planar64Vec3,
 }
-#[derive(Clone)]
-pub struct IntersectingAccelerator{
-	pub acceleration:Planar64Vec3
-}
 //All models can be given these attributes
 #[derive(Clone)]
-pub struct GameMechanicJumpLimit{
-	pub count:u32,
+pub struct GameMechanicAccelerator{
+	pub acceleration:Planar64Vec3
 }
 #[derive(Clone)]
-pub struct GameMechanicBooster{
-	pub velocity:Planar64Vec3,
+pub enum GameMechanicBooster{
+	Affine(Planar64Affine3),//capable of SetVelocity,DotVelocity,normal booster,bouncy part,redirect velocity, and much more
+	Velocity(Planar64Vec3),//straight up boost velocity adds to your current velocity
+	Energy{direction:Planar64Vec3,energy:Planar64},//increase energy in direction
+}
+#[derive(Clone)]
+pub enum TrajectoryChoice{
+	HighArcLongDuration,//underhand lob at target: less horizontal speed and more air time
+	LowArcShortDuration,//overhand throw at target: more horizontal speed and less air time
+}
+#[derive(Clone)]
+pub enum GameMechanicSetTrajectory{
+	AirTime(Time),//air time (relative to gravity direction) is invariant across mass and gravity changes
+	Height(Planar64),//boost height (relative to gravity direction) is invariant across mass and gravity changes
+	TargetPointTime{//launch on a trajectory that will land at a target point in a set amount of time
+		target_point:Planar64Vec3,
+		time:Time,//short time = fast and direct, long time = launch high in the air, negative time = wrong way
+	},
+	TrajectoryTargetPoint{//launch at a fixed speed and land at a target point
+		target_point:Planar64Vec3,
+		speed:Planar64,//if speed is too low this will fail to reach the target.  The closest-passing trajectory will be chosen instead
+		trajectory_choice:TrajectoryChoice,
+	},
+	Velocity(Planar64Vec3),//SetVelocity
+	DotVelocity{direction:Planar64Vec3,dot:Planar64},//set your velocity in a specific direction without touching other directions
 }
 #[derive(Clone)]
 pub enum ZoneBehaviour{
@@ -133,10 +153,10 @@ pub struct GameMechanicZone{
 	pub behaviour:ZoneBehaviour,
 }
 // enum TrapCondition{
-// 	FasterThan(i64),
-// 	SlowerThan(i64),
-// 	InRange(i64,i64),
-// 	OutsideRange(i64,i64),
+// 	FasterThan(Planar64),
+// 	SlowerThan(Planar64),
+// 	InRange(Planar64,Planar64),
+// 	OutsideRange(Planar64,Planar64),
 // }
 #[derive(Clone)]
 pub enum StageElementBehaviour{
@@ -145,6 +165,7 @@ pub enum StageElementBehaviour{
  	Trigger,
  	Teleport,
  	Platform,
+ 	JumpLimit(u32),
  	//Speedtrap(TrapCondition),//Acts as a trigger with a speed condition
 }
 #[derive(Clone)]
@@ -167,23 +188,42 @@ pub enum TeleportBehaviour{
 	StageElement(GameMechanicStageElement),
 	Wormhole(GameMechanicWormhole),
 }
+//attributes listed in order of handling
 #[derive(Default,Clone)]
 pub struct GameMechanicAttributes{
-	pub jump_limit:Option<GameMechanicJumpLimit>,
-	pub booster:Option<GameMechanicBooster>,
 	pub zone:Option<GameMechanicZone>,
+	pub booster:Option<GameMechanicBooster>,
+	pub trajectory:Option<GameMechanicSetTrajectory>,
 	pub teleport_behaviour:Option<TeleportBehaviour>,
+	pub accelerator:Option<GameMechanicAccelerator>,
+}
+impl GameMechanicAttributes{
+	pub fn any(&self)->bool{
+		self.booster.is_some()
+		||self.trajectory.is_some()
+		||self.zone.is_some()
+		||self.teleport_behaviour.is_some()
+		||self.accelerator.is_some()
+	}
 }
 #[derive(Default,Clone)]
 pub struct ContactingAttributes{
-	pub elasticity:Option<u32>,//[1/2^32,1] 0=None (elasticity+1)/2^32
 	//friction?
 	pub contact_behaviour:Option<ContactingBehaviour>,
+}
+impl ContactingAttributes{
+	pub fn any(&self)->bool{
+		self.contact_behaviour.is_some()
+	}
 }
 #[derive(Default,Clone)]
 pub struct IntersectingAttributes{
 	pub water:Option<IntersectingWater>,
-	pub accelerator:Option<IntersectingAccelerator>,
+}
+impl IntersectingAttributes{
+	pub fn any(&self)->bool{
+		self.water.is_some()
+	}
 }
 //Spawn(u32) NO! spawns are indexed in the map header instead of marked with attibutes
 pub enum CollisionAttributes{
