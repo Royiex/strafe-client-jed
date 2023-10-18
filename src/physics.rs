@@ -1348,7 +1348,7 @@ fn teleport(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,poi
 	//touching.recalculate(body);
 }
 
-fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&PhysicsModels,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body)->Option<MoveState>{
+fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&PhysicsModels,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body,model:&ModelPhysics)->Option<MoveState>{
 	match teleport_behaviour{
 		Some(crate::model::TeleportBehaviour::StageElement(stage_element))=>{
 			if stage_element.force||game.stage_id<stage_element.stage_id{
@@ -1369,7 +1369,10 @@ fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehav
 		},
 		Some(crate::model::TeleportBehaviour::Wormhole(wormhole))=>{
 			//telefart
-			None
+			let origin_model=model;
+			let destination_model=models.get_wormhole_model(wormhole.destination_model_id)?;
+			//ignore the transform for now
+			Some(teleport(body,touching,style,body.position-origin_model.transform.translation+destination_model.transform.translation))
 		}
 		None=>None,
 	}
@@ -1429,7 +1432,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						//check ground
 						self.touching.insert_contact(c.model,c);
 						//I love making functions with 10 arguments to dodge the borrow checker
-						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body);
+						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model);
 						//flatten v
 						self.touching.constrain_velocity(&self.models,&mut v);
 						match &general.booster{
@@ -1466,7 +1469,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
 						self.touching.insert_intersect(c.model,c);
-						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body);
+						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model);
 					},
 				}
 			},
