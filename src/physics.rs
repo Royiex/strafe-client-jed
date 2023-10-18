@@ -924,7 +924,7 @@ impl PhysicsState {
 
 	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
 		return Some(TimedInstruction{
-			time:Time::from_nanos(self.style.strafe_tick_rate.rhs_div_int(self.style.strafe_tick_rate.mul_int(self.time.nanos())+1)),
+			time:Time::from_nanos(self.style.strafe_tick_rate.rhs_div_int(self.style.strafe_tick_rate.mul_int(self.time.nanos()+1)+1)),
 			//only poll the physics if there is a before and after mouse event
 			instruction:PhysicsInstruction::StrafeTick
 		});
