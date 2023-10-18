@@ -172,7 +172,32 @@ impl WalkState{
 	}
 }
 
-
+struct Modes{
+	modes:Vec<crate::model::ModeDescription>,
+	mode_from_mode_id:std::collections::HashMap::<u32,usize>,
+}
+impl Modes{
+	fn clear(&mut self){
+		self.modes.clear();
+		self.mode_from_mode_id.clear();
+	}
+	fn get_mode(&self,mode_id:u32)->Option<&crate::model::ModeDescription>{
+		self.modes.get(*self.mode_from_mode_id.get(&mode_id)?)
+	}
+	fn insert(&mut self,temp_map_mode_id:u32,mode:crate::model::ModeDescription){
+		let mode_id=self.modes.len();
+		self.mode_from_mode_id.insert(temp_map_mode_id,mode_id);
+		self.modes.push(mode);
+	}
+}
+impl Default for Modes{
+	fn default() -> Self {
+		Self{
+			modes:Vec::new(),
+			mode_from_mode_id:std::collections::HashMap::new(),
+		}
+	}
+}
 
 #[derive(Clone)]
 pub struct PhysicsCamera {
@@ -515,8 +540,7 @@ pub struct PhysicsState{
 	models:Vec<ModelPhysics>,
 	bvh:crate::bvh::BvhNode,
 	
-	modes:Vec<crate::model::ModeDescription>,
-	mode_from_mode_id:std::collections::HashMap::<u32,usize>,
+	modes:Modes,
 	//the spawn point is where you spawn when you load into the map.
 	//This is not the same as Reset which teleports you to Spawn0
 	pub spawn_point:Planar64Vec3,
@@ -702,8 +726,7 @@ impl Default for PhysicsState{
 			controls: 0,
 			world:WorldState{},
 			game:GameMechanicsState::default(),
-			modes:Vec::new(),
-			mode_from_mode_id:std::collections::HashMap::new(),
+			modes:Modes::default(),
 		}
 	}
 }
@@ -861,11 +884,11 @@ impl PhysicsState {
 				}
 			}
 		}
-		let num_modes=self.modes.len();
+		let num_modes=self.modes.modes.len();
 		for (mode_id,mode) in eshmep{
-			self.mode_from_mode_id.insert(mode_id,num_modes+mode);
+			self.modes.mode_from_mode_id.insert(mode_id,num_modes+mode);
 		}
-		self.modes.append(&mut modedatas.into_iter().map(|mut tup|{
+		self.modes.modes.append(&mut modedatas.into_iter().map(|mut tup|{
 			tup.1.sort_by_key(|tup|tup.0);
 			tup.2.sort_by_key(|tup|tup.0);
 			let mut eshmep1=std::collections::HashMap::new();
@@ -886,13 +909,6 @@ impl PhysicsState {
 		self.camera.sensitivity=user_settings.calculate_sensitivity();
 	}
 
-	pub fn get_mode(&self,mode_id:u32)->Option<&crate::model::ModeDescription>{
-		if let Some(&mode)=self.mode_from_mode_id.get(&mode_id){
-			self.modes.get(mode)
-		}else{
-			None
-		}
-	}
 	//tickless gaming
 	pub fn run(&mut self, time_limit:Time){
 		//prepare is ommitted - everything is done via instructions.
@@ -1296,6 +1312,43 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 	}
 }
 
+fn teleport(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,point:Planar64Vec3)->MoveState{
+	body.position=point;
+	//manual clear //for c in contacts{process_instruction(CollisionEnd(c))}
+	touching.clear();
+	body.acceleration=style.gravity;
+	MoveState::Air
+	//TODO: calculate contacts and determine the actual state
+	//touching.recalculate(body);
+}
+
+fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&Vec<ModelPhysics>,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body)->Option<MoveState>{
+	match teleport_behaviour{
+		Some(crate::model::TeleportBehaviour::StageElement(stage_element))=>{
+			if stage_element.force||game.stage_id<stage_element.stage_id{
+				game.stage_id=stage_element.stage_id;
+			}
+			match &stage_element.behaviour{
+				crate::model::StageElementBehaviour::SpawnAt=>None,
+				crate::model::StageElementBehaviour::Trigger
+				|crate::model::StageElementBehaviour::Teleport=>{
+					//I guess this is correct behaviour when trying to teleport to a non-existent spawn but it's still weird
+					let model=models.get(*modes.get_mode(stage_element.mode_id)?.get_spawn_model_id(game.stage_id)? as usize)?;
+					let point=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(style.hitbox_halfsize.y()+Planar64::ONE/16);
+					Some(teleport(body,touching,style,point))
+				},
+				crate::model::StageElementBehaviour::Platform=>None,
+				crate::model::StageElementBehaviour::JumpLimit(_)=>None,//TODO
+			}
+		},
+		Some(crate::model::TeleportBehaviour::Wormhole(wormhole))=>{
+			//telefart
+			None
+		}
+		None=>None,
+	}
+}
+
 impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 	fn process_instruction(&mut self, ins:TimedInstruction<PhysicsInstruction>) {
 		match &ins.instruction {
@@ -1349,37 +1402,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						}
 						//check ground
 						self.touching.insert_contact(c.model,c);
-		match &general.teleport_behaviour{
-			Some(crate::model::TeleportBehaviour::StageElement(stage_element))=>{
-				if stage_element.force||self.game.stage_id<stage_element.stage_id{
-					self.game.stage_id=stage_element.stage_id;
-				}
-				match &stage_element.behaviour{
-					crate::model::StageElementBehaviour::SpawnAt=>(),
-					crate::model::StageElementBehaviour::Trigger
-					|crate::model::StageElementBehaviour::Teleport=>{
-						//TODO make good
-						if let Some(mode)=self.get_mode(stage_element.mode_id){
-							if let Some(&spawn)=mode.get_spawn_model_id(self.game.stage_id){
-								if let Some(model)=self.models.get(spawn as usize){
-									self.body.position=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(self.style.hitbox_halfsize.y()+Planar64::ONE/16);
-									//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
-									self.touching.clear();
-									self.body.acceleration=self.style.gravity;
-									self.move_state=MoveState::Air;//TODO: calculate contacts and determine the actual state
-								}else{println!("bad1");}
-							}else{println!("bad2");}
-						}else{println!("bad3");}
-					},
-					crate::model::StageElementBehaviour::Platform=>(),
-					crate::model::StageElementBehaviour::JumpLimit(_)=>(),//TODO
-				}
-			},
-			Some(crate::model::TeleportBehaviour::Wormhole(wormhole))=>{
-				//telefart
-			}
-			None=>(),
-		}
+						//I love making functions with 10 arguments to dodge the borrow checker
+						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body);
 						//flatten v
 						self.touching.constrain_velocity(&self.models,&mut v);
 						match &general.booster{
@@ -1416,37 +1440,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
 						self.touching.insert_intersect(c.model,c);
-		match &general.teleport_behaviour{
-			Some(crate::model::TeleportBehaviour::StageElement(stage_element))=>{
-				if stage_element.force||self.game.stage_id<stage_element.stage_id{
-					self.game.stage_id=stage_element.stage_id;
-				}
-				match &stage_element.behaviour{
-					crate::model::StageElementBehaviour::SpawnAt=>(),
-					crate::model::StageElementBehaviour::Trigger
-					|crate::model::StageElementBehaviour::Teleport=>{
-						//TODO make good
-						if let Some(mode)=self.get_mode(stage_element.mode_id){
-							if let Some(&spawn)=mode.get_spawn_model_id(self.game.stage_id){
-								if let Some(model)=self.models.get(spawn as usize){
-									self.body.position=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(self.style.hitbox_halfsize.y()+Planar64::ONE/16);
-									//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
-									self.touching.clear();
-									self.body.acceleration=self.style.gravity;
-									self.move_state=MoveState::Air;//TODO: calculate contacts and determine the actual state
-								}else{println!("bad1");}
-							}else{println!("bad2");}
-						}else{println!("bad3");}
-					},
-					crate::model::StageElementBehaviour::Platform=>(),
-					crate::model::StageElementBehaviour::JumpLimit(_)=>(),//TODO
-				}
-			},
-			Some(crate::model::TeleportBehaviour::Wormhole(wormhole))=>{
-				//telefart
-			}
-			None=>(),
-		}
+						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body);
 					},
 				}
 			},
