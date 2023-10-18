@@ -263,16 +263,17 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 				if let Some(attr)=match &object.name[..]{
 					"MapStart"=>{
 						spawn_point=model_transform.transform_point3(Planar64Vec3::ZERO)+Planar64Vec3::Y*5/2;
-						Some(crate::model::TempIndexedAttributes::Start{mode_id:0})
+						Some(crate::model::TempIndexedAttributes::Start(crate::model::TempAttrStart{mode_id:0}))
 					},
-					"UnorderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::UnorderedCheckpoint{mode_id:0}),
+					"UnorderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::UnorderedCheckpoint(crate::model::TempAttrUnorderedCheckpoint{mode_id:0})),
 					other=>{
-						let regman=lazy_regex::regex!(r"^(BonusStart|Spawn|ForceSpawn|OrderedCheckpoint)(\d+)$");
+						let regman=lazy_regex::regex!(r"^(BonusStart|Spawn|ForceSpawn|OrderedCheckpoint|WormholeOut)(\d+)$");
 						if let Some(captures) = regman.captures(other) {
 							match &captures[1]{
-								"BonusStart"=>Some(crate::model::TempIndexedAttributes::Start{mode_id:captures[2].parse::<u32>().unwrap()}),
-								"Spawn"|"ForceSpawn"=>Some(crate::model::TempIndexedAttributes::Spawn{mode_id:0,stage_id:captures[2].parse::<u32>().unwrap()}),
-								"OrderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::OrderedCheckpoint{mode_id:0,checkpoint_id:captures[2].parse::<u32>().unwrap()}),
+								"BonusStart"=>Some(crate::model::TempIndexedAttributes::Start(crate::model::TempAttrStart{mode_id:captures[2].parse::<u32>().unwrap()})),
+								"Spawn"|"ForceSpawn"=>Some(crate::model::TempIndexedAttributes::Spawn(crate::model::TempAttrSpawn{mode_id:0,stage_id:captures[2].parse::<u32>().unwrap()})),
+								"OrderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::OrderedCheckpoint(crate::model::TempAttrOrderedCheckpoint{mode_id:0,checkpoint_id:captures[2].parse::<u32>().unwrap()})),
+								"WormholeOut"=>Some(crate::model::TempIndexedAttributes::Wormhole(crate::model::TempAttrWormhole{wormhole_id:captures[2].parse::<u32>().unwrap()})),
 								_=>None,
 							}
 						}else{

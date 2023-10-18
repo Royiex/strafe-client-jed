@@ -65,21 +65,35 @@ impl ModeDescription{
 		self.ordered_checkpoints.get(*self.ordered_checkpoint_from_checkpoint_id.get(&checkpoint_id)?)
 	}
 }
+//I don't want this code to exist!
+#[derive(Clone)]
+pub struct TempAttrStart{
+	pub mode_id:u32,
+}
+#[derive(Clone)]
+pub struct TempAttrSpawn{
+	pub mode_id:u32,
+	pub stage_id:u32,
+}
+#[derive(Clone)]
+pub struct TempAttrOrderedCheckpoint{
+	pub mode_id:u32,
+	pub checkpoint_id:u32,
+}
+#[derive(Clone)]
+pub struct TempAttrUnorderedCheckpoint{
+	pub mode_id:u32,
+}
+#[derive(Clone)]
+pub struct TempAttrWormhole{
+	pub wormhole_id:u32,
+}
 pub enum TempIndexedAttributes{
-	Start{
-		mode_id:u32,
-	},
-	Spawn{
-		mode_id:u32,
-		stage_id:u32,
-	},
-	OrderedCheckpoint{
-		mode_id:u32,
-		checkpoint_id:u32,
-	},
-	UnorderedCheckpoint{
-		mode_id:u32,
-	},
+	Start(TempAttrStart),
+	Spawn(TempAttrSpawn),
+	OrderedCheckpoint(TempAttrOrderedCheckpoint),
+	UnorderedCheckpoint(TempAttrUnorderedCheckpoint),
+	Wormhole(TempAttrWormhole),
 }
 
 //you have this effect while in contact

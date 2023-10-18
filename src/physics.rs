@@ -871,13 +871,14 @@ impl PhysicsState {
 			//make aabb and run vertices to get realistic bounds
 			for model_instance in &model.instances{
 				if let Some(model_physics)=ModelPhysics::from_model(model,model_instance){
-					let model_id=self.models.push(model_physics) as u32;
+					let model_id=self.models.push(model_physics);
 					for attr in &model_instance.temp_indexing{
 						match attr{
-							crate::model::TempIndexedAttributes::Start{mode_id}=>starts.push((*mode_id,model_id)),
-							crate::model::TempIndexedAttributes::Spawn{mode_id,stage_id}=>spawns.push((*mode_id,model_id,*stage_id)),
-							crate::model::TempIndexedAttributes::OrderedCheckpoint{mode_id,checkpoint_id}=>ordered_checkpoints.push((*mode_id,model_id,*checkpoint_id)),
-							crate::model::TempIndexedAttributes::UnorderedCheckpoint{mode_id}=>unordered_checkpoints.push((*mode_id,model_id)),
+							crate::model::TempIndexedAttributes::Start(s)=>starts.push((model_id,s.clone())),
+							crate::model::TempIndexedAttributes::Spawn(s)=>spawns.push((model_id,s.clone())),
+							crate::model::TempIndexedAttributes::OrderedCheckpoint(s)=>ordered_checkpoints.push((model_id,s.clone())),
+							crate::model::TempIndexedAttributes::UnorderedCheckpoint(s)=>unordered_checkpoints.push((model_id,s.clone())),
+							crate::model::TempIndexedAttributes::Wormhole(s)=>{self.models.model_id_from_wormhole_id.insert(s.wormhole_id,model_id);},
 						}
 					}
 				}
@@ -886,51 +887,47 @@ impl PhysicsState {
 		self.bvh=crate::bvh::generate_bvh(self.models.models.iter().map(|m|m.mesh().clone()).collect());
 		//I don't wanna write structs for temporary structures
 		//this code builds ModeDescriptions from the unsorted lists at the top of the function
-		starts.sort_by_key(|tup|tup.0);
-		let mut eshmep=std::collections::HashMap::new();
-		let mut modedatas:Vec<(u32,Vec<(u32,u32)>,Vec<(u32,u32)>,Vec<u32>)>=starts.into_iter().enumerate().map(|(i,tup)|{
-			eshmep.insert(tup.0,i);
-			(tup.1,Vec::new(),Vec::new(),Vec::new())
+		starts.sort_by_key(|tup|tup.1.mode_id);
+		let mut mode_id_from_map_mode_id=std::collections::HashMap::new();
+		let mut modedatas:Vec<(usize,Vec<(u32,usize)>,Vec<(u32,usize)>,Vec<usize>,u32)>=starts.into_iter().enumerate().map(|(i,(model_id,s))|{
+			mode_id_from_map_mode_id.insert(s.mode_id,i);
+			(model_id,Vec::new(),Vec::new(),Vec::new(),s.mode_id)
 		}).collect();
-		for tup in spawns{
-			if let Some(mode_id)=eshmep.get(&tup.0){
+		for (model_id,s) in spawns{
+			if let Some(mode_id)=mode_id_from_map_mode_id.get(&s.mode_id){
 				if let Some(modedata)=modedatas.get_mut(*mode_id){
-					modedata.1.push((tup.2,tup.1));
+					modedata.1.push((s.stage_id,model_id));
 				}
 			}
 		}
-		for tup in ordered_checkpoints{
-			if let Some(mode_id)=eshmep.get(&tup.0){
+		for (model_id,s) in ordered_checkpoints{
+			if let Some(mode_id)=mode_id_from_map_mode_id.get(&s.mode_id){
 				if let Some(modedata)=modedatas.get_mut(*mode_id){
-					modedata.2.push((tup.2,tup.1));
+					modedata.2.push((s.checkpoint_id,model_id));
 				}
 			}
 		}
-		for tup in unordered_checkpoints{
-			if let Some(mode_id)=eshmep.get(&tup.0){
+		for (model_id,s) in unordered_checkpoints{
+			if let Some(mode_id)=mode_id_from_map_mode_id.get(&s.mode_id){
 				if let Some(modedata)=modedatas.get_mut(*mode_id){
-					modedata.3.push(tup.1);
+					modedata.3.push(model_id);
 				}
 			}
 		}
-		let num_modes=self.modes.modes.len();
-		for (mode_id,mode) in eshmep{
-			self.modes.mode_from_mode_id.insert(mode_id,num_modes+mode);
-		}
-		self.modes.modes.append(&mut modedatas.into_iter().map(|mut tup|{
+		for mut tup in modedatas.into_iter(){
 			tup.1.sort_by_key(|tup|tup.0);
 			tup.2.sort_by_key(|tup|tup.0);
 			let mut eshmep1=std::collections::HashMap::new();
 			let mut eshmep2=std::collections::HashMap::new();
-			crate::model::ModeDescription{
-				start:tup.0 as usize,
-				spawns:tup.1.into_iter().enumerate().map(|(i,tup)|{eshmep1.insert(tup.0,i);tup.1 as usize}).collect(),
-				ordered_checkpoints:tup.2.into_iter().enumerate().map(|(i,tup)|{eshmep2.insert(tup.0,i);tup.1 as usize}).collect(),
-				unordered_checkpoints:tup.3.into_iter().map(|v|v as usize).collect(),
+			self.modes.insert(tup.4,crate::model::ModeDescription{
+				start:tup.0,
+				spawns:tup.1.into_iter().enumerate().map(|(i,tup)|{eshmep1.insert(tup.0,i);tup.1}).collect(),
+				ordered_checkpoints:tup.2.into_iter().enumerate().map(|(i,tup)|{eshmep2.insert(tup.0,i);tup.1}).collect(),
+				unordered_checkpoints:tup.3,
 				spawn_from_stage_id:eshmep1,
 				ordered_checkpoint_from_checkpoint_id:eshmep2,
-			}
-		}).collect());
+			});
+		}
 		println!("Physics Objects: {}",self.models.models.len());
 	}
 
