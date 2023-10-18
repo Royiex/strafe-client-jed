@@ -50,8 +50,17 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 	let mut contacting=crate::model::ContactingAttributes::default();
 	let mut force_can_collide=can_collide;
 	match name{
-		"Water"=>intersecting.water=Some(crate::model::IntersectingWater{density:Planar64::ONE,viscosity:Planar64::ONE/10,current:velocity}),
-		"Accelerator"=>{force_can_collide=false;intersecting.accelerator=Some(crate::model::IntersectingAccelerator{acceleration:velocity})},
+		"Water"=>{
+			force_can_collide=false;
+			//TODO: read stupid CustomPhysicalProperties
+			intersecting.water=Some(crate::model::IntersectingWater{density:Planar64::ONE,viscosity:Planar64::ONE/10,current:velocity});
+		},
+		"Accelerator"=>{
+			//although the new game supports collidable accelerators, this is a roblox compatability map loader
+			force_can_collide=false;
+			general.accelerator=Some(crate::model::GameMechanicAccelerator{acceleration:velocity});
+		},
+		"SetVelocity"=>general.trajectory=Some(crate::model::GameMechanicSetTrajectory::Velocity(velocity)),
 		"MapFinish"=>{force_can_collide=false;general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Finish})},
 		"MapAnticheat"=>{force_can_collide=false;general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Anitcheat})},
 		"Platform"=>general.teleport_behaviour=Some(crate::model::TeleportBehaviour::StageElement(crate::model::GameMechanicStageElement{
@@ -72,10 +81,26 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 					},
 					behaviour:match &captures[2]{
 						"Spawn"|"SpawnAt"=>crate::model::StageElementBehaviour::SpawnAt,
+						//cancollide false so you don't hit the side
+						//NOT a decoration
 						"Trigger"=>{force_can_collide=false;crate::model::StageElementBehaviour::Trigger},
 						"Teleport"=>{force_can_collide=false;crate::model::StageElementBehaviour::Teleport},
 						"Platform"=>crate::model::StageElementBehaviour::Platform,
 						_=>panic!("regex1[2] messed up bad"),
+					}
+				}));
+			}else if let Some(captures)=lazy_regex::regex!(r"^(Force)?(Jump)(\d+)$")
+			.captures(other){
+				general.teleport_behaviour=Some(crate::model::TeleportBehaviour::StageElement(crate::model::GameMechanicStageElement{
+					mode_id:0,
+					stage_id:0,
+					force:match captures.get(1){
+						Some(m)=>m.as_str()=="Force",
+						None=>false,
+					},
+					behaviour:match &captures[2]{
+						"Jump"=>crate::model::StageElementBehaviour::JumpLimit(captures[3].parse::<u32>().unwrap()),
+						_=>panic!("regex4[1] messed up bad"),
 					}
 				}));
 			}else if let Some(captures)=lazy_regex::regex!(r"^Bonus(Finish|Anticheat)(\d+)$")
@@ -86,39 +111,33 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 					"Anticheat"=>general.zone=Some(crate::model::GameMechanicZone{mode_id:captures[2].parse::<u32>().unwrap(),behaviour:crate::model::ZoneBehaviour::Anitcheat}),
 					_=>panic!("regex2[1] messed up bad"),
 				}
+			}else if let Some(captures)=lazy_regex::regex!(r"^(WormholeIn)(\d+)$")
+			.captures(other){
+				force_can_collide=false;
+				match &captures[1]{
+					"WormholeIn"=>general.teleport_behaviour=Some(crate::model::TeleportBehaviour::Wormhole(crate::model::GameMechanicWormhole{destination_model_id:captures[2].parse::<u32>().unwrap()})),
+					_=>panic!("regex3[1] messed up bad"),
+				}
 			}
 		}
 	}
 	//need some way to skip this
 	if velocity!=Planar64Vec3::ZERO{
-		general.booster=Some(crate::model::GameMechanicBooster{velocity});
+		general.booster=Some(crate::model::GameMechanicBooster::Velocity(velocity));
 	}
 	match force_can_collide{
 		true=>{
 			match name{
-				"Bounce"=>contacting.elasticity=Some(u32::MAX),
+				"Bounce"=>contacting.contact_behaviour=Some(crate::model::ContactingBehaviour::Elastic(u32::MAX)),
 				"Surf"=>contacting.contact_behaviour=Some(crate::model::ContactingBehaviour::Surf),
 				"Ladder"=>contacting.contact_behaviour=Some(crate::model::ContactingBehaviour::Ladder(crate::model::ContactingLadder{sticky:true})),
-				other=>{
-					if let Some(captures)=lazy_regex::regex!(r"^(Jump|WormholeIn)(\d+)$")
-					.captures(other){
-						match &captures[1]{
-							"Jump"=>general.jump_limit=Some(crate::model::GameMechanicJumpLimit{count:captures[2].parse::<u32>().unwrap()}),
-							"WormholeIn"=>general.teleport_behaviour=Some(crate::model::TeleportBehaviour::Wormhole(crate::model::GameMechanicWormhole{destination_model_id:captures[2].parse::<u32>().unwrap()})),
-							_=>panic!("regex3[1] messed up bad"),
-						}
-					}
-				}
+				_=>(),
 			}
 			crate::model::CollisionAttributes::Contact{contacting,general}
 		},
 		false=>if force_intersecting
-		||general.jump_limit.is_some()
-		||general.booster.is_some()
-		||general.zone.is_some()
-		||general.teleport_behaviour.is_some()
-		||intersecting.water.is_some()
-		||intersecting.accelerator.is_some()
+		||general.any()
+		||intersecting.any()
 		{
 			crate::model::CollisionAttributes::Intersect{intersecting,general}
 		}else{

@@ -1319,12 +1319,18 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				let model=c.model(&self.models).unwrap();
 				match &model.attributes{
 					PhysicsCollisionAttributes::Contact{contacting,general}=>{
+						let mut v=self.body.velocity;
 						match &contacting.contact_behaviour{
 							Some(crate::model::ContactingBehaviour::Surf)=>println!("I'm surfing!"),
+							&Some(crate::model::ContactingBehaviour::Elastic(elasticity))=>{
+								let n=c.normal(&self.models);
+								let d=n.dot(v)*Planar64::raw(-1-elasticity as i64);
+								v-=n*(d/n.dot(n));
+							},
 							Some(crate::model::ContactingBehaviour::Ladder(contacting_ladder))=>{
 								if contacting_ladder.sticky{
 									//kill v
-									self.body.velocity=Planar64Vec3::ZERO;//model.velocity
+									v=Planar64Vec3::ZERO;//model.velocity
 								}
 								//ladder walkstate
 								let (walk_state,a)=WalkState::ladder(&self.touching,&self.body,&self.style,&self.models,self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&c.normal(&self.models));
@@ -1348,7 +1354,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				if stage_element.force||self.game.stage_id<stage_element.stage_id{
 					self.game.stage_id=stage_element.stage_id;
 				}
-				match stage_element.behaviour{
+				match &stage_element.behaviour{
 					crate::model::StageElementBehaviour::SpawnAt=>(),
 					crate::model::StageElementBehaviour::Trigger
 					|crate::model::StageElementBehaviour::Teleport=>{
@@ -1366,6 +1372,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						}else{println!("bad3");}
 					},
 					crate::model::StageElementBehaviour::Platform=>(),
+					crate::model::StageElementBehaviour::JumpLimit(_)=>(),//TODO
 				}
 			},
 			Some(crate::model::TeleportBehaviour::Wormhole(wormhole))=>{
@@ -1374,11 +1381,28 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			None=>(),
 		}
 						//flatten v
-						let mut v=self.body.velocity;
 						self.touching.constrain_velocity(&self.models,&mut v);
 						match &general.booster{
 							Some(booster)=>{
-								v+=booster.velocity;
+								match booster{
+									&crate::model::GameMechanicBooster::Affine(transform)=>v=transform.transform_point3(v),
+									&crate::model::GameMechanicBooster::Velocity(velocity)=>v+=velocity,
+									&crate::model::GameMechanicBooster::Energy{direction,energy}=>todo!(),
+								}
+								self.touching.constrain_velocity(&self.models,&mut v);
+							},
+							None=>(),
+						}
+						match &general.trajectory{
+							Some(trajectory)=>{
+								match trajectory{
+									crate::model::GameMechanicSetTrajectory::AirTime(_) => todo!(),
+									crate::model::GameMechanicSetTrajectory::Height(_) => todo!(),
+									crate::model::GameMechanicSetTrajectory::TargetPointTime { target_point, time } => todo!(),
+									crate::model::GameMechanicSetTrajectory::TrajectoryTargetPoint { target_point, speed, trajectory_choice } => todo!(),
+									&crate::model::GameMechanicSetTrajectory::Velocity(velocity)=>v=velocity,
+									crate::model::GameMechanicSetTrajectory::DotVelocity { direction, dot } => todo!(),
+								}
 								self.touching.constrain_velocity(&self.models,&mut v);
 							},
 							None=>(),
@@ -1397,7 +1421,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				if stage_element.force||self.game.stage_id<stage_element.stage_id{
 					self.game.stage_id=stage_element.stage_id;
 				}
-				match stage_element.behaviour{
+				match &stage_element.behaviour{
 					crate::model::StageElementBehaviour::SpawnAt=>(),
 					crate::model::StageElementBehaviour::Trigger
 					|crate::model::StageElementBehaviour::Teleport=>{
@@ -1415,6 +1439,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						}else{println!("bad3");}
 					},
 					crate::model::StageElementBehaviour::Platform=>(),
+					crate::model::StageElementBehaviour::JumpLimit(_)=>(),//TODO
 				}
 			},
 			Some(crate::model::TeleportBehaviour::Wormhole(wormhole))=>{
