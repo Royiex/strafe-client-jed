@@ -124,7 +124,7 @@ struct WalkState{
 impl WalkEnum{
 	//args going crazy
 	//(walk_enum,body.acceleration)=with_target_velocity();
-	fn with_target_velocity(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&Vec<ModelPhysics>,mut velocity:Planar64Vec3,normal:&Planar64Vec3)->(WalkEnum,Planar64Vec3){
+	fn with_target_velocity(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&PhysicsModels,mut velocity:Planar64Vec3,normal:&Planar64Vec3)->(WalkEnum,Planar64Vec3){
 		touching.constrain_velocity(models,&mut velocity);
 		let mut target_diff=velocity-body.velocity;
 		//remove normal component
@@ -150,14 +150,14 @@ impl WalkEnum{
 	}
 }
 impl WalkState{
-	fn ground(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&Vec<ModelPhysics>,mut velocity:Planar64Vec3)->(Self,Planar64Vec3){
+	fn ground(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&PhysicsModels,velocity:Planar64Vec3)->(Self,Planar64Vec3){
 		let (walk_enum,a)=WalkEnum::with_target_velocity(touching,body,style,models,velocity,&Planar64Vec3::Y);
 		(Self{
 			state:walk_enum,
 			normal:Planar64Vec3::Y,
 		},a)
 	}
-	fn ladder(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&Vec<ModelPhysics>,mut velocity:Planar64Vec3,normal:&Planar64Vec3)->(Self,Planar64Vec3){
+	fn ladder(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&PhysicsModels,velocity:Planar64Vec3,normal:&Planar64Vec3)->(Self,Planar64Vec3){
 		let (walk_enum,a)=WalkEnum::with_target_velocity(touching,body,style,models,velocity,normal);
 		(Self{
 			state:walk_enum,
@@ -189,6 +189,36 @@ impl Default for Modes{
 		Self{
 			modes:Vec::new(),
 			mode_from_mode_id:std::collections::HashMap::new(),
+		}
+	}
+}
+
+struct PhysicsModels{
+	models:Vec<ModelPhysics>,
+	model_id_from_wormhole_id:std::collections::HashMap::<u32,usize>,
+}
+impl PhysicsModels{
+	fn clear(&mut self){
+		self.models.clear();
+		self.model_id_from_wormhole_id.clear();
+	}
+	fn get(&self,i:usize)->Option<&ModelPhysics>{
+		self.models.get(i)
+	}
+	fn get_wormhole_model(&self,wormhole_id:u32)->Option<&ModelPhysics>{
+		self.models.get(*self.model_id_from_wormhole_id.get(&wormhole_id)?)
+	}
+	fn push(&mut self,model:ModelPhysics)->usize{
+		let model_id=self.models.len();
+		self.models.push(model);
+		model_id
+	}
+}
+impl Default for PhysicsModels{
+	fn default() -> Self {
+		Self{
+			models:Vec::new(),
+			model_id_from_wormhole_id:std::collections::HashMap::new(),
 		}
 	}
 }
@@ -531,7 +561,7 @@ pub struct PhysicsState{
 	controls:u32,
 	move_state:MoveState,
 	//all models
-	models:Vec<ModelPhysics>,
+	models:PhysicsModels,
 	bvh:crate::bvh::BvhNode,
 	
 	modes:Modes,
@@ -610,44 +640,44 @@ impl ModelPhysics {
 //OR have a separate list from contacts for model intersection
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
 pub struct RelativeCollision {
-	face: TreyMeshFace,//just an id
-	model: u32,//using id to avoid lifetimes
+	face:TreyMeshFace,//just an id
+	model:usize,//using id to avoid lifetimes
 }
 
 impl RelativeCollision {
-	pub fn model<'a>(&self,models:&'a Vec<ModelPhysics>)->Option<&'a ModelPhysics>{
-		models.get(self.model as usize)
+	fn model<'a>(&self,models:&'a PhysicsModels)->Option<&'a ModelPhysics>{
+		models.get(self.model)
 	}
 	// pub fn mesh(&self,models:&Vec<ModelPhysics>) -> TreyMesh {
 	// 	return self.model(models).unwrap().face_mesh(self.face).clone()
 	// }
-	pub fn normal(&self,models:&Vec<ModelPhysics>) -> Planar64Vec3 {
+	fn normal(&self,models:&PhysicsModels) -> Planar64Vec3 {
 		return self.model(models).unwrap().face_normal(self.face)
 	}
 }
 
 struct TouchingState{
-	contacts:std::collections::HashMap::<u32,RelativeCollision>,
-	intersects:std::collections::HashMap::<u32,RelativeCollision>,
+	contacts:std::collections::HashMap::<usize,RelativeCollision>,
+	intersects:std::collections::HashMap::<usize,RelativeCollision>,
 }
 impl TouchingState{
 	fn clear(&mut self){
 		self.contacts.clear();
 		self.intersects.clear();
 	}
-	fn insert_contact(&mut self,model_id:u32,collision:RelativeCollision)->Option<RelativeCollision>{
+	fn insert_contact(&mut self,model_id:usize,collision:RelativeCollision)->Option<RelativeCollision>{
 		self.contacts.insert(model_id,collision)
 	}
-	fn remove_contact(&mut self,model_id:u32)->Option<RelativeCollision>{
+	fn remove_contact(&mut self,model_id:usize)->Option<RelativeCollision>{
 		self.contacts.remove(&model_id)
 	}
-	fn insert_intersect(&mut self,model_id:u32,collision:RelativeCollision)->Option<RelativeCollision>{
+	fn insert_intersect(&mut self,model_id:usize,collision:RelativeCollision)->Option<RelativeCollision>{
 		self.intersects.insert(model_id,collision)
 	}
-	fn remove_intersect(&mut self,model_id:u32)->Option<RelativeCollision>{
+	fn remove_intersect(&mut self,model_id:usize)->Option<RelativeCollision>{
 		self.intersects.remove(&model_id)
 	}
-	fn constrain_velocity(&self,models:&Vec<ModelPhysics>,velocity:&mut Planar64Vec3){
+	fn constrain_velocity(&self,models:&PhysicsModels,velocity:&mut Planar64Vec3){
 		for (_,contact) in &self.contacts {
 			let n=contact.normal(models);
 			let d=velocity.dot(n);
@@ -656,7 +686,7 @@ impl TouchingState{
 			}
 		}
 	}
-	fn constrain_acceleration(&self,models:&Vec<ModelPhysics>,acceleration:&mut Planar64Vec3){
+	fn constrain_acceleration(&self,models:&PhysicsModels,acceleration:&mut Planar64Vec3){
 		for (_,contact) in &self.contacts {
 			let n=contact.normal(models);
 			let d=acceleration.dot(n);
@@ -712,7 +742,7 @@ impl Default for PhysicsState{
 			time: Time::ZERO,
 			style:StyleModifiers::default(),
 			touching:TouchingState::default(),
-			models: Vec::new(),
+			models:PhysicsModels::default(),
 			bvh:crate::bvh::BvhNode::default(),
 			move_state: MoveState::Air,
 			camera: PhysicsCamera::from_offset(Planar64Vec3::int(0,2,0)),//4.5-2.5=2
@@ -835,8 +865,7 @@ impl PhysicsState {
 			//make aabb and run vertices to get realistic bounds
 			for model_instance in &model.instances{
 				if let Some(model_physics)=ModelPhysics::from_model(model,model_instance){
-					let model_id=self.models.len() as u32;
-					self.models.push(model_physics);
+					let model_id=self.models.push(model_physics) as u32;
 					for attr in &model_instance.temp_indexing{
 						match attr{
 							crate::model::TempIndexedAttributes::Start{mode_id}=>starts.push((*mode_id,model_id)),
@@ -848,7 +877,7 @@ impl PhysicsState {
 				}
 			}
 		}
-		self.bvh=crate::bvh::generate_bvh(self.models.iter().map(|m|m.mesh().clone()).collect());
+		self.bvh=crate::bvh::generate_bvh(self.models.models.iter().map(|m|m.mesh().clone()).collect());
 		//I don't wanna write structs for temporary structures
 		//this code builds ModeDescriptions from the unsorted lists at the top of the function
 		starts.sort_by_key(|tup|tup.0);
@@ -888,15 +917,15 @@ impl PhysicsState {
 			let mut eshmep1=std::collections::HashMap::new();
 			let mut eshmep2=std::collections::HashMap::new();
 			crate::model::ModeDescription{
-				start:tup.0,
-				spawns:tup.1.into_iter().enumerate().map(|(i,tup)|{eshmep1.insert(tup.0,i);tup.1}).collect(),
-				ordered_checkpoints:tup.2.into_iter().enumerate().map(|(i,tup)|{eshmep2.insert(tup.0,i);tup.1}).collect(),
-				unordered_checkpoints:tup.3,
+				start:tup.0 as usize,
+				spawns:tup.1.into_iter().enumerate().map(|(i,tup)|{eshmep1.insert(tup.0,i);tup.1 as usize}).collect(),
+				ordered_checkpoints:tup.2.into_iter().enumerate().map(|(i,tup)|{eshmep2.insert(tup.0,i);tup.1 as usize}).collect(),
+				unordered_checkpoints:tup.3.into_iter().map(|v|v as usize).collect(),
 				spawn_from_stage_id:eshmep1,
 				ordered_checkpoint_from_checkpoint_id:eshmep2,
 			}
 		}).collect());
-		println!("Physics Objects: {}",self.models.len());
+		println!("Physics Objects: {}",self.models.models.len());
 	}
 
 	pub fn load_user_settings(&mut self,user_settings:&crate::settings::UserSettings){
@@ -1159,9 +1188,9 @@ impl PhysicsState {
 		}
 		None
 	}
-	fn predict_collision_start(&self,time:Time,time_limit:Time,model_id:u32) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn predict_collision_start(&self,time:Time,time_limit:Time,model_id:usize) -> Option<TimedInstruction<PhysicsInstruction>> {
 		let mesh0=self.mesh();
-		let mesh1=self.models.get(model_id as usize).unwrap().mesh();
+		let mesh1=self.models.get(model_id).unwrap().mesh();
 		let (p,v,a,body_time)=(self.body.position,self.body.velocity,self.body.acceleration,self.body.time);
 		//find best t
 		let mut best_time=time_limit;
@@ -1266,12 +1295,12 @@ impl PhysicsState {
 			}
 		}
 		//generate instruction
-		if let Some(face) = best_face{
-			return Some(TimedInstruction {
+		if let Some(face)=best_face{
+			return Some(TimedInstruction{
 				time: best_time,
-				instruction: PhysicsInstruction::CollisionStart(RelativeCollision {
+				instruction:PhysicsInstruction::CollisionStart(RelativeCollision{
 					face,
-					model: model_id
+					model:model_id
 				})
 			})
 		}
@@ -1316,7 +1345,7 @@ fn teleport(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,poi
 	//touching.recalculate(body);
 }
 
-fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&Vec<ModelPhysics>,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body)->Option<MoveState>{
+fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&PhysicsModels,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body)->Option<MoveState>{
 	match teleport_behaviour{
 		Some(crate::model::TeleportBehaviour::StageElement(stage_element))=>{
 			if stage_element.force||game.stage_id<stage_element.stage_id{

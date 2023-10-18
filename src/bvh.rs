@@ -12,12 +12,12 @@ use crate::aabb::Aabb;
 #[derive(Default)]
 pub struct BvhNode{
 	children:Vec<Self>,
-	models:Vec<u32>,
+	models:Vec<usize>,
 	aabb:Aabb,
 }
 
 impl BvhNode{
-	pub fn the_tester<F:FnMut(u32)>(&self,aabb:&Aabb,f:&mut F){
+	pub fn the_tester<F:FnMut(usize)>(&self,aabb:&Aabb,f:&mut F){
 		for &model in &self.models{
 			f(model);
 		}
@@ -37,7 +37,7 @@ fn generate_bvh_node(boxen:Vec<(usize,Aabb)>)->BvhNode{
 	let n=boxen.len();
 	if n<20{
 		let mut aabb=Aabb::default();
-		let models=boxen.into_iter().map(|b|{aabb.join(&b.1);b.0 as u32}).collect();
+		let models=boxen.into_iter().map(|b|{aabb.join(&b.1);b.0}).collect();
 		BvhNode{
 			children:Vec::new(),
 			models,
