@@ -119,12 +119,12 @@ pub enum GameMechanicBooster{
 	Velocity(Planar64Vec3),//straight up boost velocity adds to your current velocity
 	Energy{direction:Planar64Vec3,energy:Planar64},//increase energy in direction
 }
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub enum TrajectoryChoice{
 	HighArcLongDuration,//underhand lob at target: less horizontal speed and more air time
 	LowArcShortDuration,//overhand throw at target: more horizontal speed and less air time
 }
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub enum GameMechanicSetTrajectory{
 	AirTime(Time),//air time (relative to gravity direction) is invariant across mass and gravity changes
 	Height(Planar64),//boost height (relative to gravity direction) is invariant across mass and gravity changes

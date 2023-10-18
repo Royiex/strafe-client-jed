@@ -404,11 +404,12 @@ impl TryFrom<[f32;3]> for Unit32Vec3{
 */
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy,Hash,Eq,Ord,PartialEq,PartialOrd)]
+#[derive(Clone,Copy,Debug,Hash,Eq,Ord,PartialEq,PartialOrd)]
 pub struct Planar64(i64);
 impl Planar64{
 	pub const ZERO:Self=Self(0);
 	pub const ONE:Self=Self(1<<32);
+	pub const FRAC_1_SQRT2:Self=Self(3_037_000_500);
 	#[inline]
 	pub const fn int(num:i32)->Self{
 		Self(Self::ONE.0*num as i64)
@@ -563,7 +564,7 @@ impl std::ops::Div<Planar64> for Planar64{
 
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy,Default,Hash,Eq,PartialEq)]
+#[derive(Clone,Copy,Debug,Default,Hash,Eq,PartialEq)]
 pub struct Planar64Vec3(glam::I64Vec3);
 impl Planar64Vec3{
 	pub const ZERO:Self=Planar64Vec3(glam::I64Vec3::ZERO);
@@ -628,6 +629,14 @@ impl Planar64Vec3{
 			(self.0.z as i128)*(rhs.0.z as i128)
 		)>>32) as i64)
 	}
+	#[inline]
+/*	pub fn cross(&self,rhs:Self)->Planar64Vec3{
+		Planar64Vec3(((
+			(self.0.x as i128)*(rhs.0.x as i128)+
+			(self.0.y as i128)*(rhs.0.y as i128)+
+			(self.0.z as i128)*(rhs.0.z as i128)
+		)>>32) as i64)
+	}*/
 	#[inline]
 	pub fn length(&self)->Planar64{
 		let radicand=(self.0.x as i128)*(self.0.x as i128)+(self.0.y as i128)*(self.0.y as i128)+(self.0.z as i128)*(self.0.z as i128);

@@ -1395,13 +1395,25 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						}
 						match &general.trajectory{
 							Some(trajectory)=>{
+								println!("??? {:?}",trajectory);
 								match trajectory{
-									crate::model::GameMechanicSetTrajectory::AirTime(_) => todo!(),
-									crate::model::GameMechanicSetTrajectory::Height(_) => todo!(),
-									crate::model::GameMechanicSetTrajectory::TargetPointTime { target_point, time } => todo!(),
-									crate::model::GameMechanicSetTrajectory::TrajectoryTargetPoint { target_point, speed, trajectory_choice } => todo!(),
+									&crate::model::GameMechanicSetTrajectory::Height(height)=>{
+										//vg=sqrt(-2*gg*height)
+										println!("height booster h={}",height);
+										let vg=v.dot(self.style.gravity);
+										let gg=self.style.gravity.dot(self.style.gravity);
+										let hb=(gg.sqrt()*height*2).sqrt()*gg.sqrt();
+										println!("hb={} vg={}",hb,vg);
+										let b=self.style.gravity*((-hb-vg)/gg);
+										println!("bopo {}",b);
+										v+=b;
+									},
 									&crate::model::GameMechanicSetTrajectory::Velocity(velocity)=>v=velocity,
-									crate::model::GameMechanicSetTrajectory::DotVelocity { direction, dot } => todo!(),
+									crate::model::GameMechanicSetTrajectory::AirTime(_)
+									|crate::model::GameMechanicSetTrajectory::TargetPointTime{target_point:_,time:_}
+									|crate::model::GameMechanicSetTrajectory::TrajectoryTargetPoint{target_point:_,speed:_,trajectory_choice:_}
+									|crate::model::GameMechanicSetTrajectory::DotVelocity{direction:_,dot:_}
+									=>(),
 								}
 								self.touching.constrain_velocity(&self.models,&mut v);
 							},

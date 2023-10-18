@@ -49,6 +49,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 	let mut intersecting=crate::model::IntersectingAttributes::default();
 	let mut contacting=crate::model::ContactingAttributes::default();
 	let mut force_can_collide=can_collide;
+	const GRAVITY:Planar64Vec3=Planar64Vec3::int(0,-100,0);
 	match name{
 		"Water"=>{
 			force_can_collide=false;
@@ -123,7 +124,20 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 	}
 	//need some way to skip this
 	if velocity!=Planar64Vec3::ZERO{
-		general.booster=Some(crate::model::GameMechanicBooster::Velocity(velocity));
+		//assume all vertical boosters are targetting a height
+		let vg=velocity.dot(GRAVITY);
+		if Planar64::ZERO<=vg{
+			//weird down booster
+			general.booster=Some(crate::model::GameMechanicBooster::Velocity(velocity));
+		}else{
+			println!("set attr");
+			let gg=GRAVITY.dot(GRAVITY);
+			let height=-vg*gg.sqrt().sqrt()*Planar64::FRAC_1_SQRT2/gg;//vi/sqrt(-2*a)=d
+			let v=velocity-GRAVITY*(vg/gg);
+			//if we are adding zero SO BE IT, the check to see if the vectors are parallel is too sensitive
+			general.booster=Some(crate::model::GameMechanicBooster::Velocity(v));
+			general.trajectory=Some(crate::model::GameMechanicSetTrajectory::Height(height));
+		}
 	}
 	match force_can_collide{
 		true=>{
