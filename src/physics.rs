@@ -1356,12 +1356,12 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		}
 		//selectively update body
 		match &ins.instruction {
-			//PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),//dodge time for mouse movement
+			PhysicsInstruction::Input(PhysicsInputInstruction::Idle)=>self.time=ins.time,//idle simply updates time
 			PhysicsInstruction::Input(_)
 			|PhysicsInstruction::ReachWalkTargetVelocity
 			|PhysicsInstruction::CollisionStart(_)
 			|PhysicsInstruction::CollisionEnd(_)
-			|PhysicsInstruction::StrafeTick => self.advance_time(ins.time),
+			|PhysicsInstruction::StrafeTick=>self.advance_time(ins.time),
 		}
 		match ins.instruction {
 			PhysicsInstruction::CollisionStart(c) => {
