@@ -1,3 +1,18 @@
+use std::borrow::Cow;
+use wgpu::{util::DeviceExt,AstcBlock,AstcChannel};
+use crate::model_graphics::{GraphicsVertex,ModelGraphicsInstance};
+
+#[derive(Clone)]
+pub struct ModelUpdate{
+	transform:Option<glam::Mat4>,
+	color:Option<glam::Vec4>,
+}
+
+#[derive(Clone)]
+pub enum GraphicsInstruction{
+	UpdateModel(ModelUpdate),
+	Render,
+}
 
 struct Entity {
 	index_count: u32,

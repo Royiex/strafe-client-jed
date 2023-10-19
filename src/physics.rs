@@ -736,11 +736,11 @@ impl PhysicsState {
 		self.touching.clear();
 	}
 
-	pub fn into_worker(mut self)->crate::worker::CompatWorker<TimedInstruction<InputInstruction>,PhysicsOutputState,Box<dyn FnMut(TimedInstruction<InputInstruction>)->PhysicsOutputState>>{
+	pub fn into_worker(mut self)->crate::worker::CNWorker<TimedInstruction<InputInstruction>>{
 		let mut mouse_blocking=true;
 		let mut last_mouse_time=self.next_mouse.time;
 		let mut timeline=std::collections::VecDeque::new();
-		crate::worker::CompatWorker::new(self.output(),Box::new(move |ins:TimedInstruction<InputInstruction>|{
+		crate::worker::CNWorker::new(move |ins:TimedInstruction<InputInstruction>|{
 			if if let Some(phys_input)=match ins.instruction{
 				InputInstruction::MoveMouse(m)=>{
 					if mouse_blocking{
@@ -819,8 +819,7 @@ impl PhysicsState {
 					});
 				}
 			}
-			self.output()
-		}))
+		})
 	}
 
 	pub fn output(&self)->PhysicsOutputState{

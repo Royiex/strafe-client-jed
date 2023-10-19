@@ -1,6 +1,4 @@
-use std::{borrow::Cow, time::Instant};
-use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
-use model_graphics::{GraphicsVertex,ModelGraphicsInstance};
+use std::time::Instant;
 use physics::{InputInstruction, PhysicsInstruction};
 use instruction::{TimedInstruction, InstructionConsumer};
 
@@ -23,10 +21,18 @@ mod load_roblox;
 pub struct GlobalState{
 	start_time: std::time::Instant,
 	manual_mouse_lock:bool,
-	mouse:physics::MouseState,
+	mouse:std::sync::Arc<std::sync::Mutex<physics::MouseState>>,
 	user_settings:settings::UserSettings,
-	graphics:graphics::GraphicsState,
-	physics_thread:worker::CompatWorker<TimedInstruction<InputInstruction>,physics::PhysicsOutputState,Box<dyn FnMut(TimedInstruction<InputInstruction>)->physics::PhysicsOutputState>>,
+	//Ideally the graphics thread worker description is:
+	/*
+	WorkerDescription{
+		input:Immediate,
+		output:Realtime(PoolOrdering::Ordered(3)),
+	}
+	*/
+	//up to three frames in flight, dropping new frame requests when all three are busy, and dropping output frames when one renders out of order
+	graphics_thread:worker::INWorker<graphics::GraphicsInstruction>,
+	physics_thread:worker::QNWorker<TimedInstruction<InputInstruction>>,
 }
 
 impl framework::Example for GlobalState {
