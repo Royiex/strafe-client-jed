@@ -2,6 +2,39 @@ use std::thread;
 use std::sync::{mpsc,Arc};
 use parking_lot::Mutex;
 
+//WorkerPool
+struct Pool(u32);
+enum PoolOrdering{
+	Single,//single thread cannot get out of order
+	Ordered(u32),//order matters and should be buffered/dropped according to ControlFlow
+	Unordered(u32),//order does not matter
+}
+//WorkerInput
+enum Input{
+	//no input, workers have everything needed at creation
+	None,
+	//Immediate input to any available worker, dropped if they are overflowing (all workers are busy)
+	Immediate,
+	//Queued input is ordered, but serial jobs that mutate state (such as running physics) can only be done with a single worker
+	Queued,
+}
+//WorkerOutput
+enum Output{
+	None(Pool),
+	Realtime(PoolOrdering),//outputs are dropped if they are out of order and order is demanded
+	Buffered(PoolOrdering),//outputs are held back internally if they are out of order and order is demanded
+}
+
+//realtime output is an arc mutex of the output value that is assigned every time a worker completes a job
+//buffered output produces a receiver object that can be passed to the creation of another worker
+//when ordering is requested, output is ordered by the order each thread is run
+//which is the same as the order that the input data is processed except for Input::None which has no input data
+//WorkerDescription
+struct Description{
+	input:Input,
+	output:Output,
+}
+
 //The goal here is to have a worker thread that parks itself when it runs out of work.
 //The worker thread publishes the result of its work back to the worker object for every item in the work queue.
 //The physics (target use case) knows when it has not changed the body, so not updating the value is also an option.
