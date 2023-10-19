@@ -441,7 +441,7 @@ impl GraphicsState{
 		let mut instance_count=0;
 		let uniform_buffer_binding_size=<GlobalState as framework::Example>::required_limits().max_uniform_buffer_binding_size as usize;
 		let chunk_size=uniform_buffer_binding_size/MODEL_BUFFER_SIZE_BYTES;
-		self.graphics.models.reserve(models.len());
+		self.models.reserve(models.len());
 		for model in models.into_iter() {
 			instance_count+=model.instances.len();
 			for instances_chunk in model.instances.rchunks(chunk_size){
@@ -456,13 +456,13 @@ impl GraphicsState{
 					Some(texture_id)=>{
 						match double_map.get(&texture_id){
 							Some(&mapped_texture_id)=>&texture_views[mapped_texture_id as usize],
-							None=>&self.graphics.temp_squid_texture_view,
+							None=>&self.temp_squid_texture_view,
 						}
 					},
-					None=>&self.graphics.temp_squid_texture_view,
+					None=>&self.temp_squid_texture_view,
 				};
 				let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-					layout: &self.graphics.bind_group_layouts.model,
+					layout: &self.bind_group_layouts.model,
 					entries: &[
 						wgpu::BindGroupEntry {
 							binding: 0,
@@ -474,7 +474,7 @@ impl GraphicsState{
 						},
 						wgpu::BindGroupEntry {
 							binding: 2,
-							resource: wgpu::BindingResource::Sampler(&self.graphics.samplers.repeat),
+							resource: wgpu::BindingResource::Sampler(&self.samplers.repeat),
 						},
 					],
 					label: Some(format!("Model{} Bind Group",model_count).as_str()),
@@ -485,7 +485,7 @@ impl GraphicsState{
 					usage: wgpu::BufferUsages::VERTEX,
 				});
 				//all of these are being moved here
-				self.graphics.models.push(ModelGraphics{
+				self.models.push(ModelGraphics{
 					instances:instances_chunk.to_vec(),
 					vertex_buf,
 					entities: model.entities.iter().map(|indices|{
@@ -508,11 +508,16 @@ impl GraphicsState{
 		println!("Textures Loaded={}",texture_views.len());
 		println!("Indexed Models={}",indexed_models_len);
 		println!("Deduplicated Models={}",deduplicated_models_len);
-		println!("Graphics Objects: {}",self.graphics.models.len());
+		println!("Graphics Objects: {}",self.models.len());
 		println!("Graphics Instances: {}",instance_count);
 	}
-	pub fn new()->Self{
 
+	pub fn new(
+		config: &wgpu::SurfaceConfiguration,
+		_adapter: &wgpu::Adapter,
+		device: &wgpu::Device,
+		queue: &wgpu::Queue,
+	)->Self{
 		let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: None,
 			entries: &[
@@ -868,9 +873,9 @@ impl GraphicsState{
 		device: &wgpu::Device,
 		_queue: &wgpu::Queue,
 	) {
-		self.graphics.depth_view = Self::create_depth_texture(config, device);
-		self.graphics.camera.screen_size=glam::uvec2(config.width, config.height);
-		self.graphics.load_user_settings(&self.user_settings);
+		self.depth_view = Self::create_depth_texture(config, device);
+		self.camera.screen_size=glam::uvec2(config.width, config.height);
+		self.load_user_settings(&self.user_settings);
 	}
 	pub fn render(
 		&mut self,
@@ -892,11 +897,11 @@ impl GraphicsState{
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
 		// update rotation
-		let camera_uniforms = self.graphics.camera.to_uniform_data(self.physics_thread.grab_clone().adjust_mouse(&self.mouse));
-		self.graphics.staging_belt
+		let camera_uniforms = self.camera.to_uniform_data(self.physics_thread.grab_clone().adjust_mouse(&self.mouse));
+		self.staging_belt
 			.write_buffer(
 				&mut encoder,
-				&self.graphics.camera_buf,
+				&self.camera_buf,
 				0,
 				wgpu::BufferSize::new((camera_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
 				device,
@@ -904,9 +909,9 @@ impl GraphicsState{
 			.copy_from_slice(bytemuck::cast_slice(&camera_uniforms));
 		//This code only needs to run when the uniforms change
 		/*
-		for model in self.graphics.models.iter() {
+		for model in self.models.iter() {
 			let model_uniforms = get_instances_buffer_data(&model.instances);
-			self.graphics.staging_belt
+			self.staging_belt
 				.write_buffer(
 					&mut encoder,
 					&model.model_buf,//description of where data will be written when command is executed
@@ -917,7 +922,7 @@ impl GraphicsState{
 				.copy_from_slice(bytemuck::cast_slice(&model_uniforms));
 		}
 		*/
-		self.graphics.staging_belt.finish();
+		self.staging_belt.finish();
 
 		{
 			let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -936,7 +941,7 @@ impl GraphicsState{
 					},
 				})],
 				depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-					view: &self.graphics.depth_view,
+					view: &self.depth_view,
 					depth_ops: Some(wgpu::Operations {
 						load: wgpu::LoadOp::Clear(1.0),
 						store: false,
@@ -945,11 +950,11 @@ impl GraphicsState{
 				}),
 			});
 
-			rpass.set_bind_group(0, &self.graphics.bind_groups.camera, &[]);
-			rpass.set_bind_group(1, &self.graphics.bind_groups.skybox_texture, &[]);
+			rpass.set_bind_group(0, &self.bind_groups.camera, &[]);
+			rpass.set_bind_group(1, &self.bind_groups.skybox_texture, &[]);
 
-			rpass.set_pipeline(&self.graphics.pipelines.model);
-			for model in self.graphics.models.iter() {
+			rpass.set_pipeline(&self.pipelines.model);
+			for model in self.models.iter() {
 				rpass.set_bind_group(2, &model.bind_group, &[]);
 				rpass.set_vertex_buffer(0, model.vertex_buf.slice(..));
 
@@ -959,13 +964,13 @@ impl GraphicsState{
 				}
 			}
 
-			rpass.set_pipeline(&self.graphics.pipelines.skybox);
+			rpass.set_pipeline(&self.pipelines.skybox);
 			rpass.draw(0..3, 0..1);
 		}
 
 		queue.submit(std::iter::once(encoder.finish()));
 
-		self.graphics.staging_belt.recall();
+		self.staging_belt.recall();
 	}
 }
 const MODEL_BUFFER_SIZE:usize=4*4 + 12 + 4;//let size=std::mem::size_of::<ModelInstance>();
