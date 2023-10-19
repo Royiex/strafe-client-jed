@@ -122,7 +122,7 @@ fn write_input_instruction<W:std::io::Write>(state:&mut InputInstructionDeltaSta
 		|crate::physics::InputInstruction::Idle=>0u32,//TODO: don't write idle instructions
 	};
 	//instruction id packed with game control parity bit.  This could be 1 byte but it ruins the alignment
-	w.write(&(ins.instruction as u32|parity).to_le_bytes());//4B
+	w.write(&(unsafe{std::mem::transmute::<crate::physics::InputInstruction,u32>(ins.instruction)}|parity).to_le_bytes());//4B
 	match &ins.instruction{
 		&crate::physics::InputInstruction::MoveMouse(m)=>{//4B
 			let dm=m-state.mouse_pos;
