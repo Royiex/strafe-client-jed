@@ -31,25 +31,12 @@ pub enum PhysicsInputInstruction {
 	SetZoom(bool),
 	Reset,
 	Idle,
-}
-#[derive(Debug)]
-pub enum InputInstruction {
-	MoveMouse(glam::IVec2),
-	MoveRight(bool),
-	MoveUp(bool),
-	MoveBack(bool),
-	MoveLeft(bool),
-	MoveDown(bool),
-	MoveForward(bool),
-	Jump(bool),
-	Zoom(bool),
-	Reset,
-	Idle,
 		//Idle: there were no input events, but the simulation is safe to advance to this timestep
 		//for interpolation / networking / playback reasons, most playback heads will always want
 		//to be 1 instruction ahead to generate the next state for interpolation.
 }
-#[derive(Clone,Hash)]
+
+#[derive(Clone,Hash,Default)]
 pub struct Body {
 	position: Planar64Vec3,//I64 where 2^32 = 1 u
 	velocity: Planar64Vec3,//I64 where 2^32 = 1 u/s
@@ -254,6 +241,19 @@ impl PhysicsCamera {
 	fn simulate_move_rotation_y(&self,mouse_pos_x:i32)->Planar64Mat3{
 		let ax=-self.sensitivity.x.mul_int((mouse_pos_x-self.mouse.pos.x+self.clamped_mouse_pos.x) as i64);
 		Planar64Mat3::from_rotation_y(Angle32::wrap_from_i64(ax))
+	}
+}
+
+impl std::default::Default for PhysicsCamera{
+	fn default()->Self{
+		Self{
+			offset:Planar64Vec3::ZERO,//TODO: delete this from PhysicsCamera, it should be GraphicsCamera only
+			sensitivity:Ratio64Vec2::ONE*200_000,
+			mouse:MouseState::default(),//t=0 does not cause divide by zero because it's immediately replaced
+			clamped_mouse_pos:glam::IVec2::ZERO,
+			angle_pitch_lower_limit:-Angle32::FRAC_PI_2,
+			angle_pitch_upper_limit:Angle32::FRAC_PI_2,
+		}
 	}
 }
 
@@ -523,15 +523,15 @@ enum MoveState{
 }
 
 pub struct PhysicsState{
-	pub time:Time,
+	time:Time,
 	body:Body,
 	world:WorldState,//currently there is only one state the world can be in
-	pub game:GameMechanicsState,
+	game:GameMechanicsState,
 	style:StyleModifiers,
 	touching:TouchingState,
 	//camera must exist in state because wormholes modify the camera, also camera punch
 	camera:PhysicsCamera,
-	next_mouse:MouseState,//Where is the mouse headed next
+	pub next_mouse:MouseState,//Where is the mouse headed next
 	controls:u32,
 	move_state:MoveState,
 	//all models
@@ -541,16 +541,16 @@ pub struct PhysicsState{
 	modes:Modes,
 	//the spawn point is where you spawn when you load into the map.
 	//This is not the same as Reset which teleports you to Spawn0
-	pub spawn_point:Planar64Vec3,
+	spawn_point:Planar64Vec3,
 }
-#[derive(Clone)]
+#[derive(Clone,Default)]
 pub struct PhysicsOutputState{
 	camera:PhysicsCamera,
 	body:Body,
 }
 impl PhysicsOutputState{
-	pub fn adjust_mouse(&self,mouse:&MouseState)->(glam::Vec3,glam::Vec2){
-		((self.body.extrapolated_position(mouse.time)+self.camera.offset).into(),self.camera.simulate_move_angles(mouse.pos))
+	pub fn extrapolate(&self,mouse_pos:glam::IVec2,time:Time)->(glam::Vec3,glam::Vec2){
+		((self.body.extrapolated_position(time)+self.camera.offset).into(),self.camera.simulate_move_angles(mouse_pos))
 	}
 }
 
@@ -734,93 +734,7 @@ impl PhysicsState {
 		self.models.clear();
 		self.modes.clear();
 		self.touching.clear();
-	}
-
-	pub fn into_worker(mut self)->crate::worker::CompatWorker<TimedInstruction<InputInstruction>,PhysicsOutputState,Box<dyn FnMut(TimedInstruction<InputInstruction>)->PhysicsOutputState>>{
-		let mut mouse_blocking=true;
-		let mut last_mouse_time=self.next_mouse.time;
-		let mut timeline=std::collections::VecDeque::new();
-		crate::worker::CompatWorker::new(self.output(),Box::new(move |ins:TimedInstruction<InputInstruction>|{
-			if if let Some(phys_input)=match ins.instruction{
-				InputInstruction::MoveMouse(m)=>{
-					if mouse_blocking{
-						//tell the game state which is living in the past about its future
-						timeline.push_front(TimedInstruction{
-							time:last_mouse_time,
-							instruction:PhysicsInputInstruction::SetNextMouse(MouseState{time:ins.time,pos:m}),
-						});
-					}else{
-						//mouse has just started moving again after being still for longer than 10ms.
-						//replace the entire mouse interpolation state to avoid an intermediate state with identical m0.t m1.t timestamps which will divide by zero
-						timeline.push_front(TimedInstruction{
-							time:last_mouse_time,
-							instruction:PhysicsInputInstruction::ReplaceMouse(
-								MouseState{time:last_mouse_time,pos:self.next_mouse.pos},
-								MouseState{time:ins.time,pos:m}
-							),
-						});
-						//delay physics execution until we have an interpolation target
-						mouse_blocking=true;
-					}
-					last_mouse_time=ins.time;
-					None
-				},
-				InputInstruction::MoveForward(s)=>Some(PhysicsInputInstruction::SetMoveForward(s)),
-				InputInstruction::MoveLeft(s)=>Some(PhysicsInputInstruction::SetMoveLeft(s)),
-				InputInstruction::MoveBack(s)=>Some(PhysicsInputInstruction::SetMoveBack(s)),
-				InputInstruction::MoveRight(s)=>Some(PhysicsInputInstruction::SetMoveRight(s)),
-				InputInstruction::MoveUp(s)=>Some(PhysicsInputInstruction::SetMoveUp(s)),
-				InputInstruction::MoveDown(s)=>Some(PhysicsInputInstruction::SetMoveDown(s)),
-				InputInstruction::Jump(s)=>Some(PhysicsInputInstruction::SetJump(s)),
-				InputInstruction::Zoom(s)=>Some(PhysicsInputInstruction::SetZoom(s)),
-				InputInstruction::Reset=>Some(PhysicsInputInstruction::Reset),
-				InputInstruction::Idle=>Some(PhysicsInputInstruction::Idle),
-			}{
-				//non-mouse event
-				timeline.push_back(TimedInstruction{
-					time:ins.time,
-					instruction:phys_input,
-				});
-				
-				if mouse_blocking{
-					//assume the mouse has stopped moving after 10ms.
-					//shitty mice are 125Hz which is 8ms so this should cover that.
-					//setting this to 100us still doesn't print even though it's 10x lower than the polling rate,
-					//so mouse events are probably not handled separately from drawing and fire right before it :(
-					if Time::from_millis(10)<ins.time-self.next_mouse.time{
-						//push an event to extrapolate no movement from
-						timeline.push_front(TimedInstruction{
-							time:last_mouse_time,
-							instruction:PhysicsInputInstruction::SetNextMouse(MouseState{time:ins.time,pos:self.next_mouse.pos}),
-						});
-						last_mouse_time=ins.time;
-						//stop blocking. the mouse is not moving so the physics does not need to live in the past and wait for interpolation targets.
-						mouse_blocking=false;
-						true
-					}else{
-						false
-					}
-				}else{
-					//keep this up to date so that it can be used as a known-timestamp
-					//that the mouse was not moving when the mouse starts moving again
-					last_mouse_time=ins.time;
-					true
-				}
-			}else{
-				//mouse event
-				true
-			}{
-				//empty queue
-				while let Some(instruction)=timeline.pop_front(){
-					self.run(instruction.time);
-					self.process_instruction(TimedInstruction{
-						time:instruction.time,
-						instruction:PhysicsInstruction::Input(instruction.instruction),
-					});
-				}
-			}
-			self.output()
-		}))
+		self.bvh=crate::bvh::BvhNode::default();
 	}
 
 	pub fn output(&self)->PhysicsOutputState{
@@ -828,6 +742,15 @@ impl PhysicsState {
 			body:self.body.clone(),
 			camera:self.camera.clone(),
 		}
+	}
+
+	pub fn spawn(&mut self,spawn_point:Planar64Vec3){
+		self.game.stage_id=0;
+		self.spawn_point=spawn_point;
+		self.process_instruction(crate::instruction::TimedInstruction{
+			time:self.time,
+			instruction: PhysicsInstruction::Input(PhysicsInputInstruction::Reset),
+		});
 	}
 
 	pub fn generate_models(&mut self,indexed_models:&crate::model::IndexedModelInstances){
@@ -1357,12 +1280,12 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		}
 		//selectively update body
 		match &ins.instruction {
-			//PhysicsInstruction::Input(InputInstruction::MoveMouse(_)) => (),//dodge time for mouse movement
+			PhysicsInstruction::Input(PhysicsInputInstruction::Idle)=>self.time=ins.time,//idle simply updates time
 			PhysicsInstruction::Input(_)
 			|PhysicsInstruction::ReachWalkTargetVelocity
 			|PhysicsInstruction::CollisionStart(_)
 			|PhysicsInstruction::CollisionEnd(_)
-			|PhysicsInstruction::StrafeTick => self.advance_time(ins.time),
+			|PhysicsInstruction::StrafeTick=>self.advance_time(ins.time),
 		}
 		match ins.instruction {
 			PhysicsInstruction::CollisionStart(c) => {

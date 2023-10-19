@@ -1,17 +1,69 @@
 use std::thread;
 use std::sync::{mpsc,Arc};
-use parking_lot::Mutex;
+use parking_lot::{Mutex,Condvar};
+
+//WorkerPool
+struct Pool(u32);
+enum PoolOrdering{
+	Single,//single thread cannot get out of order
+	Ordered(u32),//order matters and should be buffered/dropped according to ControlFlow
+	Unordered(u32),//order does not matter
+}
+//WorkerInput
+enum Input{
+	//no input, workers have everything needed at creation
+	None,
+	//Immediate input to any available worker, dropped if they are overflowing (all workers are busy)
+	Immediate,
+	//Queued input is ordered, but serial jobs that mutate state (such as running physics) can only be done with a single worker
+	Queued,//"Fifo"
+	//Query a function to get next input when a thread becomes available
+	//worker stops querying when Query function returns None and dies after all threads complete
+	//lifetimes sound crazy on this one
+	Query,
+	//Queue of length one, the input is replaced if it is submitted twice before the current work finishes
+	Mailbox,
+}
+//WorkerOutput
+enum Output{
+	None(Pool),
+	Realtime(PoolOrdering),//outputs are dropped if they are out of order and order is demanded
+	Buffered(PoolOrdering),//outputs are held back internally if they are out of order and order is demanded
+}
+
+//It would be possible to implement all variants
+//with a query input function and callback output function but I'm not sure if that's worth it.
+//Immediate = Condvar
+//Queued = receiver.recv()
+//a callback function would need to use an async runtime!
+
+//realtime output is an arc mutex of the output value that is assigned every time a worker completes a job
+//buffered output produces a receiver object that can be passed to the creation of another worker
+//when ordering is requested, output is ordered by the order each thread is run
+//which is the same as the order that the input data is processed except for Input::None which has no input data
+//WorkerDescription
+struct Description{
+	input:Input,
+	output:Output,
+}
 
 //The goal here is to have a worker thread that parks itself when it runs out of work.
 //The worker thread publishes the result of its work back to the worker object for every item in the work queue.
+//Previous values do not matter as soon as a new value is produced, which is why it's called "Realtime"
 //The physics (target use case) knows when it has not changed the body, so not updating the value is also an option.
 
-pub struct Worker<Task:Send,Value:Clone> {
+/*
+QR = WorkerDescription{
+	input:Queued,
+	output:Realtime(Single),
+}
+*/
+pub struct QRWorker<Task:Send,Value:Clone>{
 	sender: mpsc::Sender<Task>,
 	value:Arc<Mutex<Value>>,
 }
 
-impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
+impl<Task:Send+'static,Value:Clone+Send+'static> QRWorker<Task,Value>{
 	pub fn new<F:FnMut(Task)->Value+Send+'static>(value:Value,mut f:F) -> Self {
 		let (sender, receiver) = mpsc::channel::<Task>();
 		let ret=Self {
@@ -45,28 +97,79 @@ impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
 	}
 }
 
-pub struct CompatWorker<Task,Value:Clone,F>{
-	data:std::marker::PhantomData<Task>,
-	f:F,
-	value:Value,
+/*
+QN = WorkerDescription{
+	input:Queued,
+	output:None(Single),
+}
+*/
+//None Output Worker does all its work internally from the perspective of the work submitter
+pub struct QNWorker<'a,Task:Send>{
+	sender: mpsc::Sender<Task>,
+	handle:thread::ScopedJoinHandle<'a,()>,
 }
 
-impl<Task,Value:Clone,F:FnMut(Task)->Value> CompatWorker<Task,Value,F> {
-	pub fn new(value:Value,f:F) -> Self {
-		Self {
-			f,
-			value,
-			data:std::marker::PhantomData,
+impl<'a,Task:Send+'a> QNWorker<'a,Task>{
+	pub fn new<F:FnMut(Task)+Send+'a>(scope:&'a thread::Scope<'a,'_>,mut f:F)->QNWorker<'a,Task>{
+		let (sender,receiver)=mpsc::channel::<Task>();
+		let handle=scope.spawn(move ||{
+			loop {
+				match receiver.recv() {
+					Ok(task)=>f(task),
+					Err(_)=>{
+						println!("Worker stopping.",);
+						break;
+					}
+				}
+			}
+		});
+		Self{
+			sender,
+			handle,
 		}
 	}
-
-	pub fn send(&mut self,task:Task)->Result<(),()>{
-		self.value=(self.f)(task);
-		Ok(())
+	pub fn send(&self,task:Task)->Result<(),mpsc::SendError<Task>>{
+		self.sender.send(task)
 	}
+}
 
-	pub fn grab_clone(&self)->Value{
-		self.value.clone()
+/*
+IN = WorkerDescription{
+	input:Immediate,
+	output:None(Single),
+}
+*/
+//Inputs are dropped if the worker is busy
+pub struct INWorker<'a,Task:Send>{
+	sender: mpsc::SyncSender<Task>,
+	handle:thread::ScopedJoinHandle<'a,()>,
+}
+
+impl<'a,Task:Send+'a> INWorker<'a,Task>{
+	pub fn new<F:FnMut(Task)+Send+'a>(scope:&'a thread::Scope<'a,'_>,mut f:F)->INWorker<'a,Task>{
+		let (sender,receiver)=mpsc::sync_channel::<Task>(1);
+		let handle=scope.spawn(move ||{
+			loop {
+				match receiver.recv() {
+					Ok(task)=>f(task),
+					Err(_)=>{
+						println!("Worker stopping.",);
+						break;
+					}
+				}
+			}
+		});
+		Self{
+			sender,
+			handle,
+		}
+	}
+	//blocking!
+	pub fn blocking_send(&self,task:Task)->Result<(), mpsc::SendError<Task>>{
+		self.sender.send(task)
+	}
+	pub fn send(&self,task:Task)->Result<(), mpsc::TrySendError<Task>>{
+		self.sender.try_send(task)
 	}
 }
 
@@ -74,7 +177,7 @@ impl<Task,Value:Clone,F:FnMut(Task)->Value> CompatWorker<Task,Value,F> {
 fn test_worker() {
 	println!("hiiiii");
 	// Create the worker thread
-	let worker = Worker::new(crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO),
+	let worker=QRWorker::new(crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO),
 		|_|crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE)
 	);
 

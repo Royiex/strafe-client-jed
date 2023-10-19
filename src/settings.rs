@@ -1,11 +1,14 @@
 use crate::integer::{Ratio64,Ratio64Vec2};
+#[derive(Clone)]
 struct Ratio{
 	ratio:f64,
 }
+#[derive(Clone)]
 enum DerivedFov{
 	FromScreenAspect,
 	FromAspect(Ratio),
 }
+#[derive(Clone)]
 enum Fov{
 	Exactly{x:f64,y:f64},
 	SpecifyXDeriveY{x:f64,y:DerivedFov},
@@ -16,9 +19,11 @@ impl Default for Fov{
 		Fov::SpecifyYDeriveX{x:DerivedFov::FromScreenAspect,y:1.0}
 	}
 }
+#[derive(Clone)]
 enum DerivedSensitivity{
 	FromRatio(Ratio64),
 }
+#[derive(Clone)]
 enum Sensitivity{
 	Exactly{x:Ratio64,y:Ratio64},
 	SpecifyXDeriveY{x:Ratio64,y:DerivedSensitivity},
@@ -30,7 +35,7 @@ impl Default for Sensitivity{
 	}
 }
 
-#[derive(Default)]
+#[derive(Default,Clone)]
 pub struct UserSettings{
 	fov:Fov,
 	sensitivity:Sensitivity,
