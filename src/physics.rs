@@ -50,6 +50,45 @@ pub enum InputInstruction {
 		//for interpolation / networking / playback reasons, most playback heads will always want
 		//to be 1 instruction ahead to generate the next state for interpolation.
 }
+impl InputInstruction{
+	pub fn id(&self)->u32{
+		let parity=match self{
+			crate::physics::InputInstruction::MoveRight(true)
+			|crate::physics::InputInstruction::MoveUp(true)
+			|crate::physics::InputInstruction::MoveBack(true)
+			|crate::physics::InputInstruction::MoveLeft(true)
+			|crate::physics::InputInstruction::MoveDown(true)
+			|crate::physics::InputInstruction::MoveForward(true)
+			|crate::physics::InputInstruction::Jump(true)
+			|crate::physics::InputInstruction::Zoom(true)=>1u32<<31,
+			crate::physics::InputInstruction::MoveRight(false)
+			|crate::physics::InputInstruction::MoveUp(false)
+			|crate::physics::InputInstruction::MoveBack(false)
+			|crate::physics::InputInstruction::MoveLeft(false)
+			|crate::physics::InputInstruction::MoveDown(false)
+			|crate::physics::InputInstruction::MoveForward(false)
+			|crate::physics::InputInstruction::Jump(false)
+			|crate::physics::InputInstruction::Zoom(false)
+			|crate::physics::InputInstruction::MoveMouse(_)
+			|crate::physics::InputInstruction::Reset
+			|crate::physics::InputInstruction::Idle=>0u32,
+		};
+		let id=match self{
+			crate::physics::InputInstruction::MoveRight(_)=>0,
+			crate::physics::InputInstruction::MoveUp(_)=>1,
+			crate::physics::InputInstruction::MoveBack(_)=>2,
+			crate::physics::InputInstruction::MoveLeft(_)=>3,
+			crate::physics::InputInstruction::MoveDown(_)=>4,
+			crate::physics::InputInstruction::MoveForward(_)=>5,
+			crate::physics::InputInstruction::Jump(_)=>6,
+			crate::physics::InputInstruction::Zoom(_)=>7,
+			crate::physics::InputInstruction::MoveMouse(_)=>8,
+			crate::physics::InputInstruction::Reset=>9,
+			crate::physics::InputInstruction::Idle=>10,
+		};
+		id|parity
+	}
+}
 #[derive(Clone,Hash)]
 pub struct Body {
 	position: Planar64Vec3,//I64 where 2^32 = 1 u
