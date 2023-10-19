@@ -87,72 +87,60 @@ loop{
 BLOCK_DEMO_HEADER:
 //timeline of loading maps, player equipment, bots
 */
-struct PhysicsInputInstructionDeltaState{
+struct InputInstructionDeltaState{
 	mouse_pos:glam::IVec2,
 	time:crate::integer::Time,
 }
 
 //everything must be 4 byte aligned, it's all going to be compressed so don't think too had about saving less than 4 bytes
-//8B - 24B
-fn write_input_instruction<W:std::io::Write>(state:&mut PhysicsInputInstructionDeltaState,w:&mut W,ins:&crate::instruction::TimedInstruction<crate::physics::PhysicsInputInstruction>){
+//8B - 12B
+//TODO: Omit (mouse only?) instructions that don't surround an actual physics instruction
+fn write_input_instruction<W:std::io::Write>(state:&mut InputInstructionDeltaState,w:&mut W,ins:&crate::instruction::TimedInstruction<crate::physics::InputInstruction>){
 	let dt=ins.time-state.time;
 	//TODO: insert idle instruction if gap is over u32 nanoseconds
 	//OR: end the data block! the full state at the start of the next block will contain an absolute timestamp
 	w.write(&(dt.nanos() as u32).to_le_bytes());//4B
 	let parity=match &ins.instruction{
-		crate::physics::PhysicsInputInstruction::SetMoveRight(true)
-		|crate::physics::PhysicsInputInstruction::SetMoveUp(true)
-		|crate::physics::PhysicsInputInstruction::SetMoveBack(true)
-		|crate::physics::PhysicsInputInstruction::SetMoveLeft(true)
-		|crate::physics::PhysicsInputInstruction::SetMoveDown(true)
-		|crate::physics::PhysicsInputInstruction::SetMoveForward(true)
-		|crate::physics::PhysicsInputInstruction::SetJump(true)
-		|crate::physics::PhysicsInputInstruction::SetZoom(true)=>1u32<<31,
-		crate::physics::PhysicsInputInstruction::SetMoveRight(false)
-		|crate::physics::PhysicsInputInstruction::SetMoveUp(false)
-		|crate::physics::PhysicsInputInstruction::SetMoveBack(false)
-		|crate::physics::PhysicsInputInstruction::SetMoveLeft(false)
-		|crate::physics::PhysicsInputInstruction::SetMoveDown(false)
-		|crate::physics::PhysicsInputInstruction::SetMoveForward(false)
-		|crate::physics::PhysicsInputInstruction::SetJump(false)
-		|crate::physics::PhysicsInputInstruction::SetZoom(false)
-		|crate::physics::PhysicsInputInstruction::ReplaceMouse(_,_)
-		|crate::physics::PhysicsInputInstruction::SetNextMouse(_)
-		|crate::physics::PhysicsInputInstruction::Reset
-		|crate::physics::PhysicsInputInstruction::Idle=>0u32,
+		crate::physics::InputInstruction::MoveRight(true)
+		|crate::physics::InputInstruction::MoveUp(true)
+		|crate::physics::InputInstruction::MoveBack(true)
+		|crate::physics::InputInstruction::MoveLeft(true)
+		|crate::physics::InputInstruction::MoveDown(true)
+		|crate::physics::InputInstruction::MoveForward(true)
+		|crate::physics::InputInstruction::Jump(true)
+		|crate::physics::InputInstruction::Zoom(true)=>1u32<<31,
+		crate::physics::InputInstruction::MoveRight(false)
+		|crate::physics::InputInstruction::MoveUp(false)
+		|crate::physics::InputInstruction::MoveBack(false)
+		|crate::physics::InputInstruction::MoveLeft(false)
+		|crate::physics::InputInstruction::MoveDown(false)
+		|crate::physics::InputInstruction::MoveForward(false)
+		|crate::physics::InputInstruction::Jump(false)
+		|crate::physics::InputInstruction::Zoom(false)
+		|crate::physics::InputInstruction::MoveMouse(_)
+		|crate::physics::InputInstruction::Reset
+		|crate::physics::InputInstruction::Idle=>0u32,//TODO: don't write idle instructions
 	};
 	//instruction id packed with game control parity bit.  This could be 1 byte but it ruins the alignment
 	w.write(&(ins.instruction as u32|parity).to_le_bytes());//4B
 	match &ins.instruction{
-		crate::physics::PhysicsInputInstruction::ReplaceMouse(m0,m1)=>{//16B
-			let dm0=m0.pos-state.mouse_pos;
-			w.write(&(dm0.x as i16).to_le_bytes());
-			w.write(&(dm0.y as i16).to_le_bytes());
-			w.write(&((m0.time-ins.time).nanos() as u32).to_le_bytes());
-			let dm1=m1.pos-m0.pos;
-			w.write(&(dm1.x as i16).to_le_bytes());
-			w.write(&(dm1.y as i16).to_le_bytes());
-			w.write(&((m1.time-m0.time).nanos() as u32).to_le_bytes());
-			state.mouse_pos=m1.pos;
-		},
-		crate::physics::PhysicsInputInstruction::SetNextMouse(m)=>{//8B
-			let dm=m.pos-state.mouse_pos;
+		&crate::physics::InputInstruction::MoveMouse(m)=>{//4B
+			let dm=m-state.mouse_pos;
 			w.write(&(dm.x as i16).to_le_bytes());
 			w.write(&(dm.y as i16).to_le_bytes());
-			w.write(&((m.time-state.time).nanos() as u32).to_le_bytes());
-			state.mouse_pos=m.pos;
+			state.mouse_pos=m;
 		},
 		//0B
-		crate::physics::PhysicsInputInstruction::SetMoveRight(_)
-		|crate::physics::PhysicsInputInstruction::SetMoveUp(_)
-		|crate::physics::PhysicsInputInstruction::SetMoveBack(_)
-		|crate::physics::PhysicsInputInstruction::SetMoveLeft(_)
-		|crate::physics::PhysicsInputInstruction::SetMoveDown(_)
-		|crate::physics::PhysicsInputInstruction::SetMoveForward(_)
-		|crate::physics::PhysicsInputInstruction::SetJump(_)
-		|crate::physics::PhysicsInputInstruction::SetZoom(_)
-		|crate::physics::PhysicsInputInstruction::Reset
-		|crate::physics::PhysicsInputInstruction::Idle=>(),
+		crate::physics::InputInstruction::MoveRight(_)
+		|crate::physics::InputInstruction::MoveUp(_)
+		|crate::physics::InputInstruction::MoveBack(_)
+		|crate::physics::InputInstruction::MoveLeft(_)
+		|crate::physics::InputInstruction::MoveDown(_)
+		|crate::physics::InputInstruction::MoveForward(_)
+		|crate::physics::InputInstruction::Jump(_)
+		|crate::physics::InputInstruction::Zoom(_)
+		|crate::physics::InputInstruction::Reset
+		|crate::physics::InputInstruction::Idle=>(),
 	}
 	state.time=ins.time;
 }

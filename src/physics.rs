@@ -18,9 +18,7 @@ pub enum PhysicsInstruction {
 	Input(PhysicsInputInstruction),
 }
 #[derive(Debug)]
-pub enum PhysicsInputInstruction {
-	ReplaceMouse(MouseState,MouseState),
-	SetNextMouse(MouseState),
+pub enum PhysicsInputInstruction{
 	SetMoveRight(bool),
 	SetMoveUp(bool),
 	SetMoveBack(bool),
@@ -29,8 +27,25 @@ pub enum PhysicsInputInstruction {
 	SetMoveForward(bool),
 	SetJump(bool),
 	SetZoom(bool),
+	ReplaceMouse(MouseState,MouseState),
+	SetNextMouse(MouseState),
 	Reset,
 	Idle,
+}
+#[derive(Debug)]
+#[repr(u32)]
+pub enum InputInstruction {
+	MoveRight(bool)=0,
+	MoveUp(bool)=1,
+	MoveBack(bool)=2,
+	MoveLeft(bool)=3,
+	MoveDown(bool)=4,
+	MoveForward(bool)=5,
+	Jump(bool)=6,
+	Zoom(bool)=7,
+	MoveMouse(glam::IVec2)=64,
+	Reset=100,
+	Idle=127,
 		//Idle: there were no input events, but the simulation is safe to advance to this timestep
 		//for interpolation / networking / playback reasons, most playback heads will always want
 		//to be 1 instruction ahead to generate the next state for interpolation.
