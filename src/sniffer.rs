@@ -24,6 +24,8 @@ for block_id in 0..num_blocks{
 
 //begin blocks
 
+//each block is compressed with zstd or gz or something
+
 */
 
 /* block types
@@ -76,6 +78,9 @@ BLOCK_BOT_SEGMENT:
 PhysicsState physics_state 
 //to read, greedily decode instructions until eof
 loop{
+	//delta encode as much as possible (time,mousepos)
+	//strafe ticks are implied
+	//physics can be implied in an input-only bot file
 	TimedInstruction<PhysicsInstruction> instruction
 }
 
