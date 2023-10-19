@@ -37,14 +37,21 @@ struct Description{
 
 //The goal here is to have a worker thread that parks itself when it runs out of work.
 //The worker thread publishes the result of its work back to the worker object for every item in the work queue.
+//Previous values do not matter as soon as a new value is produced, which is why it's called "Realtime"
 //The physics (target use case) knows when it has not changed the body, so not updating the value is also an option.
 
-pub struct Worker<Task:Send,Value:Clone> {
+/*
+QR = WorkerDescription{
+	input:Queued,
+	output:Realtime(Single),
+}
+*/
+pub struct QRWorker<Task:Send,Value:Clone>{
 	sender: mpsc::Sender<Task>,
 	value:Arc<Mutex<Value>>,
 }
 
-impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
+impl<Task:Send+'static,Value:Clone+Send+'static> QRWorker<Task,Value>{
 	pub fn new<F:FnMut(Task)->Value+Send+'static>(value:Value,mut f:F) -> Self {
 		let (sender, receiver) = mpsc::channel::<Task>();
 		let ret=Self {
@@ -78,13 +85,13 @@ impl<Task:Send+'static,Value:Clone+Send+'static> Worker<Task,Value> {
 	}
 }
 
-pub struct CompatWorker<Task,Value:Clone,F>{
+pub struct CompatCRWorker<Task,Value:Clone,F>{
 	data:std::marker::PhantomData<Task>,
 	f:F,
 	value:Value,
 }
 
-impl<Task,Value:Clone,F:FnMut(Task)->Value> CompatWorker<Task,Value,F> {
+impl<Task,Value:Clone,F:FnMut(Task)->Value> CompatCRWorker<Task,Value,F>{
 	pub fn new(value:Value,f:F) -> Self {
 		Self {
 			f,
@@ -107,7 +114,7 @@ impl<Task,Value:Clone,F:FnMut(Task)->Value> CompatWorker<Task,Value,F> {
 fn test_worker() {
 	println!("hiiiii");
 	// Create the worker thread
-	let worker = Worker::new(crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO),
+	let worker=CRWorker::new(crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO),
 		|_|crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE)
 	);
 
