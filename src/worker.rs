@@ -85,6 +85,41 @@ impl<Task:Send+'static,Value:Clone+Send+'static> QRWorker<Task,Value>{
 	}
 }
 
+/*
+QN = WorkerDescription{
+	input:Queued,
+	output:None(Single),
+}
+*/
+//None Output Worker does all its work internally from the perspective of the work submitter
+pub struct QNWorker<Task:Send> {
+	sender: mpsc::Sender<Task>,
+}
+
+impl<Task:Send+'static> QNWorker<Task>{
+	pub fn new<F:FnMut(Task)+Send+'static>(mut f:F)->Self{
+		let (sender,receiver)=mpsc::channel::<Task>();
+		let ret=Self {
+			sender,
+		};
+		thread::spawn(move ||{
+			loop {
+				match receiver.recv() {
+					Ok(task)=>f(task),
+					Err(_)=>{
+						println!("Worker stopping.",);
+						break;
+					}
+				}
+			}
+		});
+		ret
+	}
+	pub fn send(&self,task:Task)->Result<(),mpsc::SendError<Task>>{
+		self.sender.send(task)
+	}
+}
+
 pub struct CompatCRWorker<Task,Value:Clone,F>{
 	data:std::marker::PhantomData<Task>,
 	f:F,
@@ -114,7 +149,7 @@ impl<Task,Value:Clone,F:FnMut(Task)->Value> CompatCRWorker<Task,Value,F>{
 fn test_worker() {
 	println!("hiiiii");
 	// Create the worker thread
-	let worker=CRWorker::new(crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO),
+	let worker=QRWorker::new(crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO),
 		|_|crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE)
 	);
 
