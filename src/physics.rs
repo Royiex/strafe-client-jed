@@ -57,32 +57,6 @@ pub struct Body {
 	time:Time,//nanoseconds x xxxxD!
 }
 
-
-/*
-enum InputInstruction {
-}
-struct InputState {
-}
-impl InputState {
-	pub fn get_control(&self,control:u32) -> bool {
-		self.controls&control!=0
-	}
-}
-impl crate::instruction::InstructionEmitter<InputInstruction> for InputState{
-	fn next_instruction(&self, time_limit:crate::body::Time) -> Option<TimedInstruction<InputInstruction>> {
-		//this is polled by PhysicsState for actions like Jump
-		//no, it has to be the other way around. physics is run up until the jump instruction, and then the jump instruction is pushed.
-		self.queue.get(0)
-	}
-}
-impl crate::instruction::InstructionConsumer<InputInstruction> for InputState{
-	fn process_instruction(&mut self,ins:TimedInstruction<InputInstruction>){
-		//add to queue
-		self.queue.push(ins);
-	}
-}
-*/
-
 //hey dumbass just use a delta
 #[derive(Clone,Debug)]
 pub struct MouseState {
