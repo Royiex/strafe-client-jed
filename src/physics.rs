@@ -73,20 +73,11 @@ impl InputInstruction{
 			|crate::physics::InputInstruction::Reset
 			|crate::physics::InputInstruction::Idle=>0u32,
 		};
-		let id=match self{
-			crate::physics::InputInstruction::MoveRight(_)=>0,
-			crate::physics::InputInstruction::MoveUp(_)=>1,
-			crate::physics::InputInstruction::MoveBack(_)=>2,
-			crate::physics::InputInstruction::MoveLeft(_)=>3,
-			crate::physics::InputInstruction::MoveDown(_)=>4,
-			crate::physics::InputInstruction::MoveForward(_)=>5,
-			crate::physics::InputInstruction::Jump(_)=>6,
-			crate::physics::InputInstruction::Zoom(_)=>7,
-			crate::physics::InputInstruction::MoveMouse(_)=>8,
-			crate::physics::InputInstruction::Reset=>9,
-			crate::physics::InputInstruction::Idle=>10,
-		};
-		id|parity
+		self.discriminant()|parity
+	}
+	pub fn discriminant(&self)->u32{
+		//from documentation for std::mem::discriminant(&self)
+		unsafe{*<*const _>::from(self).cast::<u32>()}
 	}
 }
 
