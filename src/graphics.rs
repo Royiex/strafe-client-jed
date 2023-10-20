@@ -889,7 +889,6 @@ impl GraphicsState{
 		view: &wgpu::TextureView,
 		device: &wgpu::Device,
 		queue: &wgpu::Queue,
-		_spawner: &framework::Spawner,
 	) {
 		//ideally this would be scheduled to execute and finish right before the render.
 		let time=integer::Time::from_nanos(self.start_time.elapsed().as_nanos() as i64);

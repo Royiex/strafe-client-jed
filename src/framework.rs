@@ -1,4 +1,3 @@
-use std::future::Future;
 use winit::{
 	event::{self, WindowEvent, DeviceEvent},
 	event_loop::{ControlFlow, EventLoop},
@@ -168,7 +167,6 @@ fn start<E: Example>(
 		queue,
 	}: Setup,
 ) {
-	let spawner = Spawner::new();
 	let mut config = surface
 		.get_default_config(&adapter, size.width, size.height)
 		.expect("Surface isn't supported by the adapter.");
@@ -189,8 +187,6 @@ fn start<E: Example>(
 		};
 		match event {
 			event::Event::RedrawEventsCleared => {
-				spawner.run_until_stalled();
-
 				window.request_redraw();
 			}
 			event::Event::WindowEvent {
@@ -269,34 +265,13 @@ fn start<E: Example>(
 					..wgpu::TextureViewDescriptor::default()
 				});
 
-				example.render(&view, &device, &queue, &spawner);
+				example.render(&view, &device, &queue);
 
 				frame.present();
 			}
 			_ => {}
 		}
 	});
-}
-
-pub struct Spawner<'a> {
-	executor: async_executor::LocalExecutor<'a>,
-}
-
-impl<'a> Spawner<'a> {
-	fn new() -> Self {
-		Self {
-			executor: async_executor::LocalExecutor::new(),
-		}
-	}
-
-	#[allow(dead_code)]
-	pub fn spawn_local(&self, future: impl Future<Output = ()> + 'a) {
-		self.executor.spawn(future).detach();
-	}
-
-	fn run_until_stalled(&self) {
-		while self.executor.try_tick() {}
-	}
 }
 
 pub fn run<E: Example>(title: &str) {
