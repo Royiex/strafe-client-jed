@@ -39,11 +39,6 @@ pub trait Example: 'static + Sized {
 	fn required_limits() -> wgpu::Limits {
 		wgpu::Limits::downlevel_webgl2_defaults() // These downlevel limits will allow the code to run on all possible hardware
 	}
-	fn init() -> Self;
-	fn resize(&mut self);
-	fn update(&mut self, window: &winit::window::Window, event: WindowEvent);
-	fn device_event(&mut self, window: &winit::window::Window, event: DeviceEvent);
-	fn render(&self);
 }
 
 struct Setup {

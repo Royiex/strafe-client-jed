@@ -18,6 +18,7 @@ mod primitives;
 mod instruction;
 mod load_roblox;
 mod render_thread;
+mod window;
 
 
 pub struct GlobalState{
