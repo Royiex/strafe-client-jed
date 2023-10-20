@@ -49,10 +49,6 @@ struct Setup {
 }
 
 async fn setup<E: Example>(title: &str) -> Setup {
-	{
-		env_logger::init();
-	};
-
 	let event_loop = EventLoop::new();
 	let mut builder = winit::window::WindowBuilder::new();
 	builder = builder.with_title(title);
@@ -64,7 +60,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 	let window = builder.build(&event_loop).unwrap();
 
 
-	log::info!("Initializing the surface...");
+	println!("Initializing the surface...");
 
 	let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
 	let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
@@ -180,10 +176,10 @@ fn start<E: Example>(
 	config.view_formats.push(surface_view_format);
 	surface.configure(&device, &config);
 
-	log::info!("Initializing the example...");
+	println!("Initializing the example...");
 	let mut example=E::init();
 
-	log::info!("Entering render loop...");
+	println!("Entering render loop...");
 	event_loop.run(move |event, _, control_flow| {
 		let _ = (&instance, &adapter); // force ownership by the closure
 		*control_flow = if cfg!(feature = "metal-auto-capture") {
@@ -210,13 +206,13 @@ fn start<E: Example>(
 				// https://github.com/rust-windowing/winit/issues/2876
 				let max_dimension = adapter.limits().max_texture_dimension_2d;
 				if size.width > max_dimension || size.height > max_dimension {
-					log::warn!(
+					println!(
 						"The resizing size {:?} exceeds the limit of {}.",
 						size,
 						max_dimension
 					);
 				} else {
-					log::info!("Resizing to {:?}", size);
+					println!("Resizing to {:?}", size);
 					config.width = size.width.max(1);
 					config.height = size.height.max(1);
 					example.resize(&config, &device, &queue);

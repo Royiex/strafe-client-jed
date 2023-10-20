@@ -633,19 +633,19 @@ impl GraphicsState{
 
 		let skybox_texture_view={
 			let skybox_format = if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC) {
-				log::info!("Using ASTC");
+				println!("Using ASTC");
 				wgpu::TextureFormat::Astc {
 					block: AstcBlock::B4x4,
 					channel: AstcChannel::UnormSrgb,
 				}
 			} else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2) {
-				log::info!("Using ETC2");
+				println!("Using ETC2");
 				wgpu::TextureFormat::Etc2Rgb8UnormSrgb
 			} else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
-				log::info!("Using BC");
+				println!("Using BC");
 				wgpu::TextureFormat::Bc1RgbaUnormSrgb
 			} else {
-				log::info!("Using plain");
+				println!("Using plain");
 				wgpu::TextureFormat::Bgra8UnormSrgb
 			};
 
@@ -673,14 +673,6 @@ impl GraphicsState{
 				..size
 			};
 			let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
-
-			log::debug!(
-				"Copying {:?} skybox images of size {}, {}, 6 with {} mips to gpu",
-				skybox_format,
-				size.width,
-				size.height,
-				max_mips,
-			);
 
 			let skybox_texture = device.create_texture_with_data(
 				queue,
