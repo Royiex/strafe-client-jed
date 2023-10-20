@@ -1,8 +1,4 @@
 use std::future::Future;
-#[cfg(target_arch = "wasm32")]
-use std::str::FromStr;
-#[cfg(target_arch = "wasm32")]
-use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
 use winit::{
 	event::{self, WindowEvent, DeviceEvent},
 	event_loop::{ControlFlow, EventLoop},
@@ -50,18 +46,9 @@ struct Setup {
 	adapter: wgpu::Adapter,
 	device: wgpu::Device,
 	queue: wgpu::Queue,
-	#[cfg(target_arch = "wasm32")]
-	offscreen_canvas_setup: Option<OffscreenCanvasSetup>,
-}
-
-#[cfg(target_arch = "wasm32")]
-struct OffscreenCanvasSetup {
-	offscreen_canvas: OffscreenCanvas,
-	bitmap_renderer: ImageBitmapRenderingContext,
 }
 
 async fn setup<E: Example>(title: &str) -> Setup {
-	#[cfg(not(target_arch = "wasm32"))]
 	{
 		env_logger::init();
 	};
@@ -76,58 +63,6 @@ async fn setup<E: Example>(title: &str) -> Setup {
 	}
 	let window = builder.build(&event_loop).unwrap();
 
-	#[cfg(target_arch = "wasm32")]
-	{
-		use winit::platform::web::WindowExtWebSys;
-		let query_string = web_sys::window().unwrap().location().search().unwrap();
-		let level: log::Level = parse_url_query_string(&query_string, "RUST_LOG")
-			.and_then(|x| x.parse().ok())
-			.unwrap_or(log::Level::Error);
-		console_log::init_with_level(level).expect("could not initialize logger");
-		std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-		// On wasm, append the canvas to the document body
-		web_sys::window()
-			.and_then(|win| win.document())
-			.and_then(|doc| doc.body())
-			.and_then(|body| {
-				body.append_child(&web_sys::Element::from(window.canvas()))
-					.ok()
-			})
-			.expect("couldn't append canvas to document body");
-	}
-
-	#[cfg(target_arch = "wasm32")]
-	let mut offscreen_canvas_setup: Option<OffscreenCanvasSetup> = None;
-	#[cfg(target_arch = "wasm32")]
-	{
-		use wasm_bindgen::JsCast;
-		use winit::platform::web::WindowExtWebSys;
-
-		let query_string = web_sys::window().unwrap().location().search().unwrap();
-		if let Some(offscreen_canvas_param) =
-			parse_url_query_string(&query_string, "offscreen_canvas")
-		{
-			if FromStr::from_str(offscreen_canvas_param) == Ok(true) {
-				log::info!("Creating OffscreenCanvasSetup");
-
-				let offscreen_canvas =
-					OffscreenCanvas::new(1024, 768).expect("couldn't create OffscreenCanvas");
-
-				let bitmap_renderer = window
-					.canvas()
-					.get_context("bitmaprenderer")
-					.expect("couldn't create ImageBitmapRenderingContext (Result)")
-					.expect("couldn't create ImageBitmapRenderingContext (Option)")
-					.dyn_into::<ImageBitmapRenderingContext>()
-					.expect("couldn't convert into ImageBitmapRenderingContext");
-
-				offscreen_canvas_setup = Some(OffscreenCanvasSetup {
-					offscreen_canvas,
-					bitmap_renderer,
-				})
-			}
-		}
-	};
 
 	log::info!("Initializing the surface...");
 
@@ -141,20 +76,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
 	let size = window.inner_size();
 
-	#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
 	let surface=unsafe{instance.create_surface(&window)}.unwrap();
-	#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
-	let surface={
-		if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
-			log::info!("Creating surface from OffscreenCanvas");
-			instance.create_surface_from_offscreen_canvas(
-				offscreen_canvas_setup.offscreen_canvas.clone(),
-			)
-		} else {
-			instance.create_surface(&window)
-		}
-	}
-	.unwrap();
 
 	let adapter;
 
@@ -191,11 +113,9 @@ async fn setup<E: Example>(title: &str) -> Setup {
 		panic!("No suitable GPU adapters found on the system!");
 	}
 
-	#[cfg(not(target_arch = "wasm32"))]
-	{
-		let adapter_info = adapter.get_info();
-		println!("Using {} ({:?})", adapter_info.name, adapter_info.backend);
-	}
+
+	let adapter_info = adapter.get_info();
+	println!("Using {} ({:?})", adapter_info.name, adapter_info.backend);
 
 	let required_downlevel_capabilities = E::required_downlevel_capabilities();
 	let downlevel_capabilities = adapter.get_downlevel_capabilities();
@@ -237,13 +157,11 @@ async fn setup<E: Example>(title: &str) -> Setup {
 		adapter,
 		device,
 		queue,
-		#[cfg(target_arch = "wasm32")]
-		offscreen_canvas_setup,
 	}
 }
 
 fn start<E: Example>(
-	#[cfg(not(target_arch = "wasm32"))] Setup {
+	Setup{
 		window,
 		event_loop,
 		instance,
@@ -252,17 +170,6 @@ fn start<E: Example>(
 		adapter,
 		device,
 		queue,
-	}: Setup,
-	#[cfg(target_arch = "wasm32")] Setup {
-		window,
-		event_loop,
-		instance,
-		size,
-		surface,
-		adapter,
-		device,
-		queue,
-		offscreen_canvas_setup,
 	}: Setup,
 ) {
 	let spawner = Spawner::new();
@@ -286,7 +193,6 @@ fn start<E: Example>(
 		};
 		match event {
 			event::Event::RedrawEventsCleared => {
-				#[cfg(not(target_arch = "wasm32"))]
 				spawner.run_until_stalled();
 
 				window.request_redraw();
@@ -330,7 +236,6 @@ fn start<E: Example>(
 				| WindowEvent::CloseRequested => {
 					*control_flow = ControlFlow::Exit;
 				}
-				#[cfg(not(target_arch = "wasm32"))]
 				WindowEvent::KeyboardInput {
 					input:
 						event::KeyboardInput {
@@ -371,33 +276,16 @@ fn start<E: Example>(
 				example.render(&view, &device, &queue, &spawner);
 
 				frame.present();
-
-				#[cfg(target_arch = "wasm32")]
-				{
-					if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
-						let image_bitmap = offscreen_canvas_setup
-							.offscreen_canvas
-							.transfer_to_image_bitmap()
-							.expect("couldn't transfer offscreen canvas to image bitmap.");
-						offscreen_canvas_setup
-							.bitmap_renderer
-							.transfer_from_image_bitmap(&image_bitmap);
-
-						log::info!("Transferring OffscreenCanvas to ImageBitmapRenderer");
-					}
-				}
 			}
 			_ => {}
 		}
 	});
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub struct Spawner<'a> {
 	executor: async_executor::LocalExecutor<'a>,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl<'a> Spawner<'a> {
 	fn new() -> Self {
 		Self {
@@ -415,77 +303,7 @@ impl<'a> Spawner<'a> {
 	}
 }
 
-#[cfg(target_arch = "wasm32")]
-pub struct Spawner {}
-
-#[cfg(target_arch = "wasm32")]
-impl Spawner {
-	fn new() -> Self {
-		Self {}
-	}
-
-	#[allow(dead_code)]
-	pub fn spawn_local(&self, future: impl Future<Output = ()> + 'static) {
-		wasm_bindgen_futures::spawn_local(future);
-	}
-}
-
-#[cfg(not(target_arch = "wasm32"))]
 pub fn run<E: Example>(title: &str) {
 	let setup = pollster::block_on(setup::<E>(title));
 	start::<E>(setup);
 }
-
-#[cfg(target_arch = "wasm32")]
-pub fn run<E: Example>(title: &str) {
-	use wasm_bindgen::prelude::*;
-
-	let title = title.to_owned();
-	wasm_bindgen_futures::spawn_local(async move {
-		let setup = setup::<E>(&title).await;
-		let start_closure = Closure::once_into_js(move || start::<E>(setup));
-
-		// make sure to handle JS exceptions thrown inside start.
-		// Otherwise wasm_bindgen_futures Queue would break and never handle any tasks again.
-		// This is required, because winit uses JS exception for control flow to escape from `run`.
-		if let Err(error) = call_catch(&start_closure) {
-			let is_control_flow_exception = error.dyn_ref::<js_sys::Error>().map_or(false, |e| {
-				e.message().includes("Using exceptions for control flow", 0)
-			});
-
-			if !is_control_flow_exception {
-				web_sys::console::error_1(&error);
-			}
-		}
-
-		#[wasm_bindgen]
-		extern "C" {
-			#[wasm_bindgen(catch, js_namespace = Function, js_name = "prototype.call.call")]
-			fn call_catch(this: &JsValue) -> Result<(), JsValue>;
-		}
-	});
-}
-
-#[cfg(target_arch = "wasm32")]
-/// Parse the query string as returned by `web_sys::window()?.location().search()?` and get a
-/// specific key out of it.
-pub fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'a str> {
-	let query_string = query.strip_prefix('?')?;
-
-	for pair in query_string.split('&') {
-		let mut pair = pair.split('=');
-		let key = pair.next()?;
-		let value = pair.next()?;
-
-		if key == search_key {
-			return Some(value);
-		}
-	}
-
-	None
-}
-
-// This allows treating the framework as a standalone example,
-// thus avoiding listing the example names in `Cargo.toml`.
-#[allow(dead_code)]
-fn main() {}
