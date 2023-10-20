@@ -514,10 +514,9 @@ impl StyleModifiers{
 		// return cross(cross(Normal,ControlDir),Normal)/sqrt(1-d*d)
 		control_dir*self.walk_speed
 	}
-	fn get_propulsion_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
+	fn get_propulsion_control_dir(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
 		let camera_mat=camera.simulate_move_rotation(camera.mouse.lerp(&next_mouse,time));
-		let control_dir=camera_mat*self.get_control_dir(controls);
-		control_dir*self.walk_speed
+		camera_mat*self.get_control_dir(controls)
 	}
 }
 
@@ -902,16 +901,20 @@ impl PhysicsState {
 	// 	});
 	// }
 
-	fn refresh_walk_target(&mut self){
+	fn refresh_walk_target(&mut self)->Option<Planar64Vec3>{
 		match &mut self.move_state{
-			MoveState::Air|MoveState::Water=>(),
+			MoveState::Air|MoveState::Water=>None,
 			MoveState::Walk(WalkState{normal,state})=>{
 				let n=normal;
-				(*state,self.body.acceleration)=WalkEnum::with_target_velocity(&self.touching,&self.body,&self.style,&self.models,self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
+				let a;
+				(*state,a)=WalkEnum::with_target_velocity(&self.touching,&self.body,&self.style,&self.models,self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
+				Some(a)
 			},
 			MoveState::Ladder(WalkState{normal,state})=>{
 				let n=normal;
-				(*state,self.body.acceleration)=WalkEnum::with_target_velocity(&self.touching,&self.body,&self.style,&self.models,self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
+				let a;
+				(*state,a)=WalkEnum::with_target_velocity(&self.touching,&self.body,&self.style,&self.models,self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
+				Some(a)
 			},
 		}
 	}
@@ -1363,7 +1366,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						if self.style.get_control(StyleModifiers::CONTROL_JUMP,self.controls){
 							self.jump();
 						}
-						self.refresh_walk_target();
+						if let Some(a)=self.refresh_walk_target(){
+							self.body.acceleration=a;
+						}
 					},
 					PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
@@ -1378,6 +1383,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsCollisionAttributes::Contact{contacting,general}=>{
 						self.touching.remove_contact(c.model);//remove contact before calling contact_constrain_acceleration
 						let mut a=self.style.gravity;
+						if let Some(rocket_force)=self.style.rocket_force{
+							a+=self.style.get_propulsion_control_dir(&self.camera,self.controls,&self.next_mouse,self.time)*rocket_force;
+						}
 						self.touching.constrain_acceleration(&self.models,&mut a);
 						self.body.acceleration=a;
 						//check ground
@@ -1387,7 +1395,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 								//TODO: make this more advanced checking contacts
 								self.move_state=MoveState::Air;
 							},
-							_=>self.refresh_walk_target(),
+							_=>if let Some(a)=self.refresh_walk_target(){
+								self.body.acceleration=a;
+							},
 						}
 					},
 					PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
@@ -1464,7 +1474,14 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsInputInstruction::Idle => {refresh_walk_target=false;},//literally idle!
 				}
 				if refresh_walk_target{
-					self.refresh_walk_target();
+					if let Some(a)=self.refresh_walk_target(){
+						self.body.acceleration=a;
+					}else if let Some(rocket_force)=self.style.rocket_force{
+						let mut a=self.style.gravity;
+						a+=self.style.get_propulsion_control_dir(&self.camera,self.controls,&self.next_mouse,self.time)*rocket_force;
+						self.touching.constrain_acceleration(&self.models,&mut a);
+						self.body.acceleration=a;
+					}
 				}
 			},
 		}
