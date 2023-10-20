@@ -138,26 +138,23 @@ async fn setup<E: Example>(title: &str) -> Setup {
 		backends,
 		dx12_shader_compiler,
 	});
-	let (size, surface) = unsafe {
-		let size = window.inner_size();
 
-		#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
-		let surface = instance.create_surface(&window).unwrap();
-		#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
-		let surface = {
-			if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
-				log::info!("Creating surface from OffscreenCanvas");
-				instance.create_surface_from_offscreen_canvas(
-					offscreen_canvas_setup.offscreen_canvas.clone(),
-				)
-			} else {
-				instance.create_surface(&window)
-			}
+	let size = window.inner_size();
+
+	#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+	let surface=unsafe{instance.create_surface(&window)}.unwrap();
+	#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+	let surface={
+		if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
+			log::info!("Creating surface from OffscreenCanvas");
+			instance.create_surface_from_offscreen_canvas(
+				offscreen_canvas_setup.offscreen_canvas.clone(),
+			)
+		} else {
+			instance.create_surface(&window)
 		}
-		.unwrap();
-
-		(size, surface)
-	};
+	}
+	.unwrap();
 
 	let adapter;
 
