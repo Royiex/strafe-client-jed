@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use wgpu::{util::DeviceExt,AstcBlock,AstcChannel};
-use crate::model_graphics::{GraphicsVertex,ModelGraphicsInstance};
+use crate::model_graphics::{GraphicsVertex,ModelGraphicsColor4,ModelGraphicsInstance,ModelGraphicsSingleTexture,IndexedModelGraphicsSingleTexture,IndexedGroupFixedTexture};
 
 #[derive(Clone)]
 pub struct ModelUpdate{
@@ -106,12 +106,12 @@ pub struct GraphicsState{
 }
 
 impl GraphicsState{
-	const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
+	const DEPTH_FORMAT: wgpu::TextureFormat=wgpu::TextureFormat::Depth24Plus;
 	fn create_depth_texture(
 		config: &wgpu::SurfaceConfiguration,
 		device: &wgpu::Device,
 	) -> wgpu::TextureView {
-		let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+		let depth_texture=device.create_texture(&wgpu::TextureDescriptor {
 			size: wgpu::Extent3d {
 				width: config.width,
 				height: config.height,
@@ -131,10 +131,10 @@ impl GraphicsState{
 	pub fn clear(&mut self){
 		self.models.clear();
 	}
-	pub fn load_user_settings(&mut self,user_settings:&settings::UserSettings){
+	pub fn load_user_settings(&mut self,user_settings:&crate::settings::UserSettings){
 		self.camera.fov=user_settings.calculate_fov(1.0,&self.camera.screen_size).as_vec2();
 	}
-	fn generate_model_graphics(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,indexed_models:model::IndexedModelInstances){
+	fn generate_model_graphics(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,indexed_models:crate::model::IndexedModelInstances){
 		//generate texture view per texture
 
 		//idk how to do this gooder lol
@@ -212,7 +212,7 @@ impl GraphicsState{
 					Some(ModelGraphicsInstance{
 						transform: instance.transform.into(),
 						normal_transform: Into::<glam::Mat3>::into(instance.transform.matrix3).inverse().transpose(),
-						color:model_graphics::ModelGraphicsColor4::from(instance.color),
+						color:ModelGraphicsColor4::from(instance.color),
 					})
 				}
 			}).collect();
@@ -231,7 +231,7 @@ impl GraphicsState{
 					//create new texture_index
 					let texture_index=unique_textures.len();
 					unique_textures.push(group.texture);
-					unique_texture_models.push(model_graphics::IndexedModelGraphicsSingleTexture{
+					unique_texture_models.push(IndexedModelGraphicsSingleTexture{
 						unique_pos:model.unique_pos.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
 						unique_tex:model.unique_tex.iter().map(|v|*v.as_ref()).collect(),
 						unique_normal:model.unique_normal.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
@@ -243,7 +243,7 @@ impl GraphicsState{
 					});
 					texture_index
 				};
-				unique_texture_models[id+texture_index].groups.push(model_graphics::IndexedGroupFixedTexture{
+				unique_texture_models[id+texture_index].groups.push(IndexedGroupFixedTexture{
 					polys:group.polys,
 				});
 			}
@@ -364,7 +364,7 @@ impl GraphicsState{
 						//map the indexed vertices onto new indices
 						//creating the vertex map is slightly different because the vertices are directly hashable
 						let map_vertex_id:Vec<u32>=model.unique_vertices.iter().map(|unmapped_vertex|{
-							let vertex=model::IndexedVertex{
+							let vertex=crate::model::IndexedVertex{
 								pos:map_pos_id[unmapped_vertex.pos as usize] as u32,
 								tex:map_tex_id[unmapped_vertex.tex as usize] as u32,
 								normal:map_normal_id[unmapped_vertex.normal as usize] as u32,
@@ -381,22 +381,22 @@ impl GraphicsState{
 						}).collect();
 						for group in &model.groups{
 							for poly in &group.polys{
-								polys.push(model::IndexedPolygon{vertices:poly.vertices.iter().map(|&vertex_id|map_vertex_id[vertex_id as usize]).collect()});
+								polys.push(crate::model::IndexedPolygon{vertices:poly.vertices.iter().map(|&vertex_id|map_vertex_id[vertex_id as usize]).collect()});
 							}
 						}
 					}
 					//push model into dedup
-					deduplicated_models.push(model_graphics::IndexedModelGraphicsSingleTexture{
+					deduplicated_models.push(IndexedModelGraphicsSingleTexture{
 						unique_pos,
 						unique_tex,
 						unique_normal,
 						unique_color,
 						unique_vertices,
 						texture,
-						groups:vec![model_graphics::IndexedGroupFixedTexture{
+						groups:vec![IndexedGroupFixedTexture{
 							polys
 						}],
-						instances:vec![model_graphics::ModelGraphicsInstance{
+						instances:vec![ModelGraphicsInstance{
 							transform:glam::Mat4::IDENTITY,
 							normal_transform:glam::Mat3::IDENTITY,
 							color
@@ -414,7 +414,7 @@ impl GraphicsState{
 
 		//de-index models
 		let deduplicated_models_len=deduplicated_models.len();
-		let models:Vec<model_graphics::ModelGraphicsSingleTexture>=deduplicated_models.into_iter().map(|model|{
+		let models:Vec<ModelGraphicsSingleTexture>=deduplicated_models.into_iter().map(|model|{
 			let mut vertices = Vec::new();
 			let mut index_from_vertex = std::collections::HashMap::new();//::<IndexedVertex,usize>
 			let mut entities = Vec::new();
@@ -430,7 +430,7 @@ impl GraphicsState{
 							}else{
 								let i=vertices.len() as u16;
 								let vertex=&model.unique_vertices[vertex_index as usize];
-								vertices.push(model_graphics::GraphicsVertex{
+								vertices.push(GraphicsVertex{
 									pos: model.unique_pos[vertex.pos as usize],
 									tex: model.unique_tex[vertex.tex as usize],
 									normal: model.unique_normal[vertex.normal as usize],
@@ -444,7 +444,7 @@ impl GraphicsState{
 				}
 			}
 				entities.push(indices);
-			model_graphics::ModelGraphicsSingleTexture{
+			ModelGraphicsSingleTexture{
 				instances:model.instances,
 				vertices,
 				entities,
@@ -814,14 +814,14 @@ impl GraphicsState{
 			multiview: None,
 		});
 
-		let mut physics = physics::PhysicsState::default();
+		let mut physics = crate::physics::PhysicsState::default();
 
 		physics.load_user_settings(&user_settings);
 
 		let screen_size=glam::uvec2(config.width,config.height);
 
 		let camera=GraphicsCamera::new(screen_size,user_settings.calculate_fov(1.0,&screen_size).as_vec2());
-		let camera_uniforms = camera.to_uniform_data(physics.output().adjust_mouse(&physics::MouseState::default()));
+		let camera_uniforms = camera.to_uniform_data(physics.output().adjust_mouse(&crate::physics::MouseState::default()));
 		let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 			label: Some("Camera"),
 			contents: bytemuck::cast_slice(&camera_uniforms),
@@ -891,10 +891,10 @@ impl GraphicsState{
 		queue: &wgpu::Queue,
 	) {
 		//ideally this would be scheduled to execute and finish right before the render.
-		let time=integer::Time::from_nanos(self.start_time.elapsed().as_nanos() as i64);
-		self.physics_thread.send(TimedInstruction{
+		let time=crate::integer::Time::from_nanos(self.start_time.elapsed().as_nanos() as i64);
+		self.physics_thread.send(crate::instruction::TimedInstruction{
 			time,
-			instruction:InputInstruction::Idle,
+			instruction:crate::render_thread::InputInstruction::Idle,
 		}).unwrap();
 		//update time lol
 		self.mouse.time=time;
