@@ -193,7 +193,12 @@ impl framework::Example for GlobalState {
 	fn update(&mut self, window: &winit::window::Window, device: &wgpu::Device, queue: &wgpu::Queue, event: winit::event::WindowEvent) {
 		let time=integer::Time::from_nanos(self.start_time.elapsed().as_nanos() as i64);
 		match event {
-			winit::event::WindowEvent::DroppedFile(path) => self.load_file(path,device,queue),
+			winit::event::WindowEvent::DroppedFile(path)=>{
+				std::thread::spawn(move ||{
+					let indexed_model_instances=load_file(path);
+					self.render_thread.send(Instruction::Die(indexed_model_instances));
+				});
+			},
 			winit::event::WindowEvent::Focused(state)=>{
 				//pause unpause
 				//recalculate pressed keys on focus
