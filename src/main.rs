@@ -16,6 +16,7 @@ mod framework;
 mod primitives;
 mod instruction;
 mod load_roblox;
+mod render_thread;
 
 
 pub struct GlobalState{
