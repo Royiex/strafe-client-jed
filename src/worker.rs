@@ -16,7 +16,11 @@ enum Input{
 	//Immediate input to any available worker, dropped if they are overflowing (all workers are busy)
 	Immediate,
 	//Queued input is ordered, but serial jobs that mutate state (such as running physics) can only be done with a single worker
-	Queued,
+	Queued,//"Fifo"
+	//Query a function to get next input when a thread becomes available
+	//worker stops querying when Query function returns None and dies after all threads complete
+	//lifetimes sound crazy on this one
+	Query,
 }
 //WorkerOutput
 enum Output{
