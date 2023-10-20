@@ -21,6 +21,8 @@ enum Input{
 	//worker stops querying when Query function returns None and dies after all threads complete
 	//lifetimes sound crazy on this one
 	Query,
+	//Queue of length one, the input is replaced if it is submitted twice before the current work finishes
+	Mailbox,
 }
 //WorkerOutput
 enum Output{
