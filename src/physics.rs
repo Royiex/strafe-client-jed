@@ -447,6 +447,29 @@ impl StyleModifiers{
 			hitbox_halfsize:Planar64Vec3::raw(33<<28,73<<28,33<<28)/2,
 		}
 	}
+	fn roblox_rocket()->Self{
+		Self{
+			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
+			controls_held:0,
+			strafe_tick_rate:None,
+			jump_impulse:JumpImpulse::FromTime(Time::from_micros(715_588)),
+			jump_calculation:JumpCalculation::Capped,
+			gravity:Planar64Vec3::int(0,-100,0),
+			static_friction:Planar64::int(2),
+			kinetic_friction:Planar64::int(3),//unrealistic: kinetic friction is typically lower than static
+			mass:Planar64::int(1),
+			mv:Planar64::int(27)/10,
+			air_accel_limit:None,
+			rocket_force:Some(Planar64::int(200)),
+			walk_speed:Planar64::int(18),
+			walk_accel:Planar64::int(90),
+			ladder_speed:Planar64::int(18),
+			ladder_accel:Planar64::int(180),
+			ladder_dot:(Planar64::int(1)/2).sqrt(),
+			swim_speed:Planar64::int(12),
+			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+		}
+	}
 
 	fn get_control(&self,control:u32,controls:u32)->bool{
 		controls&self.controls_mask&control==control
