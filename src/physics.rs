@@ -53,23 +53,15 @@ pub enum InputInstruction {
 impl InputInstruction{
 	pub fn id(&self)->u32{
 		let parity=match self{
-			crate::physics::InputInstruction::MoveRight(true)
-			|crate::physics::InputInstruction::MoveUp(true)
-			|crate::physics::InputInstruction::MoveBack(true)
-			|crate::physics::InputInstruction::MoveLeft(true)
-			|crate::physics::InputInstruction::MoveDown(true)
-			|crate::physics::InputInstruction::MoveForward(true)
-			|crate::physics::InputInstruction::Jump(true)
-			|crate::physics::InputInstruction::Zoom(true)=>1u32<<31,
-			crate::physics::InputInstruction::MoveRight(false)
-			|crate::physics::InputInstruction::MoveUp(false)
-			|crate::physics::InputInstruction::MoveBack(false)
-			|crate::physics::InputInstruction::MoveLeft(false)
-			|crate::physics::InputInstruction::MoveDown(false)
-			|crate::physics::InputInstruction::MoveForward(false)
-			|crate::physics::InputInstruction::Jump(false)
-			|crate::physics::InputInstruction::Zoom(false)
-			|crate::physics::InputInstruction::MoveMouse(_)
+			crate::physics::InputInstruction::MoveRight(s)
+			|crate::physics::InputInstruction::MoveUp(s)
+			|crate::physics::InputInstruction::MoveBack(s)
+			|crate::physics::InputInstruction::MoveLeft(s)
+			|crate::physics::InputInstruction::MoveDown(s)
+			|crate::physics::InputInstruction::MoveForward(s)
+			|crate::physics::InputInstruction::Jump(s)
+			|crate::physics::InputInstruction::Zoom(s)=>(*s as u32)<<31,
+			crate::physics::InputInstruction::MoveMouse(_)
 			|crate::physics::InputInstruction::Reset
 			|crate::physics::InputInstruction::Idle=>0u32,
 		};
