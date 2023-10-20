@@ -47,7 +47,7 @@ struct Setup {
 	queue: wgpu::Queue,
 }
 
-async fn setup<E: Example>(title: &str) -> Setup {
+fn setup<E: Example>(title: &str) -> Setup {
 	let event_loop = EventLoop::new();
 	let mut builder = winit::window::WindowBuilder::new();
 	builder = builder.with_title(title);
@@ -131,7 +131,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 	let needed_limits = E::required_limits().using_resolution(adapter.limits());
 
 	let trace_dir = std::env::var("WGPU_TRACE");
-	let (device, queue) = adapter
+	let (device, queue) = pollster::block_on(adapter
 		.request_device(
 			&wgpu::DeviceDescriptor {
 				label: None,
@@ -139,8 +139,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 				limits: needed_limits,
 			},
 			trace_dir.ok().as_ref().map(std::path::Path::new),
-		)
-		.await
+		))
 		.expect("Unable to find a suitable GPU adapter!");
 
 	Setup {
@@ -275,6 +274,6 @@ fn start<E: Example>(
 }
 
 pub fn run<E: Example>(title: &str) {
-	let setup = pollster::block_on(setup::<E>(title));
+	let setup = setup::<E>(title);
 	start::<E>(setup);
 }
