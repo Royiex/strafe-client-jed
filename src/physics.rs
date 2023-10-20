@@ -291,7 +291,7 @@ enum JumpImpulse{
 struct StyleModifiers{
 	controls_mask:u32,//controls which are unable to be activated
 	controls_held:u32,//controls which must be active to be able to strafe
-	strafe_tick_rate:Ratio64,
+	strafe_tick_rate:Option<Ratio64>,
 	jump_impulse:JumpImpulse,
 	jump_calculation:JumpCalculation,
 	static_friction:Planar64,
@@ -305,6 +305,7 @@ struct StyleModifiers{
 	mass:Planar64,
 	mv:Planar64,
 	air_accel_limit:Option<Planar64>,
+	rocket_force:Option<Planar64>,
 	gravity:Planar64Vec3,
 	hitbox_halfsize:Planar64Vec3,
 }
@@ -331,7 +332,7 @@ impl StyleModifiers{
 		Self{
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held:0,
-			strafe_tick_rate:Ratio64::new(128,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			strafe_tick_rate:Some(Ratio64::new(128,Time::ONE_SECOND.nanos() as u64).unwrap()),
 			jump_impulse:JumpImpulse::FromEnergy(Planar64::int(512)),
 			jump_calculation:JumpCalculation::Energy,
 			gravity:Planar64Vec3::int(0,-80,0),
@@ -340,6 +341,7 @@ impl StyleModifiers{
 			mass:Planar64::int(1),
 			mv:Planar64::int(2),
 			air_accel_limit:None,
+			rocket_force:None,
 			walk_speed:Planar64::int(16),
 			walk_accel:Planar64::int(80),
 			ladder_speed:Planar64::int(16),
@@ -354,7 +356,7 @@ impl StyleModifiers{
 		Self{
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held:0,
-			strafe_tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			strafe_tick_rate:Some(Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap()),
 			jump_impulse:JumpImpulse::FromTime(Time::from_micros(715_588)),
 			jump_calculation:JumpCalculation::Capped,
 			gravity:Planar64Vec3::int(0,-100,0),
@@ -363,6 +365,7 @@ impl StyleModifiers{
 			mass:Planar64::int(1),
 			mv:Planar64::int(27)/10,
 			air_accel_limit:None,
+			rocket_force:None,
 			walk_speed:Planar64::int(18),
 			walk_accel:Planar64::int(90),
 			ladder_speed:Planar64::int(18),
@@ -376,7 +379,7 @@ impl StyleModifiers{
 		Self{
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held:0,
-			strafe_tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			strafe_tick_rate:Some(Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap()),
 			jump_impulse:JumpImpulse::FromTime(Time::from_micros(715_588)),
 			jump_calculation:JumpCalculation::Capped,
 			gravity:Planar64Vec3::int(0,-50,0),
@@ -385,6 +388,7 @@ impl StyleModifiers{
 			mass:Planar64::int(1),
 			mv:Planar64::int(27)/10,
 			air_accel_limit:None,
+			rocket_force:None,
 			walk_speed:Planar64::int(18),
 			walk_accel:Planar64::int(90),
 			ladder_speed:Planar64::int(18),
@@ -400,7 +404,7 @@ impl StyleModifiers{
 		Self{
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held:0,
-			strafe_tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			strafe_tick_rate:Some(Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap()),
 			jump_impulse:JumpImpulse::FromHeight(Planar64::raw(52<<28)),
 			jump_calculation:JumpCalculation::Linear,
 			gravity:Planar64Vec3::raw(0,-800<<28,0),
@@ -409,6 +413,7 @@ impl StyleModifiers{
 			mass:Planar64::int(1),
 			mv:Planar64::raw(30<<28),
 			air_accel_limit:Some(Planar64::raw(150<<28)*66),
+			rocket_force:None,
 			walk_speed:Planar64::int(18),//?
 			walk_accel:Planar64::int(90),//?
 			ladder_speed:Planar64::int(18),//?
@@ -423,7 +428,7 @@ impl StyleModifiers{
 		Self{
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held:0,
-			strafe_tick_rate:Ratio64::new(66,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			strafe_tick_rate:Some(Ratio64::new(66,Time::ONE_SECOND.nanos() as u64).unwrap()),
 			jump_impulse:JumpImpulse::FromHeight(Planar64::raw(52<<28)),
 			jump_calculation:JumpCalculation::Linear,
 			gravity:Planar64Vec3::raw(0,-800<<28,0),
@@ -432,6 +437,7 @@ impl StyleModifiers{
 			mass:Planar64::int(1),
 			mv:Planar64::raw(30<<28),
 			air_accel_limit:Some(Planar64::raw(150<<28)*66),
+			rocket_force:None,
 			walk_speed:Planar64::int(18),//?
 			walk_accel:Planar64::int(90),//?
 			ladder_speed:Planar64::int(18),//?
@@ -933,11 +939,13 @@ impl PhysicsState {
 	}
 
 	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
-		return Some(TimedInstruction{
-			time:Time::from_nanos(self.style.strafe_tick_rate.rhs_div_int(self.style.strafe_tick_rate.mul_int(self.time.nanos())+1)),
-			//only poll the physics if there is a before and after mouse event
-			instruction:PhysicsInstruction::StrafeTick
-		});
+		self.style.strafe_tick_rate.as_ref().map(|strafe_tick_rate|{
+			TimedInstruction{
+				time:Time::from_nanos(strafe_tick_rate.rhs_div_int(strafe_tick_rate.mul_int(self.time.nanos())+1)),
+				//only poll the physics if there is a before and after mouse event
+				instruction:PhysicsInstruction::StrafeTick
+			}
+		})
 	}
 
 	//state mutated on collision:
