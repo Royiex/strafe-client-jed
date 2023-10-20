@@ -1,6 +1,6 @@
 use std::thread;
 use std::sync::{mpsc,Arc};
-use parking_lot::Mutex;
+use parking_lot::{Mutex,Condvar};
 
 //WorkerPool
 struct Pool(u32);
@@ -117,6 +117,37 @@ impl<Task:Send+'static> QNWorker<Task>{
 	}
 	pub fn send(&self,task:Task)->Result<(),mpsc::SendError<Task>>{
 		self.sender.send(task)
+	}
+}
+
+/*
+IN = WorkerDescription{
+	input:Immediate,
+	output:None(Single),
+}
+*/
+//Inputs are dropped if the worker is busy
+pub struct INWorker<Task:Clone>{
+	input:Arc<(Mutex<Task>,Condvar)>,
+}
+
+impl<Task:Clone+Send+'static> INWorker<Task>{
+	pub fn new<F:FnMut(Task)+Send+'static>(task:Task,mut f:F)->Self{
+		let ret=Self {
+			input:Arc::new((Mutex::new(task),Condvar::new())),
+		};
+		let input=ret.input.clone();
+		thread::spawn(move ||{
+			loop {
+				input.1.wait(&mut input.0.lock());
+				f(input.0.lock().clone());
+			}
+		});
+		ret
+	}
+	pub fn send(&self,task:Task){
+		*self.input.0.lock()=task;
+        self.input.1.notify_one();
 	}
 }
 
