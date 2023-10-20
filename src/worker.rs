@@ -29,6 +29,12 @@ enum Output{
 	Buffered(PoolOrdering),//outputs are held back internally if they are out of order and order is demanded
 }
 
+//It would be possible to implement all variants
+//with a query input function and callback output function but I'm not sure if that's worth it.
+//Immediate = Condvar
+//Queued = receiver.recv()
+//a callback function would need to use an async runtime!
+
 //realtime output is an arc mutex of the output value that is assigned every time a worker completes a job
 //buffered output produces a receiver object that can be passed to the creation of another worker
 //when ordering is requested, output is ordered by the order each thread is run
