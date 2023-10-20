@@ -454,7 +454,7 @@ impl GraphicsState{
 		//.into_iter() the modeldata vec so entities can be /moved/ to models.entities
 		let mut model_count=0;
 		let mut instance_count=0;
-		let uniform_buffer_binding_size=<GlobalState as framework::Example>::required_limits().max_uniform_buffer_binding_size as usize;
+		let uniform_buffer_binding_size=crate::graphics_context::required_limits().max_uniform_buffer_binding_size as usize;
 		let chunk_size=uniform_buffer_binding_size/MODEL_BUFFER_SIZE_BYTES;
 		self.models.reserve(models.len());
 		for model in models.into_iter() {

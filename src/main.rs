@@ -6,19 +6,19 @@ use instruction::{TimedInstruction, InstructionConsumer};
 mod bvh;
 mod aabb;
 mod model;
-mod model_graphics;
-mod zeroes;
+mod window;
 mod worker;
+mod zeroes;
 mod integer;
 mod physics;
 mod graphics;
 mod settings;
-mod framework;
 mod primitives;
 mod instruction;
 mod load_roblox;
 mod render_thread;
-mod window;
+mod model_graphics;
+mod graphics_context;
 
 
 pub struct GlobalState{
@@ -83,17 +83,7 @@ fn load_file(path: std::path::PathBuf)->Option<model::IndexedModelInstances>{
 	}
 }
 
-impl framework::Example for GlobalState {
-	fn optional_features() -> wgpu::Features {
-		wgpu::Features::TEXTURE_COMPRESSION_ASTC
-			| wgpu::Features::TEXTURE_COMPRESSION_ETC2
-	}
-	fn required_features() -> wgpu::Features {
-		wgpu::Features::TEXTURE_COMPRESSION_BC
-	}
-	fn required_limits() -> wgpu::Limits {
-		wgpu::Limits::default() //framework.rs was using goofy limits that caused me a multi-day headache
-	}
+impl GlobalState {
 	fn init() -> Self {
 		//wee
 		let user_settings=settings::read_user_settings();
@@ -321,10 +311,7 @@ impl framework::Example for GlobalState {
 	}
 }
 
-fn main() {
-	framework::run::<GlobalState>(
-		format!("Strafe Client v{}",
-			env!("CARGO_PKG_VERSION")
-		).as_str()
-	);
+fn main(){
+	let title=format!("Strafe Client v{}",env!("CARGO_PKG_VERSION")).as_str();
+	graphics_context::setup(title).start();
 }
