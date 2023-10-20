@@ -39,27 +39,11 @@ pub trait Example: 'static + Sized {
 	fn required_limits() -> wgpu::Limits {
 		wgpu::Limits::downlevel_webgl2_defaults() // These downlevel limits will allow the code to run on all possible hardware
 	}
-	fn init(
-		config: &wgpu::SurfaceConfiguration,
-		adapter: &wgpu::Adapter,
-		device: &wgpu::Device,
-		queue: &wgpu::Queue,
-	) -> Self;
-	fn resize(
-		&mut self,
-		config: &wgpu::SurfaceConfiguration,
-		device: &wgpu::Device,
-		queue: &wgpu::Queue,
-	);
-	fn update(&mut self, window: &winit::window::Window, device: &wgpu::Device, queue: &wgpu::Queue, event: WindowEvent);
+	fn init() -> Self;
+	fn resize(&mut self);
+	fn update(&mut self, window: &winit::window::Window, event: WindowEvent);
 	fn device_event(&mut self, window: &winit::window::Window, event: DeviceEvent);
-	fn render(
-		&mut self,
-		view: &wgpu::TextureView,
-		device: &wgpu::Device,
-		queue: &wgpu::Queue,
-		spawner: &Spawner,
-	);
+	fn render(&self);
 }
 
 struct Setup {
@@ -298,7 +282,7 @@ fn start<E: Example>(
 	surface.configure(&device, &config);
 
 	log::info!("Initializing the example...");
-	let mut example = E::init(&config, &adapter, &device, &queue);
+	let mut example=E::init();
 
 	log::info!("Entering render loop...");
 	event_loop.run(move |event, _, control_flow| {

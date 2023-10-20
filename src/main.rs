@@ -93,12 +93,7 @@ impl framework::Example for GlobalState {
 	fn required_limits() -> wgpu::Limits {
 		wgpu::Limits::default() //framework.rs was using goofy limits that caused me a multi-day headache
 	}
-	fn init(
-		config: &wgpu::SurfaceConfiguration,
-		_adapter: &wgpu::Adapter,
-		device: &wgpu::Device,
-		queue: &wgpu::Queue,
-	) -> Self {
+	fn init() -> Self {
 		//wee
 		let user_settings=settings::read_user_settings();
 		let mut indexed_models = Vec::new();
@@ -190,7 +185,7 @@ impl framework::Example for GlobalState {
 	}
 
 	#[allow(clippy::single_match)]
-	fn update(&mut self, window: &winit::window::Window, device: &wgpu::Device, queue: &wgpu::Queue, event: winit::event::WindowEvent) {
+	fn update(&mut self, window: &winit::window::Window, event: winit::event::WindowEvent) {
 		let time=integer::Time::from_nanos(self.start_time.elapsed().as_nanos() as i64);
 		match event {
 			winit::event::WindowEvent::DroppedFile(path)=>{
