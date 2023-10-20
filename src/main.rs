@@ -178,5 +178,8 @@ impl GlobalState {
 
 fn main(){
 	let title=format!("Strafe Client v{}",env!("CARGO_PKG_VERSION")).as_str();
-	graphics_context::setup(title).start();
+	let context=graphics_context::setup(title);
+	let global_state=GlobalState::init();//new
+	global_state.replace_models(&context,default_models());
+	context.start(global_state);
 }
