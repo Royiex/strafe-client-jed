@@ -25,6 +25,18 @@ pub struct RenderState{
 	graphics:crate::graphics::GraphicsState,
 }
 impl RenderState{
+	pub fn new(user_settings:&crate::settings::UserSettings,indexed_model_instances:crate::model::IndexedModelInstances){
+
+		let mut physics=crate::physics::PhysicsState::default();
+		physics.spawn(indexed_model_instances.spawn_point);
+		physics.load_user_settings(user_settings);
+		physics.generate_models(&indexed_model_instances);
+
+		let mut graphics=Self::new_graphics_state();
+		graphics.load_user_settings(user_settings);
+		graphics.generate_models(indexed_model_instances);
+		//manual reset
+	}
 	pub fn into_worker(mut self)->crate::worker::CNWorker<TimedInstruction<InputInstruction>>{
 		let mut mouse_blocking=true;
 		let mut last_mouse_time=self.physics.next_mouse.time;

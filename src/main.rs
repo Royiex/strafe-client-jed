@@ -1,5 +1,6 @@
 use std::time::Instant;
-use physics::{InputInstruction, PhysicsInstruction};
+use physics::PhysicsInstruction;
+use render_thread::InputInstruction;
 use instruction::{TimedInstruction, InstructionConsumer};
 
 mod bvh;
@@ -34,6 +35,51 @@ pub struct GlobalState{
 	//up to three frames in flight, dropping new frame requests when all three are busy, and dropping output frames when one renders out of order
 	graphics_thread:worker::INWorker<graphics::GraphicsInstruction>,
 	physics_thread:worker::QNWorker<TimedInstruction<InputInstruction>>,
+}
+
+fn load_file(path: std::path::PathBuf)->Option<model::IndexedModelInstances>{
+	println!("Loading file: {:?}", &path);
+	//oh boy! let's load the map!
+	if let Ok(file)=std::fs::File::open(path){
+		let mut input = std::io::BufReader::new(file);
+		let mut first_8=[0u8;8];
+		//.rbxm roblox binary = "<roblox!"
+		//.rbxmx roblox xml = "<roblox "
+		//.bsp = "VBSP"
+		//.vmf = 
+		//.snf = "SNMF"
+		//.snf = "SNBF"
+		if let (Ok(()),Ok(()))=(std::io::Read::read_exact(&mut input, &mut first_8),std::io::Seek::rewind(&mut input)){
+			match &first_8[0..4]{
+				b"<rob"=>{
+					match match &first_8[4..8]{
+						b"lox!"=>rbx_binary::from_reader(input).map_err(|e|format!("{:?}",e)),
+						b"lox "=>rbx_xml::from_reader(input,rbx_xml::DecodeOptions::default()).map_err(|e|format!("{:?}",e)),
+						other=>Err(format!("Unknown Roblox file type {:?}",other)),
+					}{
+						Ok(dom)=>Some(load_roblox::generate_indexed_models(dom)),
+						Err(e)=>{
+							println!("Error loading roblox file:{:?}",e);
+							None
+						},
+					}
+				},
+				//b"VBSP"=>Some(load_bsp::generate_indexed_models(input)),
+				//b"SNFM"=>Some(sniffer::generate_indexed_models(input)),
+				//b"SNFB"=>Some(sniffer::load_bot(input)),
+				other=>{
+					println!("loser file {:?}",other);
+					None
+				},
+			}
+		}else{
+			println!("Failed to read first 8 bytes and seek back to beginning of file.");
+			None
+		}
+	}else{
+		println!("Could not open file");
+		None
+	}
 }
 
 impl framework::Example for GlobalState {
@@ -136,77 +182,11 @@ impl framework::Example for GlobalState {
 
 		let args:Vec<String>=std::env::args().collect();
 		if args.len()==2{
-			state.load_file(std::path::PathBuf::from(&args[1]), device, queue);
+			let indexed_model_instances=load_file(std::path::PathBuf::from(&args[1]));
+			state.render_thread=RenderThread::new(user_settings,indexed_model_instances);
 		}
 
 		return state;
-	}
-
-	fn load_file(&mut self,path: std::path::PathBuf, device: &wgpu::Device, queue: &wgpu::Queue){
-		println!("Loading file: {:?}", &path);
-		//oh boy! let's load the map!
-		if let Ok(file)=std::fs::File::open(path){
-			let mut input = std::io::BufReader::new(file);
-			let mut first_8=[0u8;8];
-			//.rbxm roblox binary = "<roblox!"
-			//.rbxmx roblox xml = "<roblox "
-			//.bsp = "VBSP"
-			//.vmf = 
-			//.snf = "SNMF"
-			//.snf = "SNBF"
-			if let (Ok(()),Ok(()))=(std::io::Read::read_exact(&mut input, &mut first_8),std::io::Seek::rewind(&mut input)){
-				if let Some(indexed_model_instances)={
-					match &first_8[0..4]{
-						b"<rob"=>{
-							match match &first_8[4..8]{
-								b"lox!"=>rbx_binary::from_reader(input).map_err(|e|format!("{:?}",e)),
-								b"lox "=>rbx_xml::from_reader(input,rbx_xml::DecodeOptions::default()).map_err(|e|format!("{:?}",e)),
-								other=>Err(format!("Unknown Roblox file type {:?}",other)),
-							}{
-								Ok(dom)=>Some(load_roblox::generate_indexed_models(dom)),
-								Err(e)=>{
-									println!("Error loading roblox file:{:?}",e);
-									None
-								},
-							}
-						},
-						//b"VBSP"=>Some(load_bsp::generate_indexed_models(input)),
-						//b"SNFM"=>Some(sniffer::generate_indexed_models(input)),
-						//b"SNFB"=>Some(sniffer::load_bot(input)),
-						other=>{
-							println!("loser file {:?}",other);
-							None
-						},
-					}
-				}{
-					let spawn_point=indexed_model_instances.spawn_point;
-					//if generate_indexed_models succeeds, clear the previous ones
-					self.graphics.clear();
-
-					let mut physics=physics::PhysicsState::default();
-					//physics.spawn()
-					physics.game.stage_id=0;
-					physics.spawn_point=spawn_point;
-					physics.process_instruction(instruction::TimedInstruction{
-						time:physics.time,
-						instruction: PhysicsInstruction::Input(physics::PhysicsInputInstruction::Reset),
-					});
-					physics.load_user_settings(&self.user_settings);
-					physics.generate_models(&indexed_model_instances);
-					self.physics_thread=physics.into_worker();
-
-					//graphics.load_user_settings(&self.user_settings);
-					self.generate_model_graphics(device,queue,indexed_model_instances);
-					//manual reset
-				}else{
-					println!("No modeldatas were generated");
-				}
-			}else{
-				println!("Failed to read first 8 bytes and seek back to beginning of file.");
-			}
-		}else{
-			println!("Could not open file");
-		}
 	}
 
 	#[allow(clippy::single_match)]

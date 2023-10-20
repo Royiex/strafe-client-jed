@@ -727,6 +727,15 @@ impl PhysicsState {
 		}
 	}
 
+	pub fn spawn(&mut self,spawn_point:Planar64Vec3){
+		self.game.stage_id=0;
+		self.spawn_point=spawn_point;
+		self.process_instruction(crate::instruction::TimedInstruction{
+			time:self.time,
+			instruction: PhysicsInstruction::Input(PhysicsInputInstruction::Reset),
+		});
+	}
+
 	pub fn generate_models(&mut self,indexed_models:&crate::model::IndexedModelInstances){
 		let mut starts=Vec::new();
 		let mut spawns=Vec::new();
