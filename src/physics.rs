@@ -507,10 +507,10 @@ enum MoveState{
 }
 
 pub struct PhysicsState{
-	pub time:Time,
+	time:Time,
 	body:Body,
 	world:WorldState,//currently there is only one state the world can be in
-	pub game:GameMechanicsState,
+	game:GameMechanicsState,
 	style:StyleModifiers,
 	touching:TouchingState,
 	//camera must exist in state because wormholes modify the camera, also camera punch
@@ -525,7 +525,7 @@ pub struct PhysicsState{
 	modes:Modes,
 	//the spawn point is where you spawn when you load into the map.
 	//This is not the same as Reset which teleports you to Spawn0
-	pub spawn_point:Planar64Vec3,
+	spawn_point:Planar64Vec3,
 }
 #[derive(Clone)]
 pub struct PhysicsOutputState{
