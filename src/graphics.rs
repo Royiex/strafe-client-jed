@@ -876,12 +876,10 @@ impl GraphicsState{
 	}
 	pub fn resize(
 		&mut self,
-		config: &wgpu::SurfaceConfiguration,
-		device: &wgpu::Device,
-		_queue: &wgpu::Queue,
+		context:&crate::graphics_context::GraphicsContext,
 	) {
-		self.depth_view = Self::create_depth_texture(config, device);
-		self.camera.screen_size=glam::uvec2(config.width, config.height);
+		self.depth_view = Self::create_depth_texture(&context.config,&context.device);
+		self.camera.screen_size=glam::uvec2(context.config.width, context.config.height);
 		self.load_user_settings(&self.user_settings);
 	}
 	pub fn render(

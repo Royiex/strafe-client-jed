@@ -166,13 +166,13 @@ impl GraphicsContextPartial4{
 		}
 	}
 }
-struct GraphicsContext{
-	instance:wgpu::Instance,
-	surface:wgpu::Surface,
-	adapter:wgpu::Adapter,
-	device:wgpu::Device,
-	queue:wgpu::Queue,
-	config:wgpu::SurfaceConfiguration,
+pub struct GraphicsContext{
+	pub instance:wgpu::Instance,
+	pub surface:wgpu::Surface,
+	pub adapter:wgpu::Adapter,
+	pub device:wgpu::Device,
+	pub queue:wgpu::Queue,
+	pub config:wgpu::SurfaceConfiguration,
 }
 
 pub fn setup(title:&str)->GraphicsContextSetup{
