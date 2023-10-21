@@ -117,10 +117,10 @@ impl GraphicsContextPartial3{
 		let required_features=required_features();
 
 		// Make sure we use the texture resolution limits from the adapter, so we can support images the size of the surface.
-		let needed_limits = required_limits().using_resolution(self.adapter.limits());
+		let needed_limits=required_limits().using_resolution(self.adapter.limits());
 
-		let trace_dir = std::env::var("WGPU_TRACE");
-		let (device, queue) = pollster::block_on(self.adapter
+		let trace_dir=std::env::var("WGPU_TRACE");
+		let (device, queue)=pollster::block_on(self.adapter
 			.request_device(
 				&wgpu::DeviceDescriptor {
 					label: None,
@@ -149,10 +149,10 @@ struct GraphicsContextPartial4{
 }
 impl GraphicsContextPartial4{
 	fn configure_surface(self,size:&winit::dpi::PhysicalSize<u32>)->GraphicsContext{
-		let mut config = self.surface
+		let mut config=self.surface
 			.get_default_config(&self.adapter, size.width, size.height)
 			.expect("Surface isn't supported by the adapter.");
-		let surface_view_format = config.format.add_srgb_suffix();
+		let surface_view_format=config.format.add_srgb_suffix();
 		config.view_formats.push(surface_view_format);
 		self.surface.configure(&self.device, &config);
 
@@ -198,37 +198,41 @@ pub fn setup(title:&str)->GraphicsContextSetup{
 }
 
 struct GraphicsContextSetup{
-	window: winit::window::Window,
+	window:winit::window::Window,
 	event_loop:winit::event_loop::EventLoop<()>,
-	partial_graphics_context:crate::graphics_context::GraphicsContextPartial4,
+	partial_graphics_context:GraphicsContextPartial4,
 }
 
 impl GraphicsContextSetup{
-	pub fn start(self){
-		let size = self.window.inner_size();
-
-		let graphics_context=self.partial_graphics_context.configure_surface(&size);
-
-		println!("Initializing global state...");
-		let mut example=GlobalState::init();
+	fn into_split(self)->(winit::window::Window,winit::event_loop::EventLoop<()>,GraphicsContext){
+		let size=self.window.inner_size();
+		//Steal values and drop self
+		(
+			self.window,
+			self.event_loop,
+			self.partial_graphics_context.configure_surface(&size),
+		)
+	}
+	pub fn start(self,mut global_state:crate::GlobalState){
+		let (window,event_loop,graphics_context)=self.into_split();
 
 		println!("Entering render loop...");
-		event_loop.run(move |event, _, control_flow| {
-			let _ = (&instance, &adapter); // force ownership by the closure
-			*control_flow = if cfg!(feature = "metal-auto-capture") {
-				ControlFlow::Exit
-			} else {
-				ControlFlow::Poll
+		event_loop.run(move |event,_,control_flow|{
+			//let _=(&instance, &adapter); // force ownership by the closure
+			*control_flow=if cfg!(feature="metal-auto-capture"){
+				winit::event_loop::ControlFlow::Exit
+			}else{
+				winit::event_loop::ControlFlow::Poll
 			};
-			match event {
-				event::Event::RedrawEventsCleared => {
+			match event{
+				winit::event::Event::RedrawEventsCleared=>{
 					window.request_redraw();
 				}
-				event::Event::WindowEvent {
+				winit::event::Event::WindowEvent {
 					event:
-						WindowEvent::Resized(size)
-						| WindowEvent::ScaleFactorChanged {
-							new_inner_size: &mut size,
+						winit::event::WindowEvent::Resized(size)
+						| winit::event::WindowEvent::ScaleFactorChanged {
+							new_inner_size:&mut size,
 							..
 						},
 					..
@@ -236,76 +240,75 @@ impl GraphicsContextSetup{
 					// Once winit is fixed, the detection conditions here can be removed.
 					// https://github.com/rust-windowing/winit/issues/2876
 					// this has been fixed if I update winit (remove the if statement and only use the else case)
-					let max_dimension = adapter.limits().max_texture_dimension_2d;
-					if size.width > max_dimension || size.height > max_dimension {
+					let max_dimension=graphics_context.adapter.limits().max_texture_dimension_2d;
+					if max_dimension<size.width||max_dimension<size.height{
 						println!(
 							"The resizing size {:?} exceeds the limit of {}.",
 							size,
 							max_dimension
 						);
-					} else {
-						println!("Resizing to {:?}", size);
-						config.width = size.width.max(1);
-						config.height = size.height.max(1);
-						example.resize(&config, &device, &queue);
-						surface.configure(&device, &config);
+					}else{
+						println!("Resizing to {:?}",size);
+						graphics_context.config.width=size.width.max(1);
+						graphics_context.config.height=size.height.max(1);
+						example.resize(&graphics_context.config, &graphics_context.device,&graphics_context.queue);
+						graphics_context.surface.configure(&graphics_context.device,&graphics_context.config);
 					}
 				}
-				event::Event::WindowEvent { event, .. } => match event {
-					WindowEvent::KeyboardInput {
+				winit::event::Event::WindowEvent{event,..}=>match event{
+					winit::event::WindowEvent::KeyboardInput{
 						input:
-							event::KeyboardInput {
-								virtual_keycode: Some(event::VirtualKeyCode::Escape),
-								state: event::ElementState::Pressed,
+							winit::event::KeyboardInput{
+								virtual_keycode:Some(winit::event::VirtualKeyCode::Escape),
+								state: winit::event::ElementState::Pressed,
 								..
 							},
 						..
 					}
-					| WindowEvent::CloseRequested => {
-						*control_flow = ControlFlow::Exit;
+					|winit::event::WindowEvent::CloseRequested=>{
+						*control_flow=winit::event_loop::ControlFlow::Exit;
 					}
-					WindowEvent::KeyboardInput {
+					winit::event::WindowEvent::KeyboardInput{
 						input:
-							event::KeyboardInput {
-								virtual_keycode: Some(event::VirtualKeyCode::Scroll),
-								state: event::ElementState::Pressed,
+							winit::event::KeyboardInput{
+								virtual_keycode:Some(winit::event::VirtualKeyCode::Scroll),
+								state: winit::event::ElementState::Pressed,
 								..
 							},
 						..
-					} => {
-						println!("{:#?}", instance.generate_report());
+					}=>{
+						println!("{:#?}",graphics_context.instance.generate_report());
 					}
-					_ => {
-						example.update(&window,&device,&queue,event);
+					_=>{
+						example.update(&window,&graphics_context.device,&graphics_context.queue,event);
 					}
 				},
-				event::Event::DeviceEvent {
+				winit::event::Event::DeviceEvent{
 					event,
 					..
 				} => {
 					example.device_event(&window,event);
 				},
-				event::Event::RedrawRequested(_) => {
-
-					let frame = match surface.get_current_texture() {
-						Ok(frame) => frame,
-						Err(_) => {
-							surface.configure(&device, &config);
-							surface
+				winit::event::Event::RedrawRequested(_)=>{
+					let frame=match graphics_context.surface.get_current_texture(){
+						Ok(frame)=>frame,
+						Err(_)=>{
+							graphics_context.surface.configure(&graphics_context.device,&graphics_context.config);
+							graphics_context.surface
 								.get_current_texture()
 								.expect("Failed to acquire next surface texture!")
 						}
 					};
-					let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
-						format: Some(surface_view_format),
+					let view=frame.texture.create_view(&wgpu::TextureViewDescriptor{
+						format:Some(graphics_context.config.view_formats[0]),
 						..wgpu::TextureViewDescriptor::default()
 					});
 
-					example.render(&view, &device, &queue);
+					example.render(&view,&graphics_context.device,&graphics_context.queue);
 
 					frame.present();
 				}
-				_ => {}
+				_=>{}
 			}
 		});
 	}
