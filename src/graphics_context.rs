@@ -239,6 +239,7 @@ impl GraphicsContextSetup{
 					// Once winit is fixed, the detection conditions here can be removed.
 					// https://github.com/rust-windowing/winit/issues/2876
 					// this has been fixed if I update winit (remove the if statement and only use the else case)
+					//drop adapter when you delete this
 					let max_dimension=graphics_context.adapter.limits().max_texture_dimension_2d;
 					if max_dimension<size.width||max_dimension<size.height{
 						println!(
