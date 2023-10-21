@@ -218,7 +218,6 @@ impl GraphicsContextSetup{
 
 		println!("Entering render loop...");
 		event_loop.run(move |event,_,control_flow|{
-			//let _=(&instance, &adapter); // force ownership by the closure
 			*control_flow=if cfg!(feature="metal-auto-capture"){
 				winit::event_loop::ControlFlow::Exit
 			}else{
@@ -251,7 +250,7 @@ impl GraphicsContextSetup{
 						println!("Resizing to {:?}",size);
 						graphics_context.config.width=size.width.max(1);
 						graphics_context.config.height=size.height.max(1);
-						example.resize(&graphics_context.config, &graphics_context.device,&graphics_context.queue);
+						window.resize(&graphics_context);
 						graphics_context.surface.configure(&graphics_context.device,&graphics_context.config);
 					}
 				}
@@ -280,14 +279,14 @@ impl GraphicsContextSetup{
 						println!("{:#?}",graphics_context.instance.generate_report());
 					}
 					_=>{
-						example.update(&window,&graphics_context.device,&graphics_context.queue,event);
+						global_state.update(event);
 					}
 				},
 				winit::event::Event::DeviceEvent{
 					event,
 					..
 				} => {
-					example.device_event(&window,event);
+					global_state.device_event(event);
 				},
 				winit::event::Event::RedrawRequested(_)=>{
 					let frame=match graphics_context.surface.get_current_texture(){
@@ -304,7 +303,7 @@ impl GraphicsContextSetup{
 						..wgpu::TextureViewDescriptor::default()
 					});
 
-					example.render(&view,&graphics_context.device,&graphics_context.queue);
+					graphics.render(&view,&graphics_context.device,&graphics_context.queue);
 
 					frame.present();
 				}
