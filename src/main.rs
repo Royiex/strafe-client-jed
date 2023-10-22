@@ -1093,7 +1093,7 @@ impl framework::Example for GlobalState {
 		let time=integer::Time::from_nanos(self.start_time.elapsed().as_nanos() as i64);
 		match event {
 			winit::event::WindowEvent::DroppedFile(path) => self.load_file(path,device,queue),
-			winit::event::WindowEvent::Focused(state)=>{
+			winit::event::WindowEvent::Focused(_state)=>{
 				//pause unpause
 				//recalculate pressed keys on focus
 			},
