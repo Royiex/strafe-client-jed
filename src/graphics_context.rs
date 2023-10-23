@@ -1,3 +1,5 @@
+use crate::instruction::TimedInstruction;
+
 fn optional_features() -> wgpu::Features {
 	wgpu::Features::empty()
 }
@@ -197,6 +199,53 @@ pub fn setup(title:&str)->GraphicsContextSetup{
 	}
 }
 
+enum RunInstruction{
+	Resize(winit::dpi::PhysicalSize<u32>),
+	WindowEvent(winit::event::WindowEvent),
+	DeviceEvent(winit::event::DeviceEvent),
+	Render,
+}
+
+impl GraphicsContext{
+	fn into_worker(self,mut global_state:crate::GlobalState)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
+		crate::worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
+			match ins.instruction{
+				RunInstruction::WindowEvent(window_event)=>{
+					global_state.window_event(window_event);
+				},
+				RunInstruction::DeviceEvent(device_event)=>{
+					global_state.device_event(device_event);
+				},
+				RunInstruction::Resize(size)=>{
+					self.config.width=size.width.max(1);
+					self.config.height=size.height.max(1);
+					global_state.graphics.resize(&self.device,&self.config);
+					self.surface.configure(&self.device,&self.config);
+				}
+				RunInstruction::Render=>{
+					let frame=match self.surface.get_current_texture(){
+						Ok(frame)=>frame,
+						Err(_)=>{
+							self.surface.configure(&self.device,&self.config);
+							self.surface
+								.get_current_texture()
+								.expect("Failed to acquire next surface texture!")
+						}
+					};
+					let view=frame.texture.create_view(&wgpu::TextureViewDescriptor{
+						format:Some(self.config.view_formats[0]),
+						..wgpu::TextureViewDescriptor::default()
+					});
+
+					global_state.graphics.render(&view,&self.device,&self.queue);
+
+					frame.present();
+				}
+			}
+		})
+	}
+}
+
 struct GraphicsContextSetup{
 	window:winit::window::Window,
 	event_loop:winit::event_loop::EventLoop<()>,
@@ -216,8 +265,15 @@ impl GraphicsContextSetup{
 	pub fn start(self,mut global_state:crate::GlobalState){
 		let (window,event_loop,graphics_context)=self.into_split();
 
+		//dedicated thread to pigh request redraw back and resize the window doesn't seem logical
+
+		//physics and graphics render thread
+		let run_thread=graphics_context.into_worker(global_state);
+
 		println!("Entering render loop...");
+		let root_time=std::time::Instant::now();
 		event_loop.run(move |event,_,control_flow|{
+			let time=crate::integer::Time::from_nanos(root_time.elapsed().as_nanos() as i64);
 			*control_flow=if cfg!(feature="metal-auto-capture"){
 				winit::event_loop::ControlFlow::Exit
 			}else{
@@ -232,9 +288,9 @@ impl GraphicsContextSetup{
 						winit::event::WindowEvent::Resized(size)
 						| winit::event::WindowEvent::ScaleFactorChanged {
 							new_inner_size:&mut size,
-							..
+							scale_factor:_,
 						},
-					..
+					window_id:_,
 				} => {
 					// Once winit is fixed, the detection conditions here can be removed.
 					// https://github.com/rust-windowing/winit/issues/2876
@@ -249,10 +305,7 @@ impl GraphicsContextSetup{
 						);
 					}else{
 						println!("Resizing to {:?}",size);
-						graphics_context.config.width=size.width.max(1);
-						graphics_context.config.height=size.height.max(1);
-						window.resize(&graphics_context);
-						graphics_context.surface.configure(&graphics_context.device,&graphics_context.config);
+						run_thread.send(TimedInstruction{time,instruction:RunInstruction::Resize(size)});
 					}
 				}
 				winit::event::Event::WindowEvent{event,..}=>match event{
@@ -268,45 +321,18 @@ impl GraphicsContextSetup{
 					|winit::event::WindowEvent::CloseRequested=>{
 						*control_flow=winit::event_loop::ControlFlow::Exit;
 					}
-					winit::event::WindowEvent::KeyboardInput{
-						input:
-							winit::event::KeyboardInput{
-								virtual_keycode:Some(winit::event::VirtualKeyCode::Scroll),
-								state: winit::event::ElementState::Pressed,
-								..
-							},
-						..
-					}=>{
-						println!("{:#?}",graphics_context.instance.generate_report());
-					}
 					_=>{
-						global_state.update(event);
+						run_thread.send(TimedInstruction{time,instruction:RunInstruction::WindowEvent(event)});
 					}
 				},
 				winit::event::Event::DeviceEvent{
 					event,
 					..
 				} => {
-					global_state.device_event(event);
+					run_thread.send(TimedInstruction{time,instruction:RunInstruction::DeviceEvent(event)});
 				},
 				winit::event::Event::RedrawRequested(_)=>{
-					let frame=match graphics_context.surface.get_current_texture(){
-						Ok(frame)=>frame,
-						Err(_)=>{
-							graphics_context.surface.configure(&graphics_context.device,&graphics_context.config);
-							graphics_context.surface
-								.get_current_texture()
-								.expect("Failed to acquire next surface texture!")
-						}
-					};
-					let view=frame.texture.create_view(&wgpu::TextureViewDescriptor{
-						format:Some(graphics_context.config.view_formats[0]),
-						..wgpu::TextureViewDescriptor::default()
-					});
-
-					graphics.render(&view,&graphics_context.device,&graphics_context.queue);
-
-					frame.present();
+					//send
 				}
 				_=>{}
 			}

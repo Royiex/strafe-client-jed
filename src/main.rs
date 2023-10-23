@@ -22,7 +22,6 @@ mod graphics_context;
 
 
 pub struct GlobalState{
-	start_time: std::time::Instant,
 	manual_mouse_lock:bool,
 	mouse:std::sync::Arc<std::sync::Mutex<physics::MouseState>>,
 	user_settings:settings::UserSettings,
@@ -159,7 +158,6 @@ impl GlobalState {
 		//3. forget
 
 		let mut state=GlobalState{
-			start_time:Instant::now(),
 			manual_mouse_lock:false,
 			mouse:physics::MouseState::default(),
 			user_settings,

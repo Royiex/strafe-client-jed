@@ -1,3 +1,6 @@
+pub enum WindowInstruction{
+	Resize(),
+}
 pub struct WindowState{
 	//ok
 }
@@ -5,8 +8,7 @@ impl WindowState{
 	fn resize(&mut self);
 	fn render(&self);
 
-	fn update(&mut self, window: &winit::window::Window, event: winit::event::WindowEvent) {
-		let time=integer::Time::from_nanos(self.start_time.elapsed().as_nanos() as i64);
+	fn window_event(&mut self, window: &winit::window::Window, event: winit::event::WindowEvent) {
 		match event {
 			winit::event::WindowEvent::DroppedFile(path)=>{
 				std::thread::spawn(move ||{
@@ -102,8 +104,6 @@ impl WindowState{
 	}
 
 	fn device_event(&mut self, window: &winit::window::Window, event: winit::event::DeviceEvent) {
-		//there's no way this is the best way get a timestamp.
-		let time=integer::Time::from_nanos(self.start_time.elapsed().as_nanos() as i64);
 		match event {
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine
@@ -148,5 +148,8 @@ impl WindowState{
 			builder = builder.with_no_redirection_bitmap(true);
 		}
 		builder.build(event_loop)
+	}
+	pub fn into_thread(window:winit::window::Window){
+		//
 	}
 }
