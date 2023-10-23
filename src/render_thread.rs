@@ -37,11 +37,11 @@ impl RenderState{
 		graphics.generate_models(indexed_model_instances);
 		//manual reset
 	}
-	pub fn into_worker(mut self)->crate::worker::CNWorker<TimedInstruction<InputInstruction>>{
+	pub fn into_worker(mut self)->crate::worker::QNWorker<TimedInstruction<InputInstruction>>{
 		let mut mouse_blocking=true;
 		let mut last_mouse_time=self.physics.next_mouse.time;
 		let mut timeline=std::collections::VecDeque::new();
-		crate::worker::CNWorker::new(move |ins:TimedInstruction<InputInstruction>|{
+		crate::worker::QNWorker::new(move |ins:TimedInstruction<InputInstruction>|{
 			let mut render=false;
 			if if let Some(phys_input)=match ins.instruction{
 				InputInstruction::MoveMouse(m)=>{
