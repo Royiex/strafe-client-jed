@@ -1098,15 +1098,15 @@ impl framework::Example for GlobalState {
 				//recalculate pressed keys on focus
 			},
 			winit::event::WindowEvent::KeyboardInput {
-				input:winit::event::KeyboardInput{state, virtual_keycode,..},
+				event:winit::event::KeyEvent{state, logical_key,..},
 				..
 			}=>{
 				let s=match state {
 					winit::event::ElementState::Pressed => true,
 					winit::event::ElementState::Released => false,
 				};
-				match virtual_keycode{
-					Some(winit::event::VirtualKeyCode::Tab)=>{
+				match logical_key{
+					winit::keyboard::Key::Named(winit::keyboard::NamedKey::Tab)=>{
 						if s{
 							self.manual_mouse_lock=false;
 							match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.graphics.camera.screen_size.x as f32/2.0, self.graphics.camera.screen_size.y as f32/2.0)){
@@ -1135,7 +1135,7 @@ impl framework::Example for GlobalState {
 						}
 						window.set_cursor_visible(s);
 					},
-					Some(winit::event::VirtualKeyCode::F11)=>{
+					winit::keyboard::Key::Named(winit::keyboard::NamedKey::F11)=>{
 						if s{
 							if window.fullscreen().is_some(){
 								window.set_fullscreen(None);
@@ -1144,7 +1144,7 @@ impl framework::Example for GlobalState {
 							}
 						}
 					},
-					Some(winit::event::VirtualKeyCode::Escape)=>{
+					winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape)=>{
 						if s{
 							self.manual_mouse_lock=false;
 							match window.set_cursor_grab(winit::window::CursorGrabMode::None){
@@ -1154,18 +1154,21 @@ impl framework::Example for GlobalState {
 							window.set_cursor_visible(true);
 						}
 					},
-					Some(keycode)=>{
+					keycode=>{
 						if let Some(input_instruction)=match keycode {
-							winit::event::VirtualKeyCode::W => Some(InputInstruction::MoveForward(s)),
-							winit::event::VirtualKeyCode::A => Some(InputInstruction::MoveLeft(s)),
-							winit::event::VirtualKeyCode::S => Some(InputInstruction::MoveBack(s)),
-							winit::event::VirtualKeyCode::D => Some(InputInstruction::MoveRight(s)),
-							winit::event::VirtualKeyCode::E => Some(InputInstruction::MoveUp(s)),
-							winit::event::VirtualKeyCode::Q => Some(InputInstruction::MoveDown(s)),
-							winit::event::VirtualKeyCode::Space => Some(InputInstruction::Jump(s)),
-							winit::event::VirtualKeyCode::Z => Some(InputInstruction::Zoom(s)),
-							winit::event::VirtualKeyCode::R => if s{Some(InputInstruction::Reset)}else{None},
-							_ => None,
+							winit::keyboard::Key::Named(winit::keyboard::NamedKey::Space)=>Some(InputInstruction::Jump(s)),
+							winit::keyboard::Key::Character(c)=>match c.as_str(){
+								"w"=>Some(InputInstruction::MoveForward(s)),
+								"a"=>Some(InputInstruction::MoveLeft(s)),
+								"s"=>Some(InputInstruction::MoveBack(s)),
+								"d"=>Some(InputInstruction::MoveRight(s)),
+								"e"=>Some(InputInstruction::MoveUp(s)),
+								"q"=>Some(InputInstruction::MoveDown(s)),
+								"z"=>Some(InputInstruction::Zoom(s)),
+								"r"=>if s{Some(InputInstruction::Reset)}else{None},
+								_=>None,
+							}
+							_=>None,
 						}{
 							self.physics_thread.send(TimedInstruction{
 								time,
@@ -1173,7 +1176,6 @@ impl framework::Example for GlobalState {
 							}).unwrap();
 						}
 					},
-					_=>(),
 				}
 			},
 			_=>(),

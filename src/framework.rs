@@ -5,7 +5,7 @@ use std::str::FromStr;
 use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
 use winit::{
 	event::{self, WindowEvent, DeviceEvent},
-	event_loop::{ControlFlow, EventLoop},
+	event_loop::EventLoop,
 };
 
 #[allow(dead_code)]
@@ -88,7 +88,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 		env_logger::init();
 	};
 
-	let event_loop = EventLoop::new();
+	let event_loop = EventLoop::new().unwrap();
 	let mut builder = winit::window::WindowBuilder::new();
 	builder = builder.with_title(title);
 	#[cfg(windows_OFF)] // TODO
@@ -302,15 +302,15 @@ fn start<E: Example>(
 	let mut example = E::init(&config, &adapter, &device, &queue);
 
 	log::info!("Entering render loop...");
-	event_loop.run(move |event, _, control_flow| {
+	event_loop.run(move |event, elwt| {
 		let _ = (&instance, &adapter); // force ownership by the closure
-		*control_flow = if cfg!(feature = "metal-auto-capture") {
-			ControlFlow::Exit
-		} else {
-			ControlFlow::Poll
-		};
+		// *control_flow = if cfg!(feature = "metal-auto-capture") {
+		// 	ControlFlow::Exit
+		// } else {
+		// 	ControlFlow::Poll
+		// };
 		match event {
-			event::Event::RedrawEventsCleared => {
+			event::Event::AboutToWait => {
 				#[cfg(not(target_arch = "wasm32"))]
 				spawner.run_until_stalled();
 
@@ -318,48 +318,44 @@ fn start<E: Example>(
 			}
 			event::Event::WindowEvent {
 				event:
-					WindowEvent::Resized(size)
-					| WindowEvent::ScaleFactorChanged {
-						new_inner_size: &mut size,
-						..
-					},
+					// WindowEvent::Resized(size)
+					// | WindowEvent::ScaleFactorChanged {
+					// 	new_inner_size: &mut size,
+					// 	..
+					// },
+					WindowEvent::Resized(size),//ignoring scale factor changed for now because mutex bruh
 				..
 			} => {
-				// Once winit is fixed, the detection conditions here can be removed.
-				// https://github.com/rust-windowing/winit/issues/2876
-				let max_dimension = adapter.limits().max_texture_dimension_2d;
-				if size.width > max_dimension || size.height > max_dimension {
-					log::warn!(
-						"The resizing size {:?} exceeds the limit of {}.",
-						size,
-						max_dimension
-					);
-				} else {
-					log::info!("Resizing to {:?}", size);
-					config.width = size.width.max(1);
-					config.height = size.height.max(1);
-					example.resize(&config, &device, &queue);
-					surface.configure(&device, &config);
-				}
+				log::info!("Resizing to {:?}", size);
+				config.width = size.width.max(1);
+				config.height = size.height.max(1);
+				example.resize(&config, &device, &queue);
+				surface.configure(&device, &config);
 			}
+			event::Event::DeviceEvent {
+				event,
+				..
+			} => {
+				example.device_event(&window,event);
+			},
 			event::Event::WindowEvent { event, .. } => match event {
 				WindowEvent::KeyboardInput {
-					input:
-						event::KeyboardInput {
-							virtual_keycode: Some(event::VirtualKeyCode::Escape),
+					event:
+						event::KeyEvent {
+							logical_key: winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape),
 							state: event::ElementState::Pressed,
 							..
 						},
 					..
 				}
 				| WindowEvent::CloseRequested => {
-					*control_flow = ControlFlow::Exit;
+					elwt.exit();
 				}
 				#[cfg(not(target_arch = "wasm32"))]
 				WindowEvent::KeyboardInput {
-					input:
-						event::KeyboardInput {
-							virtual_keycode: Some(event::VirtualKeyCode::Scroll),
+					event:
+						event::KeyEvent {
+							logical_key: winit::keyboard::Key::Named(winit::keyboard::NamedKey::ScrollLock),
 							state: event::ElementState::Pressed,
 							..
 						},
@@ -367,54 +363,47 @@ fn start<E: Example>(
 				} => {
 					println!("{:#?}", instance.generate_report());
 				}
+				WindowEvent::RedrawRequested => {
+					let frame = match surface.get_current_texture() {
+						Ok(frame) => frame,
+						Err(_) => {
+							surface.configure(&device, &config);
+							surface
+								.get_current_texture()
+								.expect("Failed to acquire next surface texture!")
+						}
+					};
+					let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
+						format: Some(surface_view_format),
+						..wgpu::TextureViewDescriptor::default()
+					});
+
+					example.render(&view, &device, &queue, &spawner);
+
+					frame.present();
+
+					#[cfg(target_arch = "wasm32")]
+					{
+						if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
+							let image_bitmap = offscreen_canvas_setup
+								.offscreen_canvas
+								.transfer_to_image_bitmap()
+								.expect("couldn't transfer offscreen canvas to image bitmap.");
+							offscreen_canvas_setup
+								.bitmap_renderer
+								.transfer_from_image_bitmap(&image_bitmap);
+
+							log::info!("Transferring OffscreenCanvas to ImageBitmapRenderer");
+						}
+					}
+				}
 				_ => {
 					example.update(&window,&device,&queue,event);
 				}
 			},
-			event::Event::DeviceEvent {
-				event,
-				..
-			} => {
-				example.device_event(&window,event);
-			},
-			event::Event::RedrawRequested(_) => {
-
-				let frame = match surface.get_current_texture() {
-					Ok(frame) => frame,
-					Err(_) => {
-						surface.configure(&device, &config);
-						surface
-							.get_current_texture()
-							.expect("Failed to acquire next surface texture!")
-					}
-				};
-				let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
-					format: Some(surface_view_format),
-					..wgpu::TextureViewDescriptor::default()
-				});
-
-				example.render(&view, &device, &queue, &spawner);
-
-				frame.present();
-
-				#[cfg(target_arch = "wasm32")]
-				{
-					if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
-						let image_bitmap = offscreen_canvas_setup
-							.offscreen_canvas
-							.transfer_to_image_bitmap()
-							.expect("couldn't transfer offscreen canvas to image bitmap.");
-						offscreen_canvas_setup
-							.bitmap_renderer
-							.transfer_from_image_bitmap(&image_bitmap);
-
-						log::info!("Transferring OffscreenCanvas to ImageBitmapRenderer");
-					}
-				}
-			}
 			_ => {}
 		}
-	});
+	}).unwrap();
 }
 
 #[cfg(not(target_arch = "wasm32"))]
