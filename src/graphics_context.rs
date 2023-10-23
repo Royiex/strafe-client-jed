@@ -161,7 +161,6 @@ impl GraphicsContextPartial4{
 		GraphicsContext{
 			instance:self.instance,
 			surface:self.surface,
-			adapter:self.adapter,
 			device:self.device,
 			queue:self.queue,
 			config,
@@ -171,14 +170,13 @@ impl GraphicsContextPartial4{
 pub struct GraphicsContext{
 	pub instance:wgpu::Instance,
 	pub surface:wgpu::Surface,
-	pub adapter:wgpu::Adapter,
 	pub device:wgpu::Device,
 	pub queue:wgpu::Queue,
 	pub config:wgpu::SurfaceConfiguration,
 }
 
 pub fn setup(title:&str)->GraphicsContextSetup{
-	let event_loop=winit::event_loop::EventLoop::new();
+	let event_loop=winit::event_loop::EventLoop::new().unwrap();
 
 	let window=crate::window::WindowState::create_window(title,&event_loop).unwrap();
 
@@ -272,57 +270,48 @@ impl GraphicsContextSetup{
 
 		println!("Entering render loop...");
 		let root_time=std::time::Instant::now();
-		event_loop.run(move |event,_,control_flow|{
+		event_loop.run(move |event,elwt|{
 			let time=crate::integer::Time::from_nanos(root_time.elapsed().as_nanos() as i64);
-			*control_flow=if cfg!(feature="metal-auto-capture"){
-				winit::event_loop::ControlFlow::Exit
-			}else{
-				winit::event_loop::ControlFlow::Poll
-			};
+			// *control_flow=if cfg!(feature="metal-auto-capture"){
+			// 	winit::event_loop::ControlFlow::Exit
+			// }else{
+			// 	winit::event_loop::ControlFlow::Poll
+			// };
 			match event{
-				winit::event::Event::RedrawEventsCleared=>{
+				winit::event::Event::AboutToWait=>{
 					window.request_redraw();
 				}
 				winit::event::Event::WindowEvent {
 					event:
-						winit::event::WindowEvent::Resized(size)
-						| winit::event::WindowEvent::ScaleFactorChanged {
-							new_inner_size:&mut size,
-							scale_factor:_,
-						},
+						// WindowEvent::Resized(size)
+						// | WindowEvent::ScaleFactorChanged {
+						// 	new_inner_size: &mut size,
+						// 	..
+						// },
+						winit::event::WindowEvent::Resized(size),//ignoring scale factor changed for now because mutex bruh
 					window_id:_,
 				} => {
-					// Once winit is fixed, the detection conditions here can be removed.
-					// https://github.com/rust-windowing/winit/issues/2876
-					// this has been fixed if I update winit (remove the if statement and only use the else case)
-					//drop adapter when you delete this
-					let max_dimension=graphics_context.adapter.limits().max_texture_dimension_2d;
-					if max_dimension<size.width||max_dimension<size.height{
-						println!(
-							"The resizing size {:?} exceeds the limit of {}.",
-							size,
-							max_dimension
-						);
-					}else{
-						println!("Resizing to {:?}",size);
-						run_thread.send(TimedInstruction{time,instruction:RunInstruction::Resize(size)});
-					}
+					println!("Resizing to {:?}",size);
+					run_thread.send(TimedInstruction{time,instruction:RunInstruction::Resize(size)});
 				}
 				winit::event::Event::WindowEvent{event,..}=>match event{
 					winit::event::WindowEvent::KeyboardInput{
-						input:
-							winit::event::KeyboardInput{
-								virtual_keycode:Some(winit::event::VirtualKeyCode::Escape),
+						event:
+							winit::event::KeyEvent {
+							logical_key: winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape),
 								state: winit::event::ElementState::Pressed,
 								..
 							},
 						..
 					}
 					|winit::event::WindowEvent::CloseRequested=>{
-						*control_flow=winit::event_loop::ControlFlow::Exit;
+						elwt.exit();
 					}
 					_=>{
 						run_thread.send(TimedInstruction{time,instruction:RunInstruction::WindowEvent(event)});
+					}
+					winit::event::WindowEvent::RedrawRequested=>{
+						run_thread.send(TimedInstruction{time,instruction:RunInstruction::Render});
 					}
 				},
 				winit::event::Event::DeviceEvent{
@@ -331,11 +320,8 @@ impl GraphicsContextSetup{
 				} => {
 					run_thread.send(TimedInstruction{time,instruction:RunInstruction::DeviceEvent(event)});
 				},
-				winit::event::Event::RedrawRequested(_)=>{
-					//send
-				}
 				_=>{}
 			}
-		});
+		}).unwrap();
 	}
 }
