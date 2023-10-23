@@ -1097,8 +1097,8 @@ impl framework::Example for GlobalState {
 				//pause unpause
 				//recalculate pressed keys on focus
 			},
-			winit::event::WindowEvent::KeyboardInput {
-				event:winit::event::KeyEvent{state, logical_key,..},
+			winit::event::WindowEvent::KeyboardInput{
+				event:winit::event::KeyEvent{state,logical_key,repeat:false,..},
 				..
 			}=>{
 				let s=match state {
