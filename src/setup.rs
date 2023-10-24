@@ -204,14 +204,14 @@ pub fn setup(title:&str)->SetupContextSetup{
 	SetupContextSetup{
 		window,
 		event_loop,
-		partial_graphics_context:partial_4,
+		partial_context:partial_4,
 	}
 }
 
 struct SetupContextSetup{
 	window:winit::window::Window,
 	event_loop:winit::event_loop::EventLoop<()>,
-	partial_graphics_context:SetupContextPartial4,
+	partial_context:SetupContextPartial4,
 }
 
 impl SetupContextSetup{
@@ -221,16 +221,16 @@ impl SetupContextSetup{
 		(
 			self.window,
 			self.event_loop,
-			self.partial_graphics_context.configure_surface(&size),
+			self.partial_context.configure_surface(&size),
 		)
 	}
 	pub fn start(self,mut run:crate::run::RunState){
-		let (window,event_loop,graphics_context)=self.into_split();
+		let (window,event_loop,setup_context)=self.into_split();
 
-		//dedicated thread to pigh request redraw back and resize the window doesn't seem logical
+		//dedicated thread to ping request redraw back and resize the window doesn't seem logical
 
 		//physics and graphics render thread
-		let run_thread=run.into_worker(graphics_context);
+		let run_thread=run.into_worker(setup_context);
 
 		println!("Entering render loop...");
 		let root_time=std::time::Instant::now();
