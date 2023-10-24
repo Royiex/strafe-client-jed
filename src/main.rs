@@ -12,8 +12,8 @@ mod settings;
 mod primitives;
 mod instruction;
 mod load_roblox;
-mod render_thread;
 mod model_graphics;
+mod physics_context;
 mod graphics_context;
 
 fn load_file(path: std::path::PathBuf)->Option<model::IndexedModelInstances>{
