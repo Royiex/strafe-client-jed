@@ -2,6 +2,13 @@ use crate::physics::PhysicsInstruction;
 use crate::render_thread::InputInstruction;
 use crate::instruction::{TimedInstruction, InstructionConsumer};
 
+pub enum RunInstruction{
+	Resize(winit::dpi::PhysicalSize<u32>),
+	WindowEvent(winit::event::WindowEvent),
+	DeviceEvent(winit::event::DeviceEvent),
+	Render,
+}
+
 pub struct RunState{
 	manual_mouse_lock:bool,
 	mouse:std::sync::Arc<std::sync::Mutex<physics::MouseState>>,
@@ -183,5 +190,43 @@ impl RunState {
 			}
 			_=>(),
 		}
+	}
+
+	pub fn into_worker(self,mut graphics_context:crate::graphics_context::GraphicsContext)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
+		crate::worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
+			match ins.instruction{
+				RunInstruction::WindowEvent(window_event)=>{
+					self.window_event(window_event);
+				},
+				RunInstruction::DeviceEvent(device_event)=>{
+					self.device_event(device_event);
+				},
+				RunInstruction::Resize(size)=>{
+					graphics_context.config.width=size.width.max(1);
+					graphics_context.config.height=size.height.max(1);
+					self.graphics.resize(&graphics_context.device,&graphics_context.config);
+					graphics_context.surface.configure(&graphics_context.device,&graphics_context.config);
+				}
+				RunInstruction::Render=>{
+					let frame=match graphics_context.surface.get_current_texture(){
+						Ok(frame)=>frame,
+						Err(_)=>{
+							graphics_context.surface.configure(&graphics_context.device,&graphics_context.config);
+							graphics_context.surface
+								.get_current_texture()
+								.expect("Failed to acquire next surface texture!")
+						}
+					};
+					let view=frame.texture.create_view(&wgpu::TextureViewDescriptor{
+						format:Some(graphics_context.config.view_formats[0]),
+						..wgpu::TextureViewDescriptor::default()
+					});
+
+					self.graphics.render(&view,&graphics_context.device,&graphics_context.queue);
+
+					frame.present();
+				}
+			}
+		})
 	}
 }

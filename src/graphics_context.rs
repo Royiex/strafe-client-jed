@@ -1,4 +1,5 @@
 use crate::instruction::TimedInstruction;
+use crate::run::RunInstruction;
 
 fn optional_features() -> wgpu::Features {
 	wgpu::Features::empty()
@@ -207,53 +208,6 @@ pub fn setup(title:&str)->GraphicsContextSetup{
 	}
 }
 
-enum RunInstruction{
-	Resize(winit::dpi::PhysicalSize<u32>),
-	WindowEvent(winit::event::WindowEvent),
-	DeviceEvent(winit::event::DeviceEvent),
-	Render,
-}
-
-impl GraphicsContext{
-	fn into_worker(self,mut run:crate::run::RunState)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
-		crate::worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
-			match ins.instruction{
-				RunInstruction::WindowEvent(window_event)=>{
-					run.window_event(window_event);
-				},
-				RunInstruction::DeviceEvent(device_event)=>{
-					run.device_event(device_event);
-				},
-				RunInstruction::Resize(size)=>{
-					self.config.width=size.width.max(1);
-					self.config.height=size.height.max(1);
-					run.graphics.resize(&self.device,&self.config);
-					self.surface.configure(&self.device,&self.config);
-				}
-				RunInstruction::Render=>{
-					let frame=match self.surface.get_current_texture(){
-						Ok(frame)=>frame,
-						Err(_)=>{
-							self.surface.configure(&self.device,&self.config);
-							self.surface
-								.get_current_texture()
-								.expect("Failed to acquire next surface texture!")
-						}
-					};
-					let view=frame.texture.create_view(&wgpu::TextureViewDescriptor{
-						format:Some(self.config.view_formats[0]),
-						..wgpu::TextureViewDescriptor::default()
-					});
-
-					run.graphics.render(&view,&self.device,&self.queue);
-
-					frame.present();
-				}
-			}
-		})
-	}
-}
-
 struct GraphicsContextSetup{
 	window:winit::window::Window,
 	event_loop:winit::event_loop::EventLoop<()>,
@@ -276,7 +230,7 @@ impl GraphicsContextSetup{
 		//dedicated thread to pigh request redraw back and resize the window doesn't seem logical
 
 		//physics and graphics render thread
-		let run_thread=graphics_context.into_worker(run);
+		let run_thread=run.into_worker(graphics_context);
 
 		println!("Entering render loop...");
 		let root_time=std::time::Instant::now();
