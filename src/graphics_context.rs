@@ -21,6 +21,16 @@ struct GraphicsContextPartial1{
 	backends:wgpu::Backends,
 	instance:wgpu::Instance,
 }
+fn create_window(title:&str,event_loop:&winit::event_loop::EventLoop<()>)->Result<winit::window::Window,winit::error::OsError>{
+	let mut builder = winit::window::WindowBuilder::new();
+	builder = builder.with_title(title);
+	#[cfg(windows_OFF)] // TODO
+	{
+		use winit::platform::windows::WindowBuilderExtWindows;
+		builder = builder.with_no_redirection_bitmap(true);
+	}
+	builder.build(event_loop)
+}
 fn create_instance()->GraphicsContextPartial1{
 	let backends=wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
 	let dx12_shader_compiler=wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
@@ -178,7 +188,7 @@ pub struct GraphicsContext{
 pub fn setup(title:&str)->GraphicsContextSetup{
 	let event_loop=winit::event_loop::EventLoop::new().unwrap();
 
-	let window=crate::window::WindowState::create_window(title,&event_loop).unwrap();
+	let window=create_window(title,&event_loop).unwrap();
 
 	println!("Initializing the surface...");
 
@@ -205,19 +215,19 @@ enum RunInstruction{
 }
 
 impl GraphicsContext{
-	fn into_worker(self,mut global_state:crate::GlobalState)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
+	fn into_worker(self,mut run:crate::run::RunState)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
 		crate::worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
 			match ins.instruction{
 				RunInstruction::WindowEvent(window_event)=>{
-					global_state.window_event(window_event);
+					run.window_event(window_event);
 				},
 				RunInstruction::DeviceEvent(device_event)=>{
-					global_state.device_event(device_event);
+					run.device_event(device_event);
 				},
 				RunInstruction::Resize(size)=>{
 					self.config.width=size.width.max(1);
 					self.config.height=size.height.max(1);
-					global_state.graphics.resize(&self.device,&self.config);
+					run.graphics.resize(&self.device,&self.config);
 					self.surface.configure(&self.device,&self.config);
 				}
 				RunInstruction::Render=>{
@@ -235,7 +245,7 @@ impl GraphicsContext{
 						..wgpu::TextureViewDescriptor::default()
 					});
 
-					global_state.graphics.render(&view,&self.device,&self.queue);
+					run.graphics.render(&view,&self.device,&self.queue);
 
 					frame.present();
 				}
@@ -260,13 +270,13 @@ impl GraphicsContextSetup{
 			self.partial_graphics_context.configure_surface(&size),
 		)
 	}
-	pub fn start(self,mut global_state:crate::GlobalState){
+	pub fn start(self,mut run:crate::run::RunState){
 		let (window,event_loop,graphics_context)=self.into_split();
 
 		//dedicated thread to pigh request redraw back and resize the window doesn't seem logical
 
 		//physics and graphics render thread
-		let run_thread=graphics_context.into_worker(global_state);
+		let run_thread=graphics_context.into_worker(run);
 
 		println!("Entering render loop...");
 		let root_time=std::time::Instant::now();

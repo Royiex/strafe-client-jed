@@ -1,13 +1,59 @@
-pub enum WindowInstruction{
-	Resize(),
-}
-pub struct WindowState{
-	//ok
-}
-impl WindowState{
-	fn resize(&mut self);
-	fn render(&self);
+use crate::physics::PhysicsInstruction;
+use crate::render_thread::InputInstruction;
+use crate::instruction::{TimedInstruction, InstructionConsumer};
 
+pub struct RunState{
+	manual_mouse_lock:bool,
+	mouse:std::sync::Arc<std::sync::Mutex<physics::MouseState>>,
+	user_settings:settings::UserSettings,
+	//Ideally the graphics thread worker description is:
+	/*
+	WorkerDescription{
+		input:Immediate,
+		output:Realtime(PoolOrdering::Ordered(3)),
+	}
+	*/
+	//up to three frames in flight, dropping new frame requests when all three are busy, and dropping output frames when one renders out of order
+	graphics_thread:worker::INWorker<graphics::GraphicsInstruction>,
+	physics_thread:worker::QNWorker<TimedInstruction<InputInstruction>>,
+}
+
+impl RunState {
+	fn init() -> Self {
+		//wee
+		let user_settings=settings::read_user_settings();
+
+		let mut graphics=GraphicsState::new();
+
+		graphics.load_user_settings(&user_settings);
+
+		//how to multithread
+
+		//1. build
+		physics.generate_models(&indexed_model_instances);
+
+		//2. move
+		let physics_thread=physics.into_worker();
+
+		//3. forget
+
+		let mut state=RunState{
+			manual_mouse_lock:false,
+			mouse:physics::MouseState::default(),
+			user_settings,
+			graphics,
+			physics_thread,
+		};
+		state.generate_model_graphics(&device,&queue,indexed_model_instances);
+
+		let args:Vec<String>=std::env::args().collect();
+		if args.len()==2{
+			let indexed_model_instances=load_file(std::path::PathBuf::from(&args[1]));
+			state.render_thread=RenderThread::new(user_settings,indexed_model_instances);
+		}
+
+		return state;
+	}
 	fn window_event(&mut self, window: &winit::window::Window, event: winit::event::WindowEvent) {
 		match event {
 			winit::event::WindowEvent::DroppedFile(path)=>{
@@ -137,19 +183,5 @@ impl WindowState{
 			}
 			_=>(),
 		}
-	}
-
-	pub fn create_window(title:&str,event_loop:&winit::event_loop::EventLoop<()>)->Result<winit::window::Window,winit::error::OsError>{
-		let mut builder = winit::window::WindowBuilder::new();
-		builder = builder.with_title(title);
-		#[cfg(windows_OFF)] // TODO
-		{
-			use winit::platform::windows::WindowBuilderExtWindows;
-			builder = builder.with_no_redirection_bitmap(true);
-		}
-		builder.build(event_loop)
-	}
-	pub fn into_thread(window:winit::window::Window){
-		//
 	}
 }

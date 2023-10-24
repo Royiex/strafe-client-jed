@@ -1,12 +1,7 @@
-use std::time::Instant;
-use physics::PhysicsInstruction;
-use render_thread::InputInstruction;
-use instruction::{TimedInstruction, InstructionConsumer};
-
 mod bvh;
+mod run;
 mod aabb;
 mod model;
-mod window;
 mod worker;
 mod zeroes;
 mod integer;
@@ -19,23 +14,6 @@ mod load_roblox;
 mod render_thread;
 mod model_graphics;
 mod graphics_context;
-
-
-pub struct GlobalState{
-	manual_mouse_lock:bool,
-	mouse:std::sync::Arc<std::sync::Mutex<physics::MouseState>>,
-	user_settings:settings::UserSettings,
-	//Ideally the graphics thread worker description is:
-	/*
-	WorkerDescription{
-		input:Immediate,
-		output:Realtime(PoolOrdering::Ordered(3)),
-	}
-	*/
-	//up to three frames in flight, dropping new frame requests when all three are busy, and dropping output frames when one renders out of order
-	graphics_thread:worker::INWorker<graphics::GraphicsInstruction>,
-	physics_thread:worker::QNWorker<TimedInstruction<InputInstruction>>,
-}
 
 fn load_file(path: std::path::PathBuf)->Option<model::IndexedModelInstances>{
 	println!("Loading file: {:?}", &path);
@@ -138,48 +116,10 @@ fn default_models()->model::IndexedModelInstances{
 	}
 }
 
-impl GlobalState {
-	fn init() -> Self {
-		//wee
-		let user_settings=settings::read_user_settings();
-
-		let mut graphics=GraphicsState::new();
-
-		graphics.load_user_settings(&user_settings);
-
-		//how to multithread
-
-		//1. build
-		physics.generate_models(&indexed_model_instances);
-
-		//2. move
-		let physics_thread=physics.into_worker();
-
-		//3. forget
-
-		let mut state=GlobalState{
-			manual_mouse_lock:false,
-			mouse:physics::MouseState::default(),
-			user_settings,
-			graphics,
-			physics_thread,
-		};
-		state.generate_model_graphics(&device,&queue,indexed_model_instances);
-
-		let args:Vec<String>=std::env::args().collect();
-		if args.len()==2{
-			let indexed_model_instances=load_file(std::path::PathBuf::from(&args[1]));
-			state.render_thread=RenderThread::new(user_settings,indexed_model_instances);
-		}
-
-		return state;
-	}
-}
-
 fn main(){
 	let title=format!("Strafe Client v{}",env!("CARGO_PKG_VERSION")).as_str();
 	let context=graphics_context::setup(title);
-	let global_state=GlobalState::init();//new
-	global_state.replace_models(&context,default_models());
-	context.start(global_state);
+	let run=run::RunState::init();//new
+	run.replace_models(&context,default_models());
+	context.start(run);
 }
