@@ -1,85 +1,78 @@
 use crate::physics::PhysicsInstruction;
-use crate::render_thread::InputInstruction;
-use crate::instruction::{TimedInstruction, InstructionConsumer};
+use crate::physics_context::InputInstruction;
+use crate::instruction::TimedInstruction;
 
 pub enum RunInstruction{
 	Resize(winit::dpi::PhysicalSize<u32>),
 	WindowEvent(winit::event::WindowEvent),
 	DeviceEvent(winit::event::DeviceEvent),
+	RequestRedraw,
 	Render,
 }
 
-pub struct RunState{
-	manual_mouse_lock:bool,
-	mouse:std::sync::Arc<std::sync::Mutex<crate::physics::MouseState>>,
-	user_settings:crate::settings::UserSettings,
-	//Ideally the graphics thread worker description is:
-	/*
-	WorkerDescription{
-		input:Immediate,
-		output:Realtime(PoolOrdering::Ordered(3)),
-	}
-	*/
-	//up to three frames in flight, dropping new frame requests when all three are busy, and dropping output frames when one renders out of order
-	graphics_thread:crate::worker::INWorker<crate::graphics::GraphicsInstruction>,
+//holds thread handles to dispatch to
+struct RunContext{
 	physics_thread:crate::worker::QNWorker<TimedInstruction<InputInstruction>>,
 }
 
-impl RunState {
-	fn init() -> Self {
+pub struct RunContextSetup{
+	manual_mouse_lock:bool,
+	mouse:crate::physics::MouseState,//std::sync::Arc<std::sync::Mutex<>>
+	user_settings:crate::settings::UserSettings,
+	window:winit::window::Window,
+	physics:crate::physics::PhysicsState,
+	graphics:crate::graphics::GraphicsState,
+}
+
+impl RunContextSetup {
+	pub fn new(context:&crate::setup::SetupContext,window:winit::window::Window)->Self{
 		//wee
 		let user_settings=crate::settings::read_user_settings();
 
-		let mut graphics=GraphicsState::new();
+		let args:Vec<String>=std::env::args().collect();
+		let indexed_model_instances=if args.len()==2{
+			crate::load_file(std::path::PathBuf::from(&args[1]))
+		}else{
+			None
+		}.unwrap_or(crate::default_models());
 
+		let mut graphics=crate::graphics::GraphicsState::new(&context.device,&context.queue);
 		graphics.load_user_settings(&user_settings);
+		graphics.generate_models(&context.device,&context.queue,indexed_model_instances);
 
-		//how to multithread
-
-		//1. build
+		let mut physics=crate::physics::PhysicsState::default();
+		physics.load_user_settings(&user_settings);
 		physics.generate_models(&indexed_model_instances);
 
-		//2. move
-		let physics_thread=physics.into_worker();
-
-		//3. forget
-
-		let mut state=Self{
+		Self{
 			manual_mouse_lock:false,
-			mouse:physics::MouseState::default(),
+			mouse:crate::physics::MouseState::default(),
 			user_settings,
+			window,
 			graphics,
-			physics_thread,
-		};
-		state.generate_model_graphics(&device,&queue,indexed_model_instances);
-
-		let args:Vec<String>=std::env::args().collect();
-		if args.len()==2{
-			let indexed_model_instances=load_file(std::path::PathBuf::from(&args[1]));
-			state.render_thread=RenderThread::new(user_settings,indexed_model_instances);
+			physics,
 		}
-
-		return state;
 	}
 	fn window_event(&mut self, time:crate::integer::Time, event: winit::event::WindowEvent) {
 		match event {
 			winit::event::WindowEvent::DroppedFile(path)=>{
+				let sender=self.sender.clone();//mpsc
 				std::thread::spawn(move ||{
-					let indexed_model_instances=load_file(path);
-					self.render_thread.send(Instruction::Die(indexed_model_instances));
+					let indexed_model_instances=crate::load_file(path);
+					sender.send(Instruction::Die(indexed_model_instances));
 				});
 			},
 			winit::event::WindowEvent::Focused(state)=>{
 				//pause unpause
 				//recalculate pressed keys on focus
 			},
-			winit::event::WindowEvent::KeyboardInput {
-				input:winit::event::KeyboardInput{state, virtual_keycode,..},
+			winit::event::WindowEvent::KeyboardInput{
+				input:winit::event::KeyboardInput{state,virtual_keycode,..},
 				..
 			}=>{
-				let s=match state {
-					winit::event::ElementState::Pressed => true,
-					winit::event::ElementState::Released => false,
+				let s=match state{
+					winit::event::ElementState::Pressed=>true,
+					winit::event::ElementState::Released=>false,
 				};
 				match virtual_keycode{
 					Some(winit::event::VirtualKeyCode::Tab)=>{
@@ -192,13 +185,16 @@ impl RunState {
 		}
 	}
 
-	pub fn into_worker(self,mut setup_context:crate::setup_context::SetupContext)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
+	pub fn into_worker(self,mut setup_context:crate::setup_context::SetupContext,)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
 		//create child context
 		let physics_context=crate::physics_context::Context::new(indexed_models,&setup_context);//this needs all the context for graphics_context too
 		let physics_thread=physics_context.into_worker();
 		//
 		crate::worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
 			match ins.instruction{
+				RunInstruction::RequestRedraw=>{
+					self.window.request_redraw();
+				}
 				RunInstruction::WindowEvent(window_event)=>{
 					self.window_event(ins.time,window_event);
 				},

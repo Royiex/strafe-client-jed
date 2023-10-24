@@ -1,6 +1,6 @@
-struct Context{
-	device:wgpu::Device,
-	queue:wgpu::Queue,
+struct Context<'a>{
+	device:&'a wgpu::Device,
+	queue:&'a wgpu::Queue,
 }
 
 impl Context{

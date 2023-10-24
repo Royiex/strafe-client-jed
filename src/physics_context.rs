@@ -21,6 +21,15 @@ pub enum InputInstruction {
 }
 
 pub struct Context{
+	//Ideally the graphics thread worker description is:
+	/*
+	WorkerDescription{
+		input:Immediate,
+		output:Realtime(PoolOrdering::Ordered(3)),
+	}
+	*/
+	//up to three frames in flight, dropping new frame requests when all three are busy, and dropping output frames when one renders out of order
+	graphics_thread:crate::worker::INWorker<crate::graphics::GraphicsInstruction>,
 }
 impl Context{
 	pub fn new(user_settings:&crate::settings::UserSettings,indexed_model_instances:&crate::model::IndexedModelInstances){

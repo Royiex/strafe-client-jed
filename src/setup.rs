@@ -208,7 +208,7 @@ pub fn setup(title:&str)->SetupContextSetup{
 	}
 }
 
-struct SetupContextSetup{
+pub struct SetupContextSetup{
 	window:winit::window::Window,
 	event_loop:winit::event_loop::EventLoop<()>,
 	partial_context:SetupContextPartial4,
@@ -224,12 +224,13 @@ impl SetupContextSetup{
 			self.partial_context.configure_surface(&size),
 		)
 	}
-	pub fn start(self,mut run:crate::run::RunState){
+	pub fn start(self){
 		let (window,event_loop,setup_context)=self.into_split();
 
 		//dedicated thread to ping request redraw back and resize the window doesn't seem logical
 
-		//physics and graphics render thread
+		let run=crate::run::RunContextSetup::new(&setup_context,window);
+		//the thread that spawns the physics thread
 		let run_thread=run.into_worker(setup_context);
 
 		println!("Entering render loop...");
@@ -243,7 +244,7 @@ impl SetupContextSetup{
 			// };
 			match event{
 				winit::event::Event::AboutToWait=>{
-					window.request_redraw();
+					run_thread.send(TimedInstruction{time,instruction:RunInstruction::RequestRedraw});
 				}
 				winit::event::Event::WindowEvent {
 					event:
@@ -271,11 +272,11 @@ impl SetupContextSetup{
 					|winit::event::WindowEvent::CloseRequested=>{
 						elwt.exit();
 					}
-					_=>{
-						run_thread.send(TimedInstruction{time,instruction:RunInstruction::WindowEvent(event)});
-					}
 					winit::event::WindowEvent::RedrawRequested=>{
 						run_thread.send(TimedInstruction{time,instruction:RunInstruction::Render});
+					}
+					_=>{
+						run_thread.send(TimedInstruction{time,instruction:RunInstruction::WindowEvent(event)});
 					}
 				},
 				winit::event::Event::DeviceEvent{

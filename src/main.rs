@@ -61,7 +61,7 @@ fn load_file(path: std::path::PathBuf)->Option<model::IndexedModelInstances>{
 	}
 }
 
-fn default_models()->model::IndexedModelInstances{
+pub fn default_models()->model::IndexedModelInstances{
 	let mut indexed_models = Vec::new();
 	indexed_models.append(&mut model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap(),glam::Vec4::ONE));
 	indexed_models.push(primitives::unit_sphere());
@@ -119,8 +119,6 @@ fn default_models()->model::IndexedModelInstances{
 
 fn main(){
 	let title=format!("Strafe Client v{}",env!("CARGO_PKG_VERSION")).as_str();
-	let context=setup_context::setup(title);
-	let run=run::RunState::init();//new
-	run.replace_models(&context,default_models());
-	context.start(run);
+	let context=setup::setup(title);
+	context.start();//creates and runs a run context
 }
