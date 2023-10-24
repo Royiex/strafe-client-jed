@@ -18,7 +18,7 @@ pub fn required_limits() -> wgpu::Limits {
 	wgpu::Limits::downlevel_webgl2_defaults() // These downlevel limits will allow the code to run on all possible hardware
 }
 
-struct GraphicsContextPartial1{
+struct SetupContextPartial1{
 	backends:wgpu::Backends,
 	instance:wgpu::Instance,
 }
@@ -32,10 +32,10 @@ fn create_window(title:&str,event_loop:&winit::event_loop::EventLoop<()>)->Resul
 	}
 	builder.build(event_loop)
 }
-fn create_instance()->GraphicsContextPartial1{
+fn create_instance()->SetupContextPartial1{
 	let backends=wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
 	let dx12_shader_compiler=wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
-	GraphicsContextPartial1{
+	SetupContextPartial1{
 		backends,
 		instance:wgpu::Instance::new(wgpu::InstanceDescriptor{
 			backends,
@@ -43,22 +43,22 @@ fn create_instance()->GraphicsContextPartial1{
 		}),
 	}
 }
-impl GraphicsContextPartial1{
-	fn create_surface(self,window:&winit::window::Window)->Result<GraphicsContextPartial2,wgpu::CreateSurfaceError>{
-		Ok(GraphicsContextPartial2{
+impl SetupContextPartial1{
+	fn create_surface(self,window:&winit::window::Window)->Result<SetupContextPartial2,wgpu::CreateSurfaceError>{
+		Ok(SetupContextPartial2{
 			backends:self.backends,
 			instance:self.instance,
 			surface:unsafe{self.instance.create_surface(window)}?
 		})
 	}
 }
-struct GraphicsContextPartial2{
+struct SetupContextPartial2{
 	backends:wgpu::Backends,
 	instance:wgpu::Instance,
 	surface:wgpu::Surface,
 }
-impl GraphicsContextPartial2{
-	fn pick_adapter(self)->GraphicsContextPartial3{
+impl SetupContextPartial2{
+	fn pick_adapter(self)->SetupContextPartial3{
 		let adapter;
 
 		let optional_features=optional_features();
@@ -112,20 +112,20 @@ impl GraphicsContextPartial2{
 			"Adapter does not support the downlevel capabilities required to run this example: {:?}",
 			required_downlevel_capabilities.flags - downlevel_capabilities.flags
 		);
-		GraphicsContextPartial3{
+		SetupContextPartial3{
 			instance:self.instance,
 			surface:self.surface,
 			adapter,
 		}
 	}
 }
-struct GraphicsContextPartial3{
+struct SetupContextPartial3{
 	instance:wgpu::Instance,
 	surface:wgpu::Surface,
 	adapter:wgpu::Adapter,
 }
-impl GraphicsContextPartial3{
-	fn request_device(self)->GraphicsContextPartial4{
+impl SetupContextPartial3{
+	fn request_device(self)->SetupContextPartial4{
 		let optional_features=optional_features();
 		let required_features=required_features();
 
@@ -144,7 +144,7 @@ impl GraphicsContextPartial3{
 			))
 			.expect("Unable to find a suitable GPU adapter!");
 
-		GraphicsContextPartial4{
+		SetupContextPartial4{
 			instance:self.instance,
 			surface:self.surface,
 			adapter:self.adapter,
@@ -153,15 +153,15 @@ impl GraphicsContextPartial3{
 		}
 	}
 }
-struct GraphicsContextPartial4{
+struct SetupContextPartial4{
 	instance:wgpu::Instance,
 	surface:wgpu::Surface,
 	adapter:wgpu::Adapter,
 	device:wgpu::Device,
 	queue:wgpu::Queue,
 }
-impl GraphicsContextPartial4{
-	fn configure_surface(self,size:&winit::dpi::PhysicalSize<u32>)->GraphicsContext{
+impl SetupContextPartial4{
+	fn configure_surface(self,size:&winit::dpi::PhysicalSize<u32>)->SetupContext{
 		let mut config=self.surface
 			.get_default_config(&self.adapter, size.width, size.height)
 			.expect("Surface isn't supported by the adapter.");
@@ -169,7 +169,7 @@ impl GraphicsContextPartial4{
 		config.view_formats.push(surface_view_format);
 		self.surface.configure(&self.device, &config);
 
-		GraphicsContext{
+		SetupContext{
 			instance:self.instance,
 			surface:self.surface,
 			device:self.device,
@@ -178,7 +178,7 @@ impl GraphicsContextPartial4{
 		}
 	}
 }
-pub struct GraphicsContext{
+pub struct SetupContext{
 	pub instance:wgpu::Instance,
 	pub surface:wgpu::Surface,
 	pub device:wgpu::Device,
@@ -186,7 +186,7 @@ pub struct GraphicsContext{
 	pub config:wgpu::SurfaceConfiguration,
 }
 
-pub fn setup(title:&str)->GraphicsContextSetup{
+pub fn setup(title:&str)->SetupContextSetup{
 	let event_loop=winit::event_loop::EventLoop::new().unwrap();
 
 	let window=create_window(title,&event_loop).unwrap();
@@ -201,21 +201,21 @@ pub fn setup(title:&str)->GraphicsContextSetup{
 
 	let partial_4=partial_3.request_device();
 
-	GraphicsContextSetup{
+	SetupContextSetup{
 		window,
 		event_loop,
 		partial_graphics_context:partial_4,
 	}
 }
 
-struct GraphicsContextSetup{
+struct SetupContextSetup{
 	window:winit::window::Window,
 	event_loop:winit::event_loop::EventLoop<()>,
-	partial_graphics_context:GraphicsContextPartial4,
+	partial_graphics_context:SetupContextPartial4,
 }
 
-impl GraphicsContextSetup{
-	fn into_split(self)->(winit::window::Window,winit::event_loop::EventLoop<()>,GraphicsContext){
+impl SetupContextSetup{
+	fn into_split(self)->(winit::window::Window,winit::event_loop::EventLoop<()>,SetupContext){
 		let size=self.window.inner_size();
 		//Steal values and drop self
 		(

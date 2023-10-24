@@ -2,6 +2,7 @@ mod bvh;
 mod run;
 mod aabb;
 mod model;
+mod setup;
 mod worker;
 mod zeroes;
 mod integer;
@@ -118,7 +119,7 @@ fn default_models()->model::IndexedModelInstances{
 
 fn main(){
 	let title=format!("Strafe Client v{}",env!("CARGO_PKG_VERSION")).as_str();
-	let context=graphics_context::setup(title);
+	let context=setup_context::setup(title);
 	let run=run::RunState::init();//new
 	run.replace_models(&context,default_models());
 	context.start(run);
