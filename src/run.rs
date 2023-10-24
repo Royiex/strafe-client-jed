@@ -11,8 +11,8 @@ pub enum RunInstruction{
 
 pub struct RunState{
 	manual_mouse_lock:bool,
-	mouse:std::sync::Arc<std::sync::Mutex<physics::MouseState>>,
-	user_settings:settings::UserSettings,
+	mouse:std::sync::Arc<std::sync::Mutex<crate::physics::MouseState>>,
+	user_settings:crate::settings::UserSettings,
 	//Ideally the graphics thread worker description is:
 	/*
 	WorkerDescription{
@@ -21,14 +21,14 @@ pub struct RunState{
 	}
 	*/
 	//up to three frames in flight, dropping new frame requests when all three are busy, and dropping output frames when one renders out of order
-	graphics_thread:worker::INWorker<graphics::GraphicsInstruction>,
-	physics_thread:worker::QNWorker<TimedInstruction<InputInstruction>>,
+	graphics_thread:crate::worker::INWorker<crate::graphics::GraphicsInstruction>,
+	physics_thread:crate::worker::QNWorker<TimedInstruction<InputInstruction>>,
 }
 
 impl RunState {
 	fn init() -> Self {
 		//wee
-		let user_settings=settings::read_user_settings();
+		let user_settings=crate::settings::read_user_settings();
 
 		let mut graphics=GraphicsState::new();
 
@@ -44,7 +44,7 @@ impl RunState {
 
 		//3. forget
 
-		let mut state=RunState{
+		let mut state=Self{
 			manual_mouse_lock:false,
 			mouse:physics::MouseState::default(),
 			user_settings,
@@ -61,7 +61,7 @@ impl RunState {
 
 		return state;
 	}
-	fn window_event(&mut self, window: &winit::window::Window, event: winit::event::WindowEvent) {
+	fn window_event(&mut self, time:crate::integer::Time, event: winit::event::WindowEvent) {
 		match event {
 			winit::event::WindowEvent::DroppedFile(path)=>{
 				std::thread::spawn(move ||{
@@ -156,7 +156,7 @@ impl RunState {
 		}
 	}
 
-	fn device_event(&mut self, window: &winit::window::Window, event: winit::event::DeviceEvent) {
+	fn device_event(&mut self, time:crate::integer::Time, event: winit::event::DeviceEvent) {
 		match event {
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine
@@ -196,10 +196,10 @@ impl RunState {
 		crate::worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
 			match ins.instruction{
 				RunInstruction::WindowEvent(window_event)=>{
-					self.window_event(window_event);
+					self.window_event(ins.time,window_event);
 				},
 				RunInstruction::DeviceEvent(device_event)=>{
-					self.device_event(device_event);
+					self.device_event(ins.time,device_event);
 				},
 				RunInstruction::Resize(size)=>{
 					graphics_context.config.width=size.width.max(1);
