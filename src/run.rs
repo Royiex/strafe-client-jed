@@ -192,7 +192,10 @@ impl RunState {
 		}
 	}
 
-	pub fn into_worker(self,mut graphics_context:crate::graphics_context::GraphicsContext)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
+	pub fn into_worker(self,mut setup_context:crate::setup_context::SetupContext)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
+		//create child context
+		let physics_context=PhysicsContext::new(());
+		//
 		crate::worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
 			match ins.instruction{
 				RunInstruction::WindowEvent(window_event)=>{
@@ -202,27 +205,27 @@ impl RunState {
 					self.device_event(ins.time,device_event);
 				},
 				RunInstruction::Resize(size)=>{
-					graphics_context.config.width=size.width.max(1);
-					graphics_context.config.height=size.height.max(1);
-					self.graphics.resize(&graphics_context.device,&graphics_context.config);
-					graphics_context.surface.configure(&graphics_context.device,&graphics_context.config);
+					setup_context.config.width=size.width.max(1);
+					setup_context.config.height=size.height.max(1);
+					self.graphics.resize(&setup_context.device,&setup_context.config);
+					setup_context.surface.configure(&setup_context.device,&setup_context.config);
 				}
 				RunInstruction::Render=>{
-					let frame=match graphics_context.surface.get_current_texture(){
+					let frame=match setup_context.surface.get_current_texture(){
 						Ok(frame)=>frame,
 						Err(_)=>{
-							graphics_context.surface.configure(&graphics_context.device,&graphics_context.config);
-							graphics_context.surface
+							setup_context.surface.configure(&setup_context.device,&setup_context.config);
+							setup_context.surface
 								.get_current_texture()
 								.expect("Failed to acquire next surface texture!")
 						}
 					};
 					let view=frame.texture.create_view(&wgpu::TextureViewDescriptor{
-						format:Some(graphics_context.config.view_formats[0]),
+						format:Some(setup_context.config.view_formats[0]),
 						..wgpu::TextureViewDescriptor::default()
 					});
 
-					self.graphics.render(&view,&graphics_context.device,&graphics_context.queue);
+					self.graphics.render(&view,&setup_context.device,&setup_context.queue);
 
 					frame.present();
 				}

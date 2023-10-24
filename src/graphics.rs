@@ -527,11 +527,10 @@ impl GraphicsState{
 		println!("Graphics Instances: {}",instance_count);
 	}
 
-	pub fn new(
-		config: &wgpu::SurfaceConfiguration,
-		_adapter: &wgpu::Adapter,
-		device: &wgpu::Device,
-		queue: &wgpu::Queue,
+	pub fn init(
+		device:&wgpu::Device,
+		queue:&wgpu::Queue,
+		config:&wgpu::SurfaceConfiguration,
 	)->Self{
 		let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: None,
@@ -876,10 +875,12 @@ impl GraphicsState{
 	}
 	pub fn resize(
 		&mut self,
-		context:&crate::graphics_context::GraphicsContext,
+		device:&wgpu::Device,
+		queue:&wgpu::Queue,
+		config:&wgpu::SurfaceConfiguration,
 	) {
-		self.depth_view = Self::create_depth_texture(&context.config,&context.device);
-		self.camera.screen_size=glam::uvec2(context.config.width, context.config.height);
+		self.depth_view = Self::create_depth_texture(config,device);
+		self.camera.screen_size=glam::uvec2(config.width, config.height);
 		self.load_user_settings(&self.user_settings);
 	}
 	pub fn render(
