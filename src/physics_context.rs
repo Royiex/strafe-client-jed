@@ -20,24 +20,18 @@ pub enum InputInstruction {
 		//to be 1 instruction ahead to generate the next state for interpolation.
 }
 
-pub struct RenderState{
-	physics:crate::physics::PhysicsState,
-	graphics:crate::graphics::GraphicsState,
+pub struct Context{
 }
-impl RenderState{
-	pub fn new(user_settings:&crate::settings::UserSettings,indexed_model_instances:crate::model::IndexedModelInstances){
-
+impl Context{
+	pub fn new(user_settings:&crate::settings::UserSettings,indexed_model_instances:&crate::model::IndexedModelInstances){
 		let mut physics=crate::physics::PhysicsState::default();
 		physics.spawn(indexed_model_instances.spawn_point);
 		physics.load_user_settings(user_settings);
 		physics.generate_models(&indexed_model_instances);
-
-		let mut graphics=Self::new_graphics_state();
-		graphics.load_user_settings(user_settings);
-		graphics.generate_models(indexed_model_instances);
-		//manual reset
 	}
 	pub fn into_worker(mut self)->crate::worker::QNWorker<TimedInstruction<InputInstruction>>{
+		let graphics_context=crate::graphics_context::Context::new();
+		let graphics_thread=graphics_context.into_worker();
 		let mut mouse_blocking=true;
 		let mut last_mouse_time=self.physics.next_mouse.time;
 		let mut timeline=std::collections::VecDeque::new();
@@ -122,7 +116,7 @@ impl RenderState{
 				}
 			}
 			if render{
-				self.graphics.render();
+				graphics_thread.send(TimedInstruction{time:ins.time,instruction:crate::graphics_context::GraphicsInstruction::Render});
 			}
 		})
 	}

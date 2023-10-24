@@ -194,7 +194,8 @@ impl RunState {
 
 	pub fn into_worker(self,mut setup_context:crate::setup_context::SetupContext)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
 		//create child context
-		let physics_context=PhysicsContext::new(());
+		let physics_context=crate::physics_context::Context::new(indexed_models,&setup_context);//this needs all the context for graphics_context too
+		let physics_thread=physics_context.into_worker();
 		//
 		crate::worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
 			match ins.instruction{
@@ -207,8 +208,8 @@ impl RunState {
 				RunInstruction::Resize(size)=>{
 					setup_context.config.width=size.width.max(1);
 					setup_context.config.height=size.height.max(1);
-					self.graphics.resize(&setup_context.device,&setup_context.config);
 					setup_context.surface.configure(&setup_context.device,&setup_context.config);
+					physics_thread.send(TimedInstruction{time:ins.time,instruction:PhysicsInstruction::Resize(size)});
 				}
 				RunInstruction::Render=>{
 					let frame=match setup_context.surface.get_current_texture(){
@@ -225,7 +226,7 @@ impl RunState {
 						..wgpu::TextureViewDescriptor::default()
 					});
 
-					self.graphics.render(&view,&setup_context.device,&setup_context.queue);
+					physics_thread.send(TimedInstruction{time:ins.time,instruction:PhysicsInstruction::Render(view)});
 
 					frame.present();
 				}
