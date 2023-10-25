@@ -1,7 +1,8 @@
 #[derive(Clone)]
-pub enum GraphicsInstruction{
-	Render(crate::physics::PhysicsOutputState,crate::integer::Time),
+pub enum Instruction{
+	Render(crate::physics::PhysicsOutputState,crate::integer::Time,glam::IVec2),
 	//UpdateModel(crate::graphics::ModelUpdate),
+	Resize(winit::dpi::PhysicalSize<u32>),
 }
 
 //Ideally the graphics thread worker description is:
@@ -14,19 +15,25 @@ WorkerDescription{
 //up to three frames in flight, dropping new frame requests when all three are busy, and dropping output frames when one renders out of order
 
 pub fn new(
-		graphics:crate::graphics::GraphicsState,
-		surface:&wgpu::Surface,
+		mut graphics:crate::graphics::GraphicsState,
+		mut config:wgpu::SurfaceConfiguration,
+		surface:wgpu::Surface,
 		device:&wgpu::Device,
 		queue:&wgpu::Queue,
-	)->crate::worker::INWorker<GraphicsInstruction>{
-	crate::worker::INWorker::new(a,move |ins:GraphicsInstruction|{
+	)->crate::compat_worker::INWorker<Instruction>{
+	crate::compat_worker::INWorker::new(move |ins:Instruction|{
 		match ins{
-			GraphicsInstruction::Render(physics_output,predicted_time)=>{
+			Instruction::Resize(size)=>{
+				config.width=size.width.max(1);
+				config.height=size.height.max(1);
+				surface.configure(device,&config);
+			}
+			Instruction::Render(physics_output,predicted_time,mouse_pos)=>{
 				//this has to go deeper somehow
 				let frame=match surface.get_current_texture(){
 					Ok(frame)=>frame,
 					Err(_)=>{
-						surface.configure(device,config);
+						surface.configure(device,&config);
 						surface
 							.get_current_texture()
 							.expect("Failed to acquire next surface texture!")
@@ -37,7 +44,7 @@ pub fn new(
 					..wgpu::TextureViewDescriptor::default()
 				});
 
-				graphics.render(&view,device,queue,physics_output,predicted_time);
+				graphics.render(&view,device,queue,physics_output,predicted_time,mouse_pos);
 
 				frame.present();
 			}

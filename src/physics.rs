@@ -31,9 +31,12 @@ pub enum PhysicsInputInstruction {
 	SetZoom(bool),
 	Reset,
 	Idle,
+		//Idle: there were no input events, but the simulation is safe to advance to this timestep
+		//for interpolation / networking / playback reasons, most playback heads will always want
+		//to be 1 instruction ahead to generate the next state for interpolation.
 }
 
-#[derive(Clone,Hash)]
+#[derive(Clone,Hash,Default)]
 pub struct Body {
 	position: Planar64Vec3,//I64 where 2^32 = 1 u
 	velocity: Planar64Vec3,//I64 where 2^32 = 1 u/s
@@ -238,6 +241,19 @@ impl PhysicsCamera {
 	fn simulate_move_rotation_y(&self,mouse_pos_x:i32)->Planar64Mat3{
 		let ax=-self.sensitivity.x.mul_int((mouse_pos_x-self.mouse.pos.x+self.clamped_mouse_pos.x) as i64);
 		Planar64Mat3::from_rotation_y(Angle32::wrap_from_i64(ax))
+	}
+}
+
+impl std::default::Default for PhysicsCamera{
+	fn default()->Self{
+		Self{
+			offset:Planar64Vec3::ZERO,//TODO: delete this from PhysicsCamera, it should be GraphicsCamera only
+			sensitivity:Ratio64Vec2::ONE*200_000,
+			mouse:MouseState::default(),//t=0 does not cause divide by zero because it's immediately replaced
+			clamped_mouse_pos:glam::IVec2::ZERO,
+			angle_pitch_lower_limit:-Angle32::FRAC_PI_2,
+			angle_pitch_upper_limit:Angle32::FRAC_PI_2,
+		}
 	}
 }
 
@@ -527,7 +543,7 @@ pub struct PhysicsState{
 	//This is not the same as Reset which teleports you to Spawn0
 	spawn_point:Planar64Vec3,
 }
-#[derive(Clone)]
+#[derive(Clone,Default)]
 pub struct PhysicsOutputState{
 	camera:PhysicsCamera,
 	body:Body,

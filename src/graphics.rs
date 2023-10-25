@@ -85,6 +85,14 @@ impl GraphicsCamera{
 		raw
 	}
 }
+impl std::default::Default for GraphicsCamera{
+	fn default()->Self{
+		Self{
+			screen_size:glam::UVec2::ONE,
+			fov:glam::Vec2::ONE,
+		}
+	}
+}
 
 pub struct GraphicsState{
 	pipelines: GraphicsPipelines,
@@ -128,7 +136,7 @@ impl GraphicsState{
 	pub fn load_user_settings(&mut self,user_settings:&crate::settings::UserSettings){
 		self.camera.fov=user_settings.calculate_fov(1.0,&self.camera.screen_size).as_vec2();
 	}
-	fn generate_model_graphics(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,indexed_models:crate::model::IndexedModelInstances){
+	pub fn generate_models(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,indexed_models:crate::model::IndexedModelInstances){
 		//generate texture view per texture
 
 		//idk how to do this gooder lol
@@ -448,7 +456,7 @@ impl GraphicsState{
 		//.into_iter() the modeldata vec so entities can be /moved/ to models.entities
 		let mut model_count=0;
 		let mut instance_count=0;
-		let uniform_buffer_binding_size=crate::graphics_context::required_limits().max_uniform_buffer_binding_size as usize;
+		let uniform_buffer_binding_size=crate::setup::required_limits().max_uniform_buffer_binding_size as usize;
 		let chunk_size=uniform_buffer_binding_size/MODEL_BUFFER_SIZE_BYTES;
 		self.models.reserve(models.len());
 		for model in models.into_iter() {
@@ -521,7 +529,7 @@ impl GraphicsState{
 		println!("Graphics Instances: {}",instance_count);
 	}
 
-	pub fn init(
+	pub fn new(
 		device:&wgpu::Device,
 		queue:&wgpu::Queue,
 		config:&wgpu::SurfaceConfiguration,
@@ -807,14 +815,8 @@ impl GraphicsState{
 			multiview: None,
 		});
 
-		let mut physics = crate::physics::PhysicsState::default();
-
-		physics.load_user_settings(&user_settings);
-
-		let screen_size=glam::uvec2(config.width,config.height);
-
-		let camera=GraphicsCamera::new(screen_size,user_settings.calculate_fov(1.0,&screen_size).as_vec2());
-		let camera_uniforms = camera.to_uniform_data(physics.output().adjust_mouse(&crate::physics::MouseState::default()));
+		let camera=GraphicsCamera::default();
+		let camera_uniforms = camera.to_uniform_data(crate::physics::PhysicsOutputState::default().extrapolate(glam::IVec2::ZERO,crate::integer::Time::ZERO));
 		let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 			label: Some("Camera"),
 			contents: bytemuck::cast_slice(&camera_uniforms),
@@ -883,8 +885,9 @@ impl GraphicsState{
 		view:&wgpu::TextureView,
 		device:&wgpu::Device,
 		queue:&wgpu::Queue,
-		predicted_time:crate::integer::Time,
 		physics_output:crate::physics::PhysicsOutputState,
+		predicted_time:crate::integer::Time,
+		mouse_pos:glam::IVec2,
 	) {
 		//TODO: use scheduled frame times to create beautiful smoothing simulation physics extrapolation assuming no input
 
@@ -892,7 +895,7 @@ impl GraphicsState{
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
 		// update rotation
-		let camera_uniforms = self.camera.to_uniform_data(physics_output.extrapolate(self.global_mouse.lock().clone(),predicted_time));
+		let camera_uniforms = self.camera.to_uniform_data(physics_output.extrapolate(mouse_pos,predicted_time));
 		self.staging_belt
 			.write_buffer(
 				&mut encoder,

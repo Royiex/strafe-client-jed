@@ -41,6 +41,11 @@ impl std::fmt::Display for Time{
 		write!(f,"{}s+{:09}ns",self.0/Self::ONE_SECOND.0,self.0%Self::ONE_SECOND.0)
 	}
 }
+impl std::default::Default for Time{
+	fn default()->Self{
+		Self(0)
+	}
+}
 impl std::ops::Neg for Time{
 	type Output=Time;
 	#[inline]

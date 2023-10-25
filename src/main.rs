@@ -119,7 +119,6 @@ pub fn default_models()->model::IndexedModelInstances{
 }
 
 fn main(){
-	let title=format!("Strafe Client v{}",env!("CARGO_PKG_VERSION")).as_str();
-	let context=setup::setup(title);
+	let context=setup::setup(format!("Strafe Client v{}",env!("CARGO_PKG_VERSION")).as_str());
 	context.start();//creates and runs a run context
 }

@@ -1,7 +1,6 @@
 use crate::integer::Time;
 use crate::physics::{MouseState,PhysicsInputInstruction};
 use crate::instruction::{TimedInstruction,InstructionConsumer};
-
 #[derive(Debug)]
 pub enum InputInstruction {
 	MoveMouse(glam::IVec2),
@@ -14,52 +13,56 @@ pub enum InputInstruction {
 	Jump(bool),
 	Zoom(bool),
 	Reset,
+}
+pub enum Instruction{
+	Input(InputInstruction),
 	Render,
-		//Idle: there were no input events, but the simulation is safe to advance to this timestep
-		//for interpolation / networking / playback reasons, most playback heads will always want
-		//to be 1 instruction ahead to generate the next state for interpolation.
+	Resize(winit::dpi::PhysicalSize<u32>),
+	//Graphics(crate::graphics_worker::Instruction),
 }
 
-	pub fn new(physics:crate::physics::PhysicsState,graphics_worker:crate::compat_worker::INWorker<crate::graphics_worker::GraphicsInstruction>)->crate::compat_worker::QNWorker<TimedInstruction<InputInstruction>>{
+	pub fn new(mut physics:crate::physics::PhysicsState,mut graphics_worker:crate::compat_worker::INWorker<crate::graphics_worker::Instruction>)->crate::compat_worker::QNWorker<TimedInstruction<Instruction>>{
 		let mut mouse_blocking=true;
 		let mut last_mouse_time=physics.next_mouse.time;
 		let mut timeline=std::collections::VecDeque::new();
-		crate::compat_worker::QNWorker::new(move |ins:TimedInstruction<InputInstruction>|{
-			let mut render=false;
-			if if let Some(phys_input)=match ins.instruction{
-				InputInstruction::MoveMouse(m)=>{
-					if mouse_blocking{
-						//tell the game state which is living in the past about its future
-						timeline.push_front(TimedInstruction{
-							time:last_mouse_time,
-							instruction:PhysicsInputInstruction::SetNextMouse(MouseState{time:ins.time,pos:m}),
-						});
-					}else{
-						//mouse has just started moving again after being still for longer than 10ms.
-						//replace the entire mouse interpolation state to avoid an intermediate state with identical m0.t m1.t timestamps which will divide by zero
-						timeline.push_front(TimedInstruction{
-							time:last_mouse_time,
-							instruction:PhysicsInputInstruction::ReplaceMouse(
-								MouseState{time:last_mouse_time,pos:physics.next_mouse.pos},
-								MouseState{time:ins.time,pos:m}
-							),
-						});
-						//delay physics execution until we have an interpolation target
-						mouse_blocking=true;
-					}
-					last_mouse_time=ins.time;
-					None
+		crate::compat_worker::QNWorker::new(move |ins:TimedInstruction<Instruction>|{
+			if if let Some(phys_input)=match &ins.instruction{
+				Instruction::Input(input_instruction)=>match input_instruction{
+					&InputInstruction::MoveMouse(m)=>{
+						if mouse_blocking{
+							//tell the game state which is living in the past about its future
+							timeline.push_front(TimedInstruction{
+								time:last_mouse_time,
+								instruction:PhysicsInputInstruction::SetNextMouse(MouseState{time:ins.time,pos:m}),
+							});
+						}else{
+							//mouse has just started moving again after being still for longer than 10ms.
+							//replace the entire mouse interpolation state to avoid an intermediate state with identical m0.t m1.t timestamps which will divide by zero
+							timeline.push_front(TimedInstruction{
+								time:last_mouse_time,
+								instruction:PhysicsInputInstruction::ReplaceMouse(
+									MouseState{time:last_mouse_time,pos:physics.next_mouse.pos},
+									MouseState{time:ins.time,pos:m}
+								),
+							});
+							//delay physics execution until we have an interpolation target
+							mouse_blocking=true;
+						}
+						last_mouse_time=ins.time;
+						None
+					},
+					&InputInstruction::MoveForward(s)=>Some(PhysicsInputInstruction::SetMoveForward(s)),
+					&InputInstruction::MoveLeft(s)=>Some(PhysicsInputInstruction::SetMoveLeft(s)),
+					&InputInstruction::MoveBack(s)=>Some(PhysicsInputInstruction::SetMoveBack(s)),
+					&InputInstruction::MoveRight(s)=>Some(PhysicsInputInstruction::SetMoveRight(s)),
+					&InputInstruction::MoveUp(s)=>Some(PhysicsInputInstruction::SetMoveUp(s)),
+					&InputInstruction::MoveDown(s)=>Some(PhysicsInputInstruction::SetMoveDown(s)),
+					&InputInstruction::Jump(s)=>Some(PhysicsInputInstruction::SetJump(s)),
+					&InputInstruction::Zoom(s)=>Some(PhysicsInputInstruction::SetZoom(s)),
+					InputInstruction::Reset=>Some(PhysicsInputInstruction::Reset),
 				},
-				InputInstruction::MoveForward(s)=>Some(PhysicsInputInstruction::SetMoveForward(s)),
-				InputInstruction::MoveLeft(s)=>Some(PhysicsInputInstruction::SetMoveLeft(s)),
-				InputInstruction::MoveBack(s)=>Some(PhysicsInputInstruction::SetMoveBack(s)),
-				InputInstruction::MoveRight(s)=>Some(PhysicsInputInstruction::SetMoveRight(s)),
-				InputInstruction::MoveUp(s)=>Some(PhysicsInputInstruction::SetMoveUp(s)),
-				InputInstruction::MoveDown(s)=>Some(PhysicsInputInstruction::SetMoveDown(s)),
-				InputInstruction::Jump(s)=>Some(PhysicsInputInstruction::SetJump(s)),
-				InputInstruction::Zoom(s)=>Some(PhysicsInputInstruction::SetZoom(s)),
-				InputInstruction::Reset=>Some(PhysicsInputInstruction::Reset),
-				InputInstruction::Render=>{render=true;Some(PhysicsInputInstruction::Idle)},
+				Instruction::Resize(_)=>Some(PhysicsInputInstruction::Idle),
+				Instruction::Render=>Some(PhysicsInputInstruction::Idle),
 			}{
 				//non-mouse event
 				timeline.push_back(TimedInstruction{
@@ -104,8 +107,14 @@ pub enum InputInstruction {
 					});
 				}
 			}
-			if render{
-				graphics_worker.send(crate::graphics_worker::GraphicsInstruction::Render(physics.output(),ins.time));
+			match ins.instruction{
+				Instruction::Render=>{
+					graphics_worker.send(crate::graphics_worker::Instruction::Render(physics.output(),ins.time,physics.next_mouse.pos)).unwrap();
+				},
+				Instruction::Resize(size)=>{
+					graphics_worker.send(crate::graphics_worker::Instruction::Resize(size)).unwrap();
+				},
+				_=>(),
 			}
 		})
 	}

@@ -47,8 +47,8 @@ impl SetupContextPartial1{
 	fn create_surface(self,window:&winit::window::Window)->Result<SetupContextPartial2,wgpu::CreateSurfaceError>{
 		Ok(SetupContextPartial2{
 			backends:self.backends,
+			surface:unsafe{self.instance.create_surface(window)}?,
 			instance:self.instance,
-			surface:unsafe{self.instance.create_surface(window)}?
 		})
 	}
 }
@@ -231,7 +231,7 @@ impl SetupContextSetup{
 
 		let run=crate::run::RunContextSetup::new(&setup_context,window);
 		//the thread that spawns the physics thread
-		let run_thread=run.into_worker(setup_context);
+		let mut run_thread=run.into_worker(setup_context);
 
 		println!("Entering render loop...");
 		let root_time=std::time::Instant::now();

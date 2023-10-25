@@ -1,5 +1,5 @@
 use crate::physics::PhysicsInstruction;
-use crate::physics_context::InputInstruction;
+use crate::physics_worker::InputInstruction;
 use crate::instruction::TimedInstruction;
 
 pub enum RunInstruction{
@@ -14,13 +14,18 @@ pub enum RunInstruction{
 struct RunContext{
 	manual_mouse_lock:bool,
 	mouse:crate::physics::MouseState,//std::sync::Arc<std::sync::Mutex<>>
+	device:wgpu::Device,
+	queue:wgpu::Queue,
 	screen_size:glam::UVec2,
 	user_settings:crate::settings::UserSettings,
 	window:winit::window::Window,
-	//physics_thread:crate::worker::QNWorker<TimedInstruction<InputInstruction>>,
+	physics_thread:crate::compat_worker::QNWorker<TimedInstruction<crate::physics_worker::Instruction>>,
 }
 
 impl RunContext{
+	fn get_middle_of_screen(&self)->winit::dpi::PhysicalPosition<f32>{
+		winit::dpi::PhysicalPosition::new(self.screen_size.x as f32/2.0, self.screen_size.y as f32/2.0)
+	}
 	fn window_event(&mut self,time:crate::integer::Time,event: winit::event::WindowEvent) {
 		match event {
 			winit::event::WindowEvent::DroppedFile(path)=>{
@@ -49,7 +54,7 @@ impl RunContext{
 					winit::keyboard::Key::Named(winit::keyboard::NamedKey::Tab)=>{
 						if s{
 							self.manual_mouse_lock=false;
-							match self.window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.screen_size.x as f32/2.0, self.screen_size.y as f32/2.0)){
+							match self.window.set_cursor_position(self.get_middle_of_screen()){
 								Ok(())=>(),
 								Err(e)=>println!("Could not set cursor position: {:?}",e),
 							}
@@ -112,7 +117,7 @@ impl RunContext{
 						}{
 							self.physics_thread.send(TimedInstruction{
 								time,
-								instruction:input_instruction,
+								instruction:crate::physics_worker::Instruction::Input(input_instruction),
 							}).unwrap();
 						}
 					},
@@ -123,13 +128,13 @@ impl RunContext{
 		}
 	}
 
-	fn device_event(&self,time:crate::integer::Time,event: winit::event::DeviceEvent) {
+	fn device_event(&mut self,time:crate::integer::Time,event: winit::event::DeviceEvent) {
 		match event {
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine
 			} => {
 				if self.manual_mouse_lock{
-					match self.window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.screen_size.x as f32/2.0, self.screen_size.y as f32/2.0)){
+					match self.window.set_cursor_position(self.get_middle_of_screen()){
 						Ok(())=>(),
 						Err(e)=>println!("Could not set cursor position: {:?}",e),
 					}
@@ -141,7 +146,7 @@ impl RunContext{
 				self.mouse.pos+=delta;
 				self.physics_thread.send(TimedInstruction{
 					time,
-					instruction:InputInstruction::MoveMouse(self.mouse.pos),
+					instruction:crate::physics_worker::Instruction::Input(InputInstruction::MoveMouse(self.mouse.pos)),
 				}).unwrap();
 			},
 			winit::event::DeviceEvent::MouseWheel {
@@ -151,7 +156,7 @@ impl RunContext{
 				if false{//self.physics.style.use_scroll{
 					self.physics_thread.send(TimedInstruction{
 						time,
-						instruction:InputInstruction::Jump(true),//activates the immediate jump path, but the style modifier prevents controls&CONTROL_JUMP bit from being set to auto jump
+						instruction:crate::physics_worker::Instruction::Input(InputInstruction::Jump(true)),//activates the immediate jump path, but the style modifier prevents controls&CONTROL_JUMP bit from being set to auto jump
 					}).unwrap();
 				}
 			}
@@ -179,13 +184,13 @@ impl RunContextSetup{
 			None
 		}.unwrap_or(crate::default_models());
 
-		let mut graphics=crate::graphics::GraphicsState::new(&context.device,&context.queue);
-		graphics.load_user_settings(&user_settings);
-		graphics.generate_models(&context.device,&context.queue,indexed_model_instances);
-
 		let mut physics=crate::physics::PhysicsState::default();
 		physics.load_user_settings(&user_settings);
 		physics.generate_models(&indexed_model_instances);
+
+		let mut graphics=crate::graphics::GraphicsState::new(&context.device,&context.queue,&context.config);
+		graphics.load_user_settings(&user_settings);
+		graphics.generate_models(&context.device,&context.queue,indexed_model_instances);
 
 		Self{
 			user_settings,
@@ -195,20 +200,25 @@ impl RunContextSetup{
 		}
 	}
 
-	fn into_context(self)->RunContext{
+	fn into_context(self,setup_context:crate::setup::SetupContext)->RunContext{
+		let screen_size=glam::uvec2(setup_context.config.width,setup_context.config.height);
+		let graphics_thread=crate::graphics_worker::new(self.graphics,setup_context.config,setup_context.surface,&setup_context.device,&setup_context.queue);
 		RunContext{
 			manual_mouse_lock:false,
 			mouse:crate::physics::MouseState::default(),
+			//make sure to update this!!!!!
+			screen_size,
+			device:setup_context.device,
+			queue:setup_context.queue,
 			user_settings:self.user_settings,
 			window:self.window,
-			physics:self.physics,
-			graphics:self.graphics,
+			physics_thread:crate::physics_worker::new(self.physics,graphics_thread),
 		}
 	}
 
-	pub fn into_worker(self,setup_context:crate::setup::SetupContext)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
-		let run_context=self.into_context();
-		crate::worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
+	pub fn into_worker(self,setup_context:crate::setup::SetupContext)->crate::compat_worker::QNWorker<TimedInstruction<RunInstruction>>{
+		let mut run_context=self.into_context(setup_context);
+		crate::compat_worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
 			match ins.instruction{
 				RunInstruction::RequestRedraw=>{
 					run_context.window.request_redraw();
@@ -220,13 +230,20 @@ impl RunContextSetup{
 					run_context.device_event(ins.time,device_event);
 				},
 				RunInstruction::Resize(size)=>{
-					setup_context.config.width=size.width.max(1);
-					setup_context.config.height=size.height.max(1);
-					setup_context.surface.configure(&setup_context.device,&setup_context.config);
-					run_context.physics_thread.send(TimedInstruction{time:ins.time,instruction:PhysicsInstruction::Resize(size)});
+					run_context.physics_thread.send(
+						TimedInstruction{
+							time:ins.time,
+							instruction:crate::physics_worker::Instruction::Resize(size)
+						}
+					).unwrap();
 				}
 				RunInstruction::Render=>{
-					//
+					run_context.physics_thread.send(
+						TimedInstruction{
+							time:ins.time,
+							instruction:crate::physics_worker::Instruction::Render
+						}
+					).unwrap();
 				}
 			}
 		})
