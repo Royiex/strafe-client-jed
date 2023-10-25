@@ -234,7 +234,7 @@ impl SetupContextSetup{
 		//the thread that spawns the physics thread
 		let mut run_thread=run.into_worker(setup_context);
 
-		println!("Entering render loop...");
+		println!("Entering event loop...");
 		let root_time=std::time::Instant::now();
 		event_loop.run(move |event,elwt|{
 			let time=crate::integer::Time::from_nanos(root_time.elapsed().as_nanos() as i64);
@@ -257,7 +257,6 @@ impl SetupContextSetup{
 						winit::event::WindowEvent::Resized(size),//ignoring scale factor changed for now because mutex bruh
 					window_id:_,
 				} => {
-					println!("Resizing to {:?}",size);
 					run_thread.send(TimedInstruction{time,instruction:RunInstruction::Resize(size)}).unwrap();
 				}
 				winit::event::Event::WindowEvent{event,..}=>match event{

@@ -24,6 +24,7 @@ pub fn new<'a>(
 	crate::compat_worker::INWorker::new(move |ins:Instruction|{
 		match ins{
 			Instruction::Resize(size,user_settings)=>{
+				println!("Resizing to {:?}",size);
 				config.width=size.width.max(1);
 				config.height=size.height.max(1);
 				surface.configure(&device,&config);
