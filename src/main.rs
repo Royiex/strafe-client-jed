@@ -1,8 +1,8 @@
 mod bvh;
-mod run;
 mod aabb;
 mod model;
 mod setup;
+mod window;
 mod worker;
 mod zeroes;
 mod integer;
@@ -120,5 +120,5 @@ pub fn default_models()->model::IndexedModelInstances{
 
 fn main(){
 	let context=setup::setup(format!("Strafe Client v{}",env!("CARGO_PKG_VERSION")).as_str());
-	context.start();//creates and runs a run context
+	context.start();//creates and runs a window context
 }

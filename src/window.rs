@@ -1,7 +1,7 @@
 use crate::instruction::TimedInstruction;
 use crate::physics_worker::InputInstruction;
 
-pub enum RunInstruction{
+pub enum WindowInstruction{
 	Resize(winit::dpi::PhysicalSize<u32>),
 	WindowEvent(winit::event::WindowEvent),
 	DeviceEvent(winit::event::DeviceEvent),
@@ -10,7 +10,7 @@ pub enum RunInstruction{
 }
 
 //holds thread handles to dispatch to
-struct RunContext<'a>{
+struct WindowContext<'a>{
 	manual_mouse_lock:bool,
 	mouse:crate::physics::MouseState,//std::sync::Arc<std::sync::Mutex<>>
 	screen_size:glam::UVec2,
@@ -19,7 +19,7 @@ struct RunContext<'a>{
 	physics_thread:crate::compat_worker::QNWorker<'a, TimedInstruction<crate::physics_worker::Instruction>>,
 }
 
-impl RunContext<'_>{
+impl WindowContext<'_>{
 	fn get_middle_of_screen(&self)->winit::dpi::PhysicalPosition<f32>{
 		winit::dpi::PhysicalPosition::new(self.screen_size.x as f32/2.0, self.screen_size.y as f32/2.0)
 	}
@@ -161,14 +161,14 @@ impl RunContext<'_>{
 	}
 }
 
-pub struct RunContextSetup{
+pub struct WindowContextSetup{
 	user_settings:crate::settings::UserSettings,
 	window:winit::window::Window,
 	physics:crate::physics::PhysicsState,
 	graphics:crate::graphics::GraphicsState,
 }
 
-impl RunContextSetup{
+impl WindowContextSetup{
 	pub fn new(context:&crate::setup::SetupContext,window:winit::window::Window)->Self{
 		//wee
 		let user_settings=crate::settings::read_user_settings();
@@ -197,10 +197,10 @@ impl RunContextSetup{
 		}
 	}
 
-	fn into_context<'a>(self,setup_context:crate::setup::SetupContext)->RunContext<'a>{
+	fn into_context<'a>(self,setup_context:crate::setup::SetupContext)->WindowContext<'a>{
 		let screen_size=glam::uvec2(setup_context.config.width,setup_context.config.height);
 		let graphics_thread=crate::graphics_worker::new(self.graphics,setup_context.config,setup_context.surface,setup_context.device,setup_context.queue);
-		RunContext{
+		WindowContext{
 			manual_mouse_lock:false,
 			mouse:crate::physics::MouseState::default(),
 			//make sure to update this!!!!!
@@ -211,29 +211,29 @@ impl RunContextSetup{
 		}
 	}
 
-	pub fn into_worker<'a>(self,setup_context:crate::setup::SetupContext)->crate::compat_worker::QNWorker<'a,TimedInstruction<RunInstruction>>{
-		let mut run_context=self.into_context(setup_context);
-		crate::compat_worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
+	pub fn into_worker<'a>(self,setup_context:crate::setup::SetupContext)->crate::compat_worker::QNWorker<'a,TimedInstruction<WindowInstruction>>{
+		let mut window_context=self.into_context(setup_context);
+		crate::compat_worker::QNWorker::new(move |ins:TimedInstruction<WindowInstruction>|{
 			match ins.instruction{
-				RunInstruction::RequestRedraw=>{
-					run_context.window.request_redraw();
+				WindowInstruction::RequestRedraw=>{
+					window_context.window.request_redraw();
 				}
-				RunInstruction::WindowEvent(window_event)=>{
-					run_context.window_event(ins.time,window_event);
+				WindowInstruction::WindowEvent(window_event)=>{
+					window_context.window_event(ins.time,window_event);
 				},
-				RunInstruction::DeviceEvent(device_event)=>{
-					run_context.device_event(ins.time,device_event);
+				WindowInstruction::DeviceEvent(device_event)=>{
+					window_context.device_event(ins.time,device_event);
 				},
-				RunInstruction::Resize(size)=>{
-					run_context.physics_thread.send(
+				WindowInstruction::Resize(size)=>{
+					window_context.physics_thread.send(
 						TimedInstruction{
 							time:ins.time,
-							instruction:crate::physics_worker::Instruction::Resize(size,run_context.user_settings.clone())
+							instruction:crate::physics_worker::Instruction::Resize(size,window_context.user_settings.clone())
 						}
 					).unwrap();
 				}
-				RunInstruction::Render=>{
-					run_context.physics_thread.send(
+				WindowInstruction::Render=>{
+					window_context.physics_thread.send(
 						TimedInstruction{
 							time:ins.time,
 							instruction:crate::physics_worker::Instruction::Render

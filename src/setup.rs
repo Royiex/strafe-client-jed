@@ -1,5 +1,5 @@
 use crate::instruction::TimedInstruction;
-use crate::run::RunInstruction;
+use crate::window::WindowInstruction;
 
 fn optional_features()->wgpu::Features{
 	wgpu::Features::TEXTURE_COMPRESSION_ASTC
@@ -230,19 +230,19 @@ impl SetupContextSetup{
 
 		//dedicated thread to ping request redraw back and resize the window doesn't seem logical
 
-		let run=crate::run::RunContextSetup::new(&setup_context,window);
+		let window=crate::window::WindowContextSetup::new(&setup_context,window);
 		//the thread that spawns the physics thread
-		let run_thread=run.into_worker(setup_context);
+		let window_thread=window.into_worker(setup_context);
 
 		println!("Entering event loop...");
 		let root_time=std::time::Instant::now();
-		run_event_loop(event_loop,run_thread,root_time).unwrap();
+		run_event_loop(event_loop,window_thread,root_time).unwrap();
 	}
 }
 
 fn run_event_loop(
 	event_loop:winit::event_loop::EventLoop<()>,
-	mut run_thread:crate::compat_worker::QNWorker<TimedInstruction<RunInstruction>>,
+	mut window_thread:crate::compat_worker::QNWorker<TimedInstruction<WindowInstruction>>,
 	root_time:std::time::Instant
 	)->Result<(),winit::error::EventLoopError>{
 		event_loop.run(move |event,elwt|{
@@ -254,7 +254,7 @@ fn run_event_loop(
 			// };
 			match event{
 				winit::event::Event::AboutToWait=>{
-					run_thread.send(TimedInstruction{time,instruction:RunInstruction::RequestRedraw}).unwrap();
+					window_thread.send(TimedInstruction{time,instruction:WindowInstruction::RequestRedraw}).unwrap();
 				}
 				winit::event::Event::WindowEvent {
 					event:
@@ -266,7 +266,7 @@ fn run_event_loop(
 						winit::event::WindowEvent::Resized(size),//ignoring scale factor changed for now because mutex bruh
 					window_id:_,
 				} => {
-					run_thread.send(TimedInstruction{time,instruction:RunInstruction::Resize(size)}).unwrap();
+					window_thread.send(TimedInstruction{time,instruction:WindowInstruction::Resize(size)}).unwrap();
 				}
 				winit::event::Event::WindowEvent{event,..}=>match event{
 					winit::event::WindowEvent::KeyboardInput{
@@ -282,17 +282,17 @@ fn run_event_loop(
 						elwt.exit();
 					}
 					winit::event::WindowEvent::RedrawRequested=>{
-						run_thread.send(TimedInstruction{time,instruction:RunInstruction::Render}).unwrap();
+						window_thread.send(TimedInstruction{time,instruction:WindowInstruction::Render}).unwrap();
 					}
 					_=>{
-						run_thread.send(TimedInstruction{time,instruction:RunInstruction::WindowEvent(event)}).unwrap();
+						window_thread.send(TimedInstruction{time,instruction:WindowInstruction::WindowEvent(event)}).unwrap();
 					}
 				},
 				winit::event::Event::DeviceEvent{
 					event,
 					..
 				} => {
-					run_thread.send(TimedInstruction{time,instruction:RunInstruction::DeviceEvent(event)}).unwrap();
+					window_thread.send(TimedInstruction{time,instruction:WindowInstruction::DeviceEvent(event)}).unwrap();
 				},
 				_=>{}
 			}
