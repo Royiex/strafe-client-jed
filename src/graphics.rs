@@ -875,8 +875,8 @@ impl GraphicsState{
 		config:&wgpu::SurfaceConfiguration,
 		user_settings:&crate::settings::UserSettings,
 	) {
-		self.depth_view = Self::create_depth_texture(config,device);
-		self.camera.screen_size=glam::uvec2(config.width, config.height);
+		self.depth_view=Self::create_depth_texture(config,device);
+		self.camera.screen_size=glam::uvec2(config.width,config.height);
 		self.load_user_settings(user_settings);
 	}
 	pub fn render(

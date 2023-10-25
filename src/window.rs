@@ -21,7 +21,7 @@ struct WindowContext<'a>{
 
 impl WindowContext<'_>{
 	fn get_middle_of_screen(&self)->winit::dpi::PhysicalPosition<f32>{
-		winit::dpi::PhysicalPosition::new(self.screen_size.x as f32/2.0, self.screen_size.y as f32/2.0)
+		winit::dpi::PhysicalPosition::new(self.screen_size.x as f32/2.0,self.screen_size.y as f32/2.0)
 	}
 	fn window_event(&mut self,time:crate::integer::Time,event: winit::event::WindowEvent) {
 		match event {
