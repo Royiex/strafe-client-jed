@@ -245,9 +245,9 @@ checksum = "a3e2c3daef883ecc1b5d58c15adae93470a91d425f3532ba1695849656af3fc1"
 
 [[package]]
 name = "bytemuck"
-version = "1.13.1"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17febce684fd15d89027105661fec94afb475cb995fbc59d2865198446ba2eea"
+checksum = "374d28ec25809ee0e23827c2ab573d729e293f281dfe393500e7ad618baa61c6"
 dependencies = [
  "bytemuck_derive",
 ]
@@ -586,9 +586,9 @@ checksum = "6fb8d784f27acf97159b40fc4db5ecd8aa23b9ad5ef69cdd136d3bc80665f0c0"
 
 [[package]]
 name = "glam"
-version = "0.24.1"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42218cb640844e3872cc3c153dc975229e080a6c4733b34709ef445610550226"
+checksum = "b5418c17512bdf42730f9032c74e1ae39afc408745ebb2acf72fbc4691c17945"
 
 [[package]]
 name = "glow"
@@ -1318,9 +1318,9 @@ dependencies = [
 
 [[package]]
 name = "rbx_dom_weak"
-version = "2.5.0"
+version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "161729449bbb0cfa657ce7bcca6a160d0af06d8b8d9efdc9abe14735dccacdb9"
+checksum = "843a2e0e1446623625943f7228d9d4b5cf3883017e3964733600682506864b34"
 dependencies = [
  "rbx_types",
  "serde",
@@ -1328,9 +1328,9 @@ dependencies = [
 
 [[package]]
 name = "rbx_reflection"
-version = "4.3.0"
+version = "4.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08bd48487192046fec8f805f3fa29f3d7d5beb9890b0859b1a92bd8aff580343"
+checksum = "41e762dfca3217d2d37da631de2fa0d1616edaa61a0a2633263d5d3305baf8c3"
 dependencies = [
  "rbx_types",
  "serde",
@@ -1339,9 +1339,9 @@ dependencies = [
 
 [[package]]
 name = "rbx_reflection_database"
-version = "0.2.7+roblox-588"
+version = "0.2.9+roblox-596"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1be6cf674182806f11ad4899dd1feafe977591f1ae035ae05a58d4b74e487276"
+checksum = "6b18f088a2b4aa66324ec97b5b6ffacb53188aef19f3497d95d6a1d1dbb28e66"
 dependencies = [
  "lazy_static",
  "rbx_reflection",
@@ -1351,9 +1351,9 @@ dependencies = [
 
 [[package]]
 name = "rbx_types"
-version = "1.6.0"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "070106e926b8ae54c7bc443e5db4d868d7f0af51c1d7cfd7efe1364c1753d8a3"
+checksum = "32a991523e3ad5f43a4d121cb4a1e5bc23f7826bb4a1db5aa51e94f1073150ec"
 dependencies = [
  "base64",
  "bitflags 1.3.2",
@@ -1366,9 +1366,9 @@ dependencies = [
 
 [[package]]
 name = "rbx_xml"
-version = "0.13.1"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bc65b70827519fdc4ab47416d1085b912f087fadab9ed415471b6daba635574"
+checksum = "fc87343301303ff0510903fb7eb3dbd1c75bdb6ab780fea6091bdc3f58b5829f"
 dependencies = [
  "base64",
  "log",
