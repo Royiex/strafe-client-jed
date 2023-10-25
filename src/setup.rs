@@ -244,7 +244,7 @@ impl SetupContextSetup{
 			// };
 			match event{
 				winit::event::Event::AboutToWait=>{
-					run_thread.send(TimedInstruction{time,instruction:RunInstruction::RequestRedraw});
+					run_thread.send(TimedInstruction{time,instruction:RunInstruction::RequestRedraw}).unwrap();
 				}
 				winit::event::Event::WindowEvent {
 					event:
@@ -257,7 +257,7 @@ impl SetupContextSetup{
 					window_id:_,
 				} => {
 					println!("Resizing to {:?}",size);
-					run_thread.send(TimedInstruction{time,instruction:RunInstruction::Resize(size)});
+					run_thread.send(TimedInstruction{time,instruction:RunInstruction::Resize(size)}).unwrap();
 				}
 				winit::event::Event::WindowEvent{event,..}=>match event{
 					winit::event::WindowEvent::KeyboardInput{
@@ -273,17 +273,17 @@ impl SetupContextSetup{
 						elwt.exit();
 					}
 					winit::event::WindowEvent::RedrawRequested=>{
-						run_thread.send(TimedInstruction{time,instruction:RunInstruction::Render});
+						run_thread.send(TimedInstruction{time,instruction:RunInstruction::Render}).unwrap();
 					}
 					_=>{
-						run_thread.send(TimedInstruction{time,instruction:RunInstruction::WindowEvent(event)});
+						run_thread.send(TimedInstruction{time,instruction:RunInstruction::WindowEvent(event)}).unwrap();
 					}
 				},
 				winit::event::Event::DeviceEvent{
 					event,
 					..
 				} => {
-					run_thread.send(TimedInstruction{time,instruction:RunInstruction::DeviceEvent(event)});
+					run_thread.send(TimedInstruction{time,instruction:RunInstruction::DeviceEvent(event)}).unwrap();
 				},
 				_=>{}
 			}

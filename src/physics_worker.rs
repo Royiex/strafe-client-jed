@@ -17,7 +17,7 @@ pub enum InputInstruction {
 pub enum Instruction{
 	Input(InputInstruction),
 	Render,
-	Resize(winit::dpi::PhysicalSize<u32>),
+	Resize(winit::dpi::PhysicalSize<u32>,crate::settings::UserSettings),
 	//Graphics(crate::graphics_worker::Instruction),
 }
 
@@ -61,7 +61,7 @@ pub enum Instruction{
 					&InputInstruction::Zoom(s)=>Some(PhysicsInputInstruction::SetZoom(s)),
 					InputInstruction::Reset=>Some(PhysicsInputInstruction::Reset),
 				},
-				Instruction::Resize(_)=>Some(PhysicsInputInstruction::Idle),
+				Instruction::Resize(_,_)=>Some(PhysicsInputInstruction::Idle),
 				Instruction::Render=>Some(PhysicsInputInstruction::Idle),
 			}{
 				//non-mouse event
@@ -111,8 +111,8 @@ pub enum Instruction{
 				Instruction::Render=>{
 					graphics_worker.send(crate::graphics_worker::Instruction::Render(physics.output(),ins.time,physics.next_mouse.pos)).unwrap();
 				},
-				Instruction::Resize(size)=>{
-					graphics_worker.send(crate::graphics_worker::Instruction::Resize(size)).unwrap();
+				Instruction::Resize(size,user_settings)=>{
+					graphics_worker.send(crate::graphics_worker::Instruction::Resize(size,user_settings)).unwrap();
 				},
 				_=>(),
 			}

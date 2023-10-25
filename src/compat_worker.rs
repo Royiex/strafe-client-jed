@@ -1,13 +1,13 @@
-pub type QNWorker<Task>=CompatNWorker<Task>;
-pub type INWorker<Task>=CompatNWorker<Task>;
+pub type QNWorker<'a,Task>=CompatNWorker<'a,Task>;
+pub type INWorker<'a,Task>=CompatNWorker<'a,Task>;
 
-pub struct CompatNWorker<Task>{
+pub struct CompatNWorker<'a,Task>{
 	data:std::marker::PhantomData<Task>,
-	f:Box<dyn FnMut(Task)>,
+	f:Box<dyn FnMut(Task)+'a>,
 }
 
-impl<Task> CompatNWorker<Task>{
-	pub fn new(f:impl FnMut(Task)+'static)->Self{
+impl<'a,Task> CompatNWorker<'a,Task>{
+	pub fn new(f:impl FnMut(Task)+'a)->CompatNWorker<'a,Task>{
 		Self{
 			data:std::marker::PhantomData,
 			f:Box::new(f),

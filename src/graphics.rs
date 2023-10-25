@@ -872,7 +872,6 @@ impl GraphicsState{
 	pub fn resize(
 		&mut self,
 		device:&wgpu::Device,
-		queue:&wgpu::Queue,
 		config:&wgpu::SurfaceConfiguration,
 		user_settings:&crate::settings::UserSettings,
 	) {
