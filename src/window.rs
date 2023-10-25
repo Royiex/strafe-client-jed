@@ -16,7 +16,7 @@ struct WindowContext<'a>{
 	screen_size:glam::UVec2,
 	user_settings:crate::settings::UserSettings,
 	window:winit::window::Window,
-	physics_thread:crate::compat_worker::QNWorker<'a, TimedInstruction<crate::physics_worker::Instruction>>,
+	physics_thread:crate::worker::QNWorker<'a,TimedInstruction<crate::physics_worker::Instruction>>,
 }
 
 impl WindowContext<'_>{
@@ -194,9 +194,9 @@ impl WindowContextSetup{
 		}
 	}
 
-	fn into_context<'a>(self,setup_context:crate::setup::SetupContext)->WindowContext<'a>{
+	fn into_context<'a>(self,scope:&'a std::thread::Scope<'a,'_>,setup_context:crate::setup::SetupContext)->WindowContext<'a>{
 		let screen_size=glam::uvec2(setup_context.config.width,setup_context.config.height);
-		let graphics_thread=crate::graphics_worker::new(self.graphics,setup_context.config,setup_context.surface,setup_context.device,setup_context.queue);
+		let graphics_thread=crate::graphics_worker::new(scope,self.graphics,setup_context.config,setup_context.surface,setup_context.device,setup_context.queue);
 		WindowContext{
 			manual_mouse_lock:false,
 			mouse:crate::physics::MouseState::default(),
@@ -204,13 +204,13 @@ impl WindowContextSetup{
 			screen_size,
 			user_settings:self.user_settings,
 			window:self.window,
-			physics_thread:crate::physics_worker::new(self.physics,graphics_thread),
+			physics_thread:crate::physics_worker::new(scope,self.physics,graphics_thread),
 		}
 	}
 
-	pub fn into_worker<'a>(self,setup_context:crate::setup::SetupContext)->crate::compat_worker::QNWorker<'a,TimedInstruction<WindowInstruction>>{
-		let mut window_context=self.into_context(setup_context);
-		crate::compat_worker::QNWorker::new(move |ins:TimedInstruction<WindowInstruction>|{
+	pub fn into_worker<'a>(self,scope:&'a std::thread::Scope<'a,'_>,setup_context:crate::setup::SetupContext)->crate::worker::QNWorker<'a,TimedInstruction<WindowInstruction>>{
+		let mut window_context=self.into_context(scope,setup_context);
+		crate::worker::QNWorker::new(scope,move |ins:TimedInstruction<WindowInstruction>|{
 			match ins.instruction{
 				WindowInstruction::RequestRedraw=>{
 					window_context.window.request_redraw();

@@ -23,11 +23,11 @@ pub enum Instruction{
 	//Graphics(crate::graphics_worker::Instruction),
 }
 
-	pub fn new(mut physics:crate::physics::PhysicsState,mut graphics_worker:crate::compat_worker::INWorker<crate::graphics_worker::Instruction>)->crate::compat_worker::QNWorker<TimedInstruction<Instruction>>{
+	pub fn new<'a>(scope:&'a std::thread::Scope<'a,'_>,mut physics:crate::physics::PhysicsState,graphics_worker:crate::worker::INWorker<'a,crate::graphics_worker::Instruction>)->crate::worker::QNWorker<'a,TimedInstruction<Instruction>>{
 		let mut mouse_blocking=true;
 		let mut last_mouse_time=physics.next_mouse.time;
 		let mut timeline=std::collections::VecDeque::new();
-		crate::compat_worker::QNWorker::new(move |ins:TimedInstruction<Instruction>|{
+		crate::worker::QNWorker::new(scope,move |ins:TimedInstruction<Instruction>|{
 			if if let Some(phys_input)=match &ins.instruction{
 				Instruction::Input(input_instruction)=>match input_instruction{
 					&InputInstruction::MoveMouse(m)=>{
@@ -113,10 +113,11 @@ pub enum Instruction{
 			}
 			match ins.instruction{
 				Instruction::Render=>{
-					graphics_worker.send(crate::graphics_worker::Instruction::Render(physics.output(),ins.time,physics.next_mouse.pos)).unwrap();
+					let _=graphics_worker.send(crate::graphics_worker::Instruction::Render(physics.output(),ins.time,physics.next_mouse.pos));
 				},
 				Instruction::Resize(size,user_settings)=>{
-					graphics_worker.send(crate::graphics_worker::Instruction::Resize(size,user_settings)).unwrap();
+					//block!
+					graphics_worker.blocking_send(crate::graphics_worker::Instruction::Resize(size,user_settings)).unwrap();
 				},
 				Instruction::GenerateModels(indexed_model_instances)=>{
 					physics.generate_models(&indexed_model_instances);

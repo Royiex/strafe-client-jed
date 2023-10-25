@@ -16,14 +16,15 @@ WorkerDescription{
 //up to three frames in flight, dropping new frame requests when all three are busy, and dropping output frames when one renders out of order
 
 pub fn new<'a>(
+		scope:&'a std::thread::Scope<'a,'_>,
 		mut graphics:crate::graphics::GraphicsState,
 		mut config:wgpu::SurfaceConfiguration,
 		surface:wgpu::Surface,
 		device:wgpu::Device,
 		queue:wgpu::Queue,
-	)->crate::compat_worker::INWorker<'a,Instruction>{
+	)->crate::worker::INWorker<'a,Instruction>{
 	let mut resize=None;
-	crate::compat_worker::INWorker::new(move |ins:Instruction|{
+	crate::worker::INWorker::new(scope,move |ins:Instruction|{
 		match ins{
 			Instruction::GenerateModels(indexed_model_instances)=>{
 				graphics.generate_models(&device,&queue,indexed_model_instances);

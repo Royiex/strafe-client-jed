@@ -232,20 +232,22 @@ impl SetupContextSetup{
 		let (window,event_loop,setup_context)=self.into_split();
 
 		//dedicated thread to ping request redraw back and resize the window doesn't seem logical
-
-		let window=crate::window::WindowContextSetup::new(&setup_context,window);
-		//the thread that spawns the physics thread
-		let window_thread=window.into_worker(setup_context);
-
-		println!("Entering event loop...");
+		//but here I am doing it
 		let root_time=std::time::Instant::now();
-		run_event_loop(event_loop,window_thread,root_time).unwrap();
+		std::thread::scope(|s|{
+			let window=crate::window::WindowContextSetup::new(&setup_context,window);
+			//the thread that spawns the physics thread
+			let window_thread=window.into_worker(s,setup_context);
+
+			println!("Entering event loop...");
+			run_event_loop(event_loop,window_thread,root_time).unwrap();
+		});
 	}
 }
 
 fn run_event_loop(
 	event_loop:winit::event_loop::EventLoop<()>,
-	mut window_thread:crate::compat_worker::QNWorker<TimedInstruction<WindowInstruction>>,
+	window_thread:crate::worker::QNWorker<TimedInstruction<WindowInstruction>>,
 	root_time:std::time::Instant
 	)->Result<(),winit::error::EventLoopError>{
 		event_loop.run(move |event,elwt|{
