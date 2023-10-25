@@ -1,6 +1,6 @@
 use std::thread;
 use std::sync::{mpsc,Arc};
-use parking_lot::{Mutex,Condvar};
+use parking_lot::Mutex;
 
 //WorkerPool
 struct Pool(u32);

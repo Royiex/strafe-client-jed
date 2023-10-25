@@ -32,7 +32,7 @@ impl WindowContext<'_>{
 					self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::GenerateModels(indexed_model_instances)}).unwrap();
 				}
 			},
-			winit::event::WindowEvent::Focused(state)=>{
+			winit::event::WindowEvent::Focused(_state)=>{
 				//pause unpause
 				//recalculate pressed keys on focus
 			},

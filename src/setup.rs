@@ -62,7 +62,8 @@ impl SetupContextPartial2{
 	fn pick_adapter(self)->SetupContextPartial3{
 		let adapter;
 
-		let optional_features=optional_features();
+		//TODO: prefer adapter that implements optional features
+		//let optional_features=optional_features();
 		let required_features=required_features();
 
 		//no helper function smh gotta write it myself

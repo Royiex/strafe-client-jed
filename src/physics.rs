@@ -1108,7 +1108,7 @@ impl PhysicsState {
 			},
 		}
 		//generate instruction
-		if let Some(face) = exit_face{
+		if let Some(_face) = exit_face{
 			return Some(TimedInstruction {
 				time: best_time,
 				instruction: PhysicsInstruction::CollisionEnd(collision_data.clone())
@@ -1365,7 +1365,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 								match booster{
 									&crate::model::GameMechanicBooster::Affine(transform)=>v=transform.transform_point3(v),
 									&crate::model::GameMechanicBooster::Velocity(velocity)=>v+=velocity,
-									&crate::model::GameMechanicBooster::Energy{direction,energy}=>todo!(),
+									&crate::model::GameMechanicBooster::Energy{direction: _,energy: _}=>todo!(),
 								}
 								self.touching.constrain_velocity(&self.models,&mut v);
 							},
@@ -1376,10 +1376,10 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 								match trajectory{
 									crate::model::GameMechanicSetTrajectory::AirTime(_) => todo!(),
 									crate::model::GameMechanicSetTrajectory::Height(_) => todo!(),
-									crate::model::GameMechanicSetTrajectory::TargetPointTime { target_point, time } => todo!(),
-									crate::model::GameMechanicSetTrajectory::TrajectoryTargetPoint { target_point, speed, trajectory_choice } => todo!(),
+									crate::model::GameMechanicSetTrajectory::TargetPointTime { target_point: _, time: _ } => todo!(),
+									crate::model::GameMechanicSetTrajectory::TrajectoryTargetPoint { target_point: _, speed: _, trajectory_choice: _ } => todo!(),
 									&crate::model::GameMechanicSetTrajectory::Velocity(velocity)=>v=velocity,
-									crate::model::GameMechanicSetTrajectory::DotVelocity { direction, dot } => todo!(),
+									crate::model::GameMechanicSetTrajectory::DotVelocity { direction: _, dot: _ } => todo!(),
 								}
 								self.touching.constrain_velocity(&self.models,&mut v);
 							},
@@ -1393,7 +1393,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 							self.body.acceleration=a;
 						}
 					},
-					PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
+					PhysicsCollisionAttributes::Intersect{intersecting: _,general}=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
 						self.touching.insert_intersect(c.model,c);
 						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model);
@@ -1403,7 +1403,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			PhysicsInstruction::CollisionEnd(c) => {
 				let model=c.model(&self.models).unwrap();
 				match &model.attributes{
-					PhysicsCollisionAttributes::Contact{contacting,general}=>{
+					PhysicsCollisionAttributes::Contact{contacting: _,general: _}=>{
 						self.touching.remove_contact(c.model);//remove contact before calling contact_constrain_acceleration
 						let mut a=self.style.gravity;
 						if let Some(rocket_force)=self.style.rocket_force{
@@ -1423,7 +1423,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 							},
 						}
 					},
-					PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
+					PhysicsCollisionAttributes::Intersect{intersecting: _,general: _}=>{
 						self.touching.remove_intersect(c.model);
 					},
 				}

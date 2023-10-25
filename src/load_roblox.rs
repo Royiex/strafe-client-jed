@@ -23,14 +23,6 @@ fn recursive_collect_superclass(objects: &mut std::vec::Vec<rbx_dom_weak::types:
 		}
 	}
 }
-fn get_texture_refs(dom:&rbx_dom_weak::WeakDom) -> Vec<rbx_dom_weak::types::Ref>{
-	let mut objects = std::vec::Vec::new();
-	recursive_collect_superclass(&mut objects, dom, dom.root(),"Decal");
-	//get ids
-	//clear vec
-	//next class
-	objects
-}
 fn planar64_affine3_from_roblox(cf:&rbx_dom_weak::types::CFrame,size:&rbx_dom_weak::types::Vector3)->Planar64Affine3{
 	Planar64Affine3::new(
 		Planar64Mat3::from_cols(
