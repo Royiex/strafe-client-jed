@@ -7,14 +7,14 @@ pub struct CompatNWorker<Task>{
 }
 
 impl<Task> CompatNWorker<Task>{
-	pub fn new(f:impl FnMut(Task))->Self{
+	pub fn new(f:impl FnMut(Task)+'static)->Self{
 		Self{
 			data:std::marker::PhantomData,
 			f:Box::new(f),
 		}
 	}
 
-	pub fn send(&self,task:Task)->Result<(),()>{
+	pub fn send(&mut self,task:Task)->Result<(),()>{
 		(self.f)(task);
 		Ok(())
 	}
