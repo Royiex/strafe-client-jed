@@ -1,21 +1,22 @@
 use crate::instruction::TimedInstruction;
 use crate::run::RunInstruction;
 
-fn optional_features() -> wgpu::Features {
-	wgpu::Features::empty()
+fn optional_features()->wgpu::Features{
+	wgpu::Features::TEXTURE_COMPRESSION_ASTC
+	|wgpu::Features::TEXTURE_COMPRESSION_ETC2
 }
-fn required_features() -> wgpu::Features {
-	wgpu::Features::empty()
+fn required_features()->wgpu::Features{
+	wgpu::Features::TEXTURE_COMPRESSION_BC
 }
-fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
-	wgpu::DownlevelCapabilities {
-		flags: wgpu::DownlevelFlags::empty(),
-		shader_model: wgpu::ShaderModel::Sm5,
+fn required_downlevel_capabilities()->wgpu::DownlevelCapabilities{
+	wgpu::DownlevelCapabilities{
+		flags:wgpu::DownlevelFlags::empty(),
+		shader_model:wgpu::ShaderModel::Sm5,
 		..wgpu::DownlevelCapabilities::default()
 	}
 }
-pub fn required_limits() -> wgpu::Limits {
-	wgpu::Limits::downlevel_webgl2_defaults() // These downlevel limits will allow the code to run on all possible hardware
+pub fn required_limits()->wgpu::Limits{
+	wgpu::Limits::default()
 }
 
 struct SetupContextPartial1{
