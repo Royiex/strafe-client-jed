@@ -232,10 +232,19 @@ impl SetupContextSetup{
 
 		let run=crate::run::RunContextSetup::new(&setup_context,window);
 		//the thread that spawns the physics thread
-		let mut run_thread=run.into_worker(setup_context);
+		let run_thread=run.into_worker(setup_context);
 
 		println!("Entering event loop...");
 		let root_time=std::time::Instant::now();
+		run_event_loop(event_loop,run_thread,root_time).unwrap();
+	}
+}
+
+fn run_event_loop(
+	event_loop:winit::event_loop::EventLoop<()>,
+	mut run_thread:crate::compat_worker::QNWorker<TimedInstruction<RunInstruction>>,
+	root_time:std::time::Instant
+	)->Result<(),winit::error::EventLoopError>{
 		event_loop.run(move |event,elwt|{
 			let time=crate::integer::Time::from_nanos(root_time.elapsed().as_nanos() as i64);
 			// *control_flow=if cfg!(feature="metal-auto-capture"){
@@ -287,6 +296,5 @@ impl SetupContextSetup{
 				},
 				_=>{}
 			}
-		}).unwrap();
-	}
+		})
 }
