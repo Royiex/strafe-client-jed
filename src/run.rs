@@ -53,7 +53,7 @@ impl RunContextSetup {
 			physics,
 		}
 	}
-	fn window_event(&mut self, time:crate::integer::Time, event: winit::event::WindowEvent) {
+	fn window_event(&self,time:crate::integer::Time,event: winit::event::WindowEvent) {
 		match event {
 			winit::event::WindowEvent::DroppedFile(path)=>{
 				let sender=self.sender.clone();//mpsc
@@ -67,32 +67,32 @@ impl RunContextSetup {
 				//recalculate pressed keys on focus
 			},
 			winit::event::WindowEvent::KeyboardInput{
-				input:winit::event::KeyboardInput{state,virtual_keycode,..},
+				event:winit::event::KeyEvent{state,logical_key,repeat:false,..},
 				..
 			}=>{
 				let s=match state{
 					winit::event::ElementState::Pressed=>true,
 					winit::event::ElementState::Released=>false,
 				};
-				match virtual_keycode{
-					Some(winit::event::VirtualKeyCode::Tab)=>{
+				match logical_key{
+					winit::keyboard::Key::Named(winit::keyboard::NamedKey::Tab)=>{
 						if s{
 							self.manual_mouse_lock=false;
-							match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.graphics.camera.screen_size.x as f32/2.0, self.graphics.camera.screen_size.y as f32/2.0)){
+							match self.window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.screen_size.x as f32/2.0, self.screen_size.y as f32/2.0)){
 								Ok(())=>(),
 								Err(e)=>println!("Could not set cursor position: {:?}",e),
 							}
-							match window.set_cursor_grab(winit::window::CursorGrabMode::None){
+							match self.window.set_cursor_grab(winit::window::CursorGrabMode::None){
 								Ok(())=>(),
 								Err(e)=>println!("Could not release cursor: {:?}",e),
 							}
 						}else{
 							//if cursor is outside window don't lock but apparently there's no get pos function
 							//let pos=window.get_cursor_pos();
-							match window.set_cursor_grab(winit::window::CursorGrabMode::Locked){
+							match self.window.set_cursor_grab(winit::window::CursorGrabMode::Locked){
 								Ok(())=>(),
 								Err(_)=>{
-									match window.set_cursor_grab(winit::window::CursorGrabMode::Confined){
+									match self.window.set_cursor_grab(winit::window::CursorGrabMode::Confined){
 										Ok(())=>(),
 										Err(e)=>{
 											self.manual_mouse_lock=true;
@@ -102,39 +102,42 @@ impl RunContextSetup {
 								}
 							}
 						}
-						window.set_cursor_visible(s);
+						self.window.set_cursor_visible(s);
 					},
-					Some(winit::event::VirtualKeyCode::F11)=>{
+					winit::keyboard::Key::Named(winit::keyboard::NamedKey::F11)=>{
 						if s{
-							if window.fullscreen().is_some(){
-								window.set_fullscreen(None);
+							if self.window.fullscreen().is_some(){
+								self.window.set_fullscreen(None);
 							}else{
-								window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
+								self.window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
 							}
 						}
 					},
-					Some(winit::event::VirtualKeyCode::Escape)=>{
+					winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape)=>{
 						if s{
 							self.manual_mouse_lock=false;
-							match window.set_cursor_grab(winit::window::CursorGrabMode::None){
+							match self.window.set_cursor_grab(winit::window::CursorGrabMode::None){
 								Ok(())=>(),
 								Err(e)=>println!("Could not release cursor: {:?}",e),
 							}
-							window.set_cursor_visible(true);
+							self.window.set_cursor_visible(true);
 						}
 					},
-					Some(keycode)=>{
-						if let Some(input_instruction)=match keycode {
-							winit::event::VirtualKeyCode::W => Some(InputInstruction::MoveForward(s)),
-							winit::event::VirtualKeyCode::A => Some(InputInstruction::MoveLeft(s)),
-							winit::event::VirtualKeyCode::S => Some(InputInstruction::MoveBack(s)),
-							winit::event::VirtualKeyCode::D => Some(InputInstruction::MoveRight(s)),
-							winit::event::VirtualKeyCode::E => Some(InputInstruction::MoveUp(s)),
-							winit::event::VirtualKeyCode::Q => Some(InputInstruction::MoveDown(s)),
-							winit::event::VirtualKeyCode::Space => Some(InputInstruction::Jump(s)),
-							winit::event::VirtualKeyCode::Z => Some(InputInstruction::Zoom(s)),
-							winit::event::VirtualKeyCode::R => if s{Some(InputInstruction::Reset)}else{None},
-							_ => None,
+					keycode=>{
+						if let Some(input_instruction)=match keycode{
+							winit::keyboard::Key::Named(winit::keyboard::NamedKey::Space)=>Some(InputInstruction::Jump(s)),
+							winit::keyboard::Key::Character(key)=>match key.as_str(){
+								"w"=>Some(InputInstruction::MoveForward(s)),
+								"a"=>Some(InputInstruction::MoveLeft(s)),
+								"s"=>Some(InputInstruction::MoveBack(s)),
+								"d"=>Some(InputInstruction::MoveRight(s)),
+								"e"=>Some(InputInstruction::MoveUp(s)),
+								"q"=>Some(InputInstruction::MoveDown(s)),
+								"z"=>Some(InputInstruction::Zoom(s)),
+								"r"=>if s{Some(InputInstruction::Reset)}else{None},
+								_=>None,
+							},
+							_=>None,
 						}{
 							self.physics_thread.send(TimedInstruction{
 								time,
@@ -149,13 +152,13 @@ impl RunContextSetup {
 		}
 	}
 
-	fn device_event(&mut self, time:crate::integer::Time, event: winit::event::DeviceEvent) {
+	fn device_event(&self,time:crate::integer::Time,event: winit::event::DeviceEvent) {
 		match event {
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine
 			} => {
 				if self.manual_mouse_lock{
-					match window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.graphics.camera.screen_size.x as f32/2.0, self.graphics.camera.screen_size.y as f32/2.0)){
+					match self.window.set_cursor_position(winit::dpi::PhysicalPosition::new(self.screen_size.x as f32/2.0, self.screen_size.y as f32/2.0)){
 						Ok(())=>(),
 						Err(e)=>println!("Could not set cursor position: {:?}",e),
 					}
@@ -185,11 +188,8 @@ impl RunContextSetup {
 		}
 	}
 
-	pub fn into_worker(self,mut setup_context:crate::setup_context::SetupContext,)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
-		//create child context
-		let physics_context=crate::physics_context::Context::new(indexed_models,&setup_context);//this needs all the context for graphics_context too
-		let physics_thread=physics_context.into_worker();
-		//
+	pub fn into_worker(self)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
+		let run_context=self.into_context();
 		crate::worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
 			match ins.instruction{
 				RunInstruction::RequestRedraw=>{
