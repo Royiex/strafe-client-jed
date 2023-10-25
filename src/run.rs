@@ -12,55 +12,26 @@ pub enum RunInstruction{
 
 //holds thread handles to dispatch to
 struct RunContext{
-	physics_thread:crate::worker::QNWorker<TimedInstruction<InputInstruction>>,
-}
-
-pub struct RunContextSetup{
 	manual_mouse_lock:bool,
 	mouse:crate::physics::MouseState,//std::sync::Arc<std::sync::Mutex<>>
+	screen_size:glam::UVec2,
 	user_settings:crate::settings::UserSettings,
 	window:winit::window::Window,
-	physics:crate::physics::PhysicsState,
-	graphics:crate::graphics::GraphicsState,
+	//physics_thread:crate::worker::QNWorker<TimedInstruction<InputInstruction>>,
 }
 
-impl RunContextSetup {
-	pub fn new(context:&crate::setup::SetupContext,window:winit::window::Window)->Self{
-		//wee
-		let user_settings=crate::settings::read_user_settings();
-
-		let args:Vec<String>=std::env::args().collect();
-		let indexed_model_instances=if args.len()==2{
-			crate::load_file(std::path::PathBuf::from(&args[1]))
-		}else{
-			None
-		}.unwrap_or(crate::default_models());
-
-		let mut graphics=crate::graphics::GraphicsState::new(&context.device,&context.queue);
-		graphics.load_user_settings(&user_settings);
-		graphics.generate_models(&context.device,&context.queue,indexed_model_instances);
-
-		let mut physics=crate::physics::PhysicsState::default();
-		physics.load_user_settings(&user_settings);
-		physics.generate_models(&indexed_model_instances);
-
-		Self{
-			manual_mouse_lock:false,
-			mouse:crate::physics::MouseState::default(),
-			user_settings,
-			window,
-			graphics,
-			physics,
-		}
-	}
-	fn window_event(&self,time:crate::integer::Time,event: winit::event::WindowEvent) {
+impl RunContext{
+	fn window_event(&mut self,time:crate::integer::Time,event: winit::event::WindowEvent) {
 		match event {
 			winit::event::WindowEvent::DroppedFile(path)=>{
-				let sender=self.sender.clone();//mpsc
-				std::thread::spawn(move ||{
-					let indexed_model_instances=crate::load_file(path);
-					sender.send(Instruction::Die(indexed_model_instances));
-				});
+				// let sender=self.sender.clone();//mpsc
+				// std::thread::spawn(move ||{
+				// 	let indexed_model_instances=crate::load_file(path);
+				// 	sender.send(Instruction::Die(indexed_model_instances));
+				// });
+				let indexed_model_instances=crate::load_file(path);
+				//self.physics=
+				println!("unimplemented");
 			},
 			winit::event::WindowEvent::Focused(state)=>{
 				//pause unpause
@@ -187,44 +158,75 @@ impl RunContextSetup {
 			_=>(),
 		}
 	}
+}
 
-	pub fn into_worker(self)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
+pub struct RunContextSetup{
+	user_settings:crate::settings::UserSettings,
+	window:winit::window::Window,
+	physics:crate::physics::PhysicsState,
+	graphics:crate::graphics::GraphicsState,
+}
+
+impl RunContextSetup{
+	pub fn new(context:&crate::setup::SetupContext,window:winit::window::Window)->Self{
+		//wee
+		let user_settings=crate::settings::read_user_settings();
+
+		let args:Vec<String>=std::env::args().collect();
+		let indexed_model_instances=if args.len()==2{
+			crate::load_file(std::path::PathBuf::from(&args[1]))
+		}else{
+			None
+		}.unwrap_or(crate::default_models());
+
+		let mut graphics=crate::graphics::GraphicsState::new(&context.device,&context.queue);
+		graphics.load_user_settings(&user_settings);
+		graphics.generate_models(&context.device,&context.queue,indexed_model_instances);
+
+		let mut physics=crate::physics::PhysicsState::default();
+		physics.load_user_settings(&user_settings);
+		physics.generate_models(&indexed_model_instances);
+
+		Self{
+			user_settings,
+			window,
+			graphics,
+			physics,
+		}
+	}
+
+	fn into_context(self)->RunContext{
+		RunContext{
+			manual_mouse_lock:false,
+			mouse:crate::physics::MouseState::default(),
+			user_settings:self.user_settings,
+			window:self.window,
+			physics:self.physics,
+			graphics:self.graphics,
+		}
+	}
+
+	pub fn into_worker(self,setup_context:crate::setup::SetupContext)->crate::worker::QNWorker<TimedInstruction<RunInstruction>>{
 		let run_context=self.into_context();
 		crate::worker::QNWorker::new(move |ins:TimedInstruction<RunInstruction>|{
 			match ins.instruction{
 				RunInstruction::RequestRedraw=>{
-					self.window.request_redraw();
+					run_context.window.request_redraw();
 				}
 				RunInstruction::WindowEvent(window_event)=>{
-					self.window_event(ins.time,window_event);
+					run_context.window_event(ins.time,window_event);
 				},
 				RunInstruction::DeviceEvent(device_event)=>{
-					self.device_event(ins.time,device_event);
+					run_context.device_event(ins.time,device_event);
 				},
 				RunInstruction::Resize(size)=>{
 					setup_context.config.width=size.width.max(1);
 					setup_context.config.height=size.height.max(1);
 					setup_context.surface.configure(&setup_context.device,&setup_context.config);
-					physics_thread.send(TimedInstruction{time:ins.time,instruction:PhysicsInstruction::Resize(size)});
+					run_context.physics_thread.send(TimedInstruction{time:ins.time,instruction:PhysicsInstruction::Resize(size)});
 				}
 				RunInstruction::Render=>{
-					let frame=match setup_context.surface.get_current_texture(){
-						Ok(frame)=>frame,
-						Err(_)=>{
-							setup_context.surface.configure(&setup_context.device,&setup_context.config);
-							setup_context.surface
-								.get_current_texture()
-								.expect("Failed to acquire next surface texture!")
-						}
-					};
-					let view=frame.texture.create_view(&wgpu::TextureViewDescriptor{
-						format:Some(setup_context.config.view_formats[0]),
-						..wgpu::TextureViewDescriptor::default()
-					});
-
-					physics_thread.send(TimedInstruction{time:ins.time,instruction:PhysicsInstruction::Render(view)});
-
-					frame.present();
+					//
 				}
 			}
 		})

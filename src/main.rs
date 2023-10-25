@@ -13,8 +13,8 @@ mod primitives;
 mod instruction;
 mod load_roblox;
 mod model_graphics;
-mod physics_context;
-mod graphics_context;
+mod physics_worker;
+mod graphics_worker;
 
 fn load_file(path: std::path::PathBuf)->Option<model::IndexedModelInstances>{
 	println!("Loading file: {:?}", &path);

@@ -8,12 +8,6 @@ pub struct ModelUpdate{
 	color:Option<glam::Vec4>,
 }
 
-#[derive(Clone)]
-pub enum GraphicsInstruction{
-	UpdateModel(ModelUpdate),
-	Render,
-}
-
 struct Entity {
 	index_count: u32,
 	index_buf: wgpu::Buffer,
@@ -878,31 +872,27 @@ impl GraphicsState{
 		device:&wgpu::Device,
 		queue:&wgpu::Queue,
 		config:&wgpu::SurfaceConfiguration,
+		user_settings:&crate::settings::UserSettings,
 	) {
 		self.depth_view = Self::create_depth_texture(config,device);
 		self.camera.screen_size=glam::uvec2(config.width, config.height);
-		self.load_user_settings(&self.user_settings);
+		self.load_user_settings(user_settings);
 	}
 	pub fn render(
 		&mut self,
-		view: &wgpu::TextureView,
-		device: &wgpu::Device,
-		queue: &wgpu::Queue,
+		view:&wgpu::TextureView,
+		device:&wgpu::Device,
+		queue:&wgpu::Queue,
+		predicted_time:crate::integer::Time,
+		physics_output:crate::physics::PhysicsOutputState,
 	) {
-		//ideally this would be scheduled to execute and finish right before the render.
-		let time=crate::integer::Time::from_nanos(self.start_time.elapsed().as_nanos() as i64);
-		self.physics_thread.send(crate::instruction::TimedInstruction{
-			time,
-			instruction:crate::render_thread::InputInstruction::Idle,
-		}).unwrap();
-		//update time lol
-		self.mouse.time=time;
+		//TODO: use scheduled frame times to create beautiful smoothing simulation physics extrapolation assuming no input
 
 		let mut encoder =
 			device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
 		// update rotation
-		let camera_uniforms = self.camera.to_uniform_data(self.physics_thread.grab_clone().adjust_mouse(&self.mouse));
+		let camera_uniforms = self.camera.to_uniform_data(physics_output.extrapolate(self.global_mouse.lock().clone(),predicted_time));
 		self.staging_belt
 			.write_buffer(
 				&mut encoder,

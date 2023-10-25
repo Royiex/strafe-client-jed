@@ -20,29 +20,9 @@ pub enum InputInstruction {
 		//to be 1 instruction ahead to generate the next state for interpolation.
 }
 
-pub struct Context{
-	//Ideally the graphics thread worker description is:
-	/*
-	WorkerDescription{
-		input:Immediate,
-		output:Realtime(PoolOrdering::Ordered(3)),
-	}
-	*/
-	//up to three frames in flight, dropping new frame requests when all three are busy, and dropping output frames when one renders out of order
-	graphics_thread:crate::worker::INWorker<crate::graphics::GraphicsInstruction>,
-}
-impl Context{
-	pub fn new(user_settings:&crate::settings::UserSettings,indexed_model_instances:&crate::model::IndexedModelInstances){
-		let mut physics=crate::physics::PhysicsState::default();
-		physics.spawn(indexed_model_instances.spawn_point);
-		physics.load_user_settings(user_settings);
-		physics.generate_models(&indexed_model_instances);
-	}
-	pub fn into_worker(mut self)->crate::worker::QNWorker<TimedInstruction<InputInstruction>>{
-		let graphics_context=crate::graphics_context::Context::new();
-		let graphics_thread=graphics_context.into_worker();
+	pub fn new(physics:crate::physics::PhysicsState,graphics_worker:crate::worker::INWorker<crate::graphics::GraphicsInstruction>)->crate::worker::QNWorker<TimedInstruction<InputInstruction>>{
 		let mut mouse_blocking=true;
-		let mut last_mouse_time=self.physics.next_mouse.time;
+		let mut last_mouse_time=physics.next_mouse.time;
 		let mut timeline=std::collections::VecDeque::new();
 		crate::worker::QNWorker::new(move |ins:TimedInstruction<InputInstruction>|{
 			let mut render=false;
@@ -60,7 +40,7 @@ impl Context{
 						timeline.push_front(TimedInstruction{
 							time:last_mouse_time,
 							instruction:PhysicsInputInstruction::ReplaceMouse(
-								MouseState{time:last_mouse_time,pos:self.physics.next_mouse.pos},
+								MouseState{time:last_mouse_time,pos:physics.next_mouse.pos},
 								MouseState{time:ins.time,pos:m}
 							),
 						});
@@ -92,11 +72,11 @@ impl Context{
 					//shitty mice are 125Hz which is 8ms so this should cover that.
 					//setting this to 100us still doesn't print even though it's 10x lower than the polling rate,
 					//so mouse events are probably not handled separately from drawing and fire right before it :(
-					if Time::from_millis(10)<ins.time-self.physics.next_mouse.time{
+					if Time::from_millis(10)<ins.time-physics.next_mouse.time{
 						//push an event to extrapolate no movement from
 						timeline.push_front(TimedInstruction{
 							time:last_mouse_time,
-							instruction:PhysicsInputInstruction::SetNextMouse(MouseState{time:ins.time,pos:self.physics.next_mouse.pos}),
+							instruction:PhysicsInputInstruction::SetNextMouse(MouseState{time:ins.time,pos:physics.next_mouse.pos}),
 						});
 						last_mouse_time=ins.time;
 						//stop blocking. the mouse is not moving so the physics does not need to live in the past and wait for interpolation targets.
@@ -117,16 +97,15 @@ impl Context{
 			}{
 				//empty queue
 				while let Some(instruction)=timeline.pop_front(){
-					self.physics.run(instruction.time);
-					self.physics.process_instruction(TimedInstruction{
+					physics.run(instruction.time);
+					physics.process_instruction(TimedInstruction{
 						time:instruction.time,
 						instruction:crate::physics::PhysicsInstruction::Input(instruction.instruction),
 					});
 				}
 			}
 			if render{
-				graphics_thread.send(TimedInstruction{time:ins.time,instruction:crate::graphics_context::GraphicsInstruction::Render});
+				graphics_worker.send(TimedInstruction{time:ins.time,instruction:crate::graphics_worker::GraphicsInstruction::Render});
 			}
 		})
 	}
-}
