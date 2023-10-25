@@ -105,7 +105,7 @@ pub enum InputInstruction {
 				}
 			}
 			if render{
-				graphics_worker.send(TimedInstruction{time:ins.time,instruction:crate::graphics_worker::GraphicsInstruction::Render});
+				graphics_worker.send(crate::graphics_worker::GraphicsInstruction::Render(physics.output(),ins.time));
 			}
 		})
 	}
