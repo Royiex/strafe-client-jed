@@ -239,6 +239,16 @@ impl SetupContextSetup{
 			//the thread that spawns the physics thread
 			let window_thread=window.into_worker(s,setup_context);
 
+			//schedule frames at 165fps
+			let event_loop_proxy=event_loop.create_proxy();
+
+			s.spawn(move ||{
+				loop{
+					std::thread::sleep(std::time::Duration::from_nanos(1_000_000_000/165));
+					event_loop_proxy.send_event(()).ok();
+				}
+			});
+
 			println!("Entering event loop...");
 			run_event_loop(event_loop,window_thread,root_time).unwrap();
 		});
@@ -258,7 +268,7 @@ fn run_event_loop(
 			// 	winit::event_loop::ControlFlow::Poll
 			// };
 			match event{
-				winit::event::Event::AboutToWait=>{
+				winit::event::Event::UserEvent(())=>{
 					window_thread.send(TimedInstruction{time,instruction:WindowInstruction::RequestRedraw}).unwrap();
 				}
 				winit::event::Event::WindowEvent {
