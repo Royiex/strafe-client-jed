@@ -20,11 +20,11 @@ pub enum InputInstruction {
 		//to be 1 instruction ahead to generate the next state for interpolation.
 }
 
-	pub fn new(physics:crate::physics::PhysicsState,graphics_worker:crate::worker::INWorker<crate::graphics::GraphicsInstruction>)->crate::worker::QNWorker<TimedInstruction<InputInstruction>>{
+	pub fn new(physics:crate::physics::PhysicsState,graphics_worker:crate::compat_worker::INWorker<crate::graphics_worker::GraphicsInstruction>)->crate::compat_worker::QNWorker<TimedInstruction<InputInstruction>>{
 		let mut mouse_blocking=true;
 		let mut last_mouse_time=physics.next_mouse.time;
 		let mut timeline=std::collections::VecDeque::new();
-		crate::worker::QNWorker::new(move |ins:TimedInstruction<InputInstruction>|{
+		crate::compat_worker::QNWorker::new(move |ins:TimedInstruction<InputInstruction>|{
 			let mut render=false;
 			if if let Some(phys_input)=match ins.instruction{
 				InputInstruction::MoveMouse(m)=>{
