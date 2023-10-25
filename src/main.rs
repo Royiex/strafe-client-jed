@@ -12,6 +12,7 @@ mod settings;
 mod primitives;
 mod instruction;
 mod load_roblox;
+mod compat_worker;
 mod model_graphics;
 mod physics_worker;
 mod graphics_worker;
