@@ -26,14 +26,11 @@ impl WindowContext<'_>{
 	fn window_event(&mut self,time:crate::integer::Time,event: winit::event::WindowEvent) {
 		match event {
 			winit::event::WindowEvent::DroppedFile(path)=>{
-				// let sender=self.sender.clone();//mpsc
-				// std::thread::spawn(move ||{
-				// 	let indexed_model_instances=crate::load_file(path);
-				// 	sender.send(Instruction::Die(indexed_model_instances));
-				// });
-				let indexed_model_instances=crate::load_file(path);
-				//self.physics=
-				println!("unimplemented");
+				//blocking because it's simpler...
+				if let Some(indexed_model_instances)=crate::load_file(path){
+					self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::ClearModels}).unwrap();
+					self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::GenerateModels(indexed_model_instances)}).unwrap();
+				}
 			},
 			winit::event::WindowEvent::Focused(state)=>{
 				//pause unpause

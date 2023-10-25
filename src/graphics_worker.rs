@@ -1,8 +1,9 @@
-#[derive(Clone)]
 pub enum Instruction{
 	Render(crate::physics::PhysicsOutputState,crate::integer::Time,glam::IVec2),
 	//UpdateModel(crate::graphics::ModelUpdate),
 	Resize(winit::dpi::PhysicalSize<u32>,crate::settings::UserSettings),
+	GenerateModels(crate::model::IndexedModelInstances),
+	ClearModels,
 }
 
 //Ideally the graphics thread worker description is:
@@ -23,6 +24,12 @@ pub fn new<'a>(
 	)->crate::compat_worker::INWorker<'a,Instruction>{
 	crate::compat_worker::INWorker::new(move |ins:Instruction|{
 		match ins{
+			Instruction::GenerateModels(indexed_model_instances)=>{
+				graphics.generate_models(&device,&queue,indexed_model_instances);
+			},
+			Instruction::ClearModels=>{
+				graphics.clear();
+			},
 			Instruction::Resize(size,user_settings)=>{
 				println!("Resizing to {:?}",size);
 				config.width=size.width.max(1);

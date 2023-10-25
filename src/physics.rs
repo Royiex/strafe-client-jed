@@ -734,6 +734,7 @@ impl PhysicsState {
 		self.models.clear();
 		self.modes.clear();
 		self.touching.clear();
+		self.bvh=crate::bvh::BvhNode::default();
 	}
 
 	pub fn output(&self)->PhysicsOutputState{

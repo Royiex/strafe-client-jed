@@ -18,6 +18,8 @@ pub enum Instruction{
 	Input(InputInstruction),
 	Render,
 	Resize(winit::dpi::PhysicalSize<u32>,crate::settings::UserSettings),
+	GenerateModels(crate::model::IndexedModelInstances),
+	ClearModels,
 	//Graphics(crate::graphics_worker::Instruction),
 }
 
@@ -61,6 +63,8 @@ pub enum Instruction{
 					&InputInstruction::Zoom(s)=>Some(PhysicsInputInstruction::SetZoom(s)),
 					InputInstruction::Reset=>Some(PhysicsInputInstruction::Reset),
 				},
+				Instruction::GenerateModels(_)=>Some(PhysicsInputInstruction::Idle),
+				Instruction::ClearModels=>Some(PhysicsInputInstruction::Idle),
 				Instruction::Resize(_,_)=>Some(PhysicsInputInstruction::Idle),
 				Instruction::Render=>Some(PhysicsInputInstruction::Idle),
 			}{
@@ -113,6 +117,15 @@ pub enum Instruction{
 				},
 				Instruction::Resize(size,user_settings)=>{
 					graphics_worker.send(crate::graphics_worker::Instruction::Resize(size,user_settings)).unwrap();
+				},
+				Instruction::GenerateModels(indexed_model_instances)=>{
+					physics.generate_models(&indexed_model_instances);
+					physics.spawn(indexed_model_instances.spawn_point);
+					graphics_worker.send(crate::graphics_worker::Instruction::GenerateModels(indexed_model_instances)).unwrap();
+				},
+				Instruction::ClearModels=>{
+					physics.clear();
+					graphics_worker.send(crate::graphics_worker::Instruction::ClearModels).unwrap();
 				},
 				_=>(),
 			}
