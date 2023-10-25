@@ -183,6 +183,7 @@ impl RunContextSetup{
 		let mut physics=crate::physics::PhysicsState::default();
 		physics.load_user_settings(&user_settings);
 		physics.generate_models(&indexed_model_instances);
+		physics.spawn(indexed_model_instances.spawn_point);
 
 		let mut graphics=crate::graphics::GraphicsState::new(&context.device,&context.queue,&context.config);
 		graphics.load_user_settings(&user_settings);
