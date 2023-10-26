@@ -177,8 +177,8 @@ impl<'a,Task:Send+'a> INWorker<'a,Task>{
 fn test_worker() {
 	println!("hiiiii");
 	// Create the worker thread
-	let worker=QRWorker::new(crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO),
-		|_|crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE)
+	let worker=QRWorker::new(crate::physics::Body::default(),
+		|_|crate::physics::Body::new(crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Time::ZERO)
 	);
 
 	// Send tasks to the worker

@@ -738,13 +738,13 @@ impl Default for TouchingState{
 	}
 }
 
-impl Body {
-	pub fn with_pva(position:Planar64Vec3,velocity:Planar64Vec3,acceleration:Planar64Vec3) -> Self {
+impl Body{
+	pub fn new(position:Planar64Vec3,velocity:Planar64Vec3,acceleration:Planar64Vec3,time:Time)->Self{
 		Self{
 			position,
 			velocity,
 			acceleration,
-			time:Time::ZERO,
+			time,
 		}
 	}
 	pub fn extrapolated_position(&self,time:Time)->Planar64Vec3{
@@ -771,7 +771,7 @@ impl Default for PhysicsState{
 	fn default()->Self{
  		Self{
 			spawn_point:Planar64Vec3::int(0,50,0),
-			body:Body::with_pva(Planar64Vec3::int(0,50,0),Planar64Vec3::int(0,0,0),Planar64Vec3::int(0,-100,0)),
+			body:Body::new(Planar64Vec3::int(0,50,0),Planar64Vec3::int(0,0,0),Planar64Vec3::int(0,-100,0),Time::ZERO),
 			time:Time::ZERO,
 			style:StyleModifiers::default(),
 			touching:TouchingState::default(),
