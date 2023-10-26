@@ -21,12 +21,9 @@ struct FaceRefs{
 	verts:Vec<VertId>,
 }
 struct EdgeRefs{
-	f0:FaceId,//left
-	f1:FaceId,//right
-	v0:VertId,//bottom
-	v1:VertId,//top
-	v0f:FaceId,//bottom capping face
-	v1f:FaceId,//top capping face
+	faces:[FaceId;2],//left, right
+	verts:[VertId;2],//bottom, top
+	vert_faces:[FaceId;2],//bottom, top
 }
 struct VertRefs{
 	faces:Vec<FaceId>,
@@ -39,23 +36,23 @@ pub struct PhysicsMesh{
 	vert_topology:Vec<VertRefs>,
 }
 impl PhysicsMesh{
-	pub fn face_edges(face_id:FaceId)->Vec<EdgeId>{
-		todo!()
+	pub fn face_edges(&self,face_id:FaceId)->&Vec<EdgeId>{
+		&self.face_topology[face_id.0].edges
 	}
-	pub fn edge_side_faces(edge_id:EdgeId)->[FaceId;2]{
-		todo!()
+	pub fn edge_side_faces(&self,edge_id:EdgeId)->&[FaceId;2]{
+		&self.edge_topology[edge_id.0].faces
 	}
-	pub fn edge_end_faces(edge_id:EdgeId)->[FaceId;2]{
-		todo!()
+	pub fn edge_end_faces(&self,edge_id:EdgeId)->&[FaceId;2]{
+		&self.edge_topology[edge_id.0].vert_faces
 	}
-	pub fn edge_verts(edge_id:EdgeId)->[VertId;2]{
-		todo!()
+	pub fn edge_verts(&self,edge_id:EdgeId)->&[VertId;2]{
+		&self.edge_topology[edge_id.0].verts
 	}
-	pub fn vert_edges(vert_id:VertId)->Vec<EdgeId>{
-		todo!()
+	pub fn vert_edges(&self,vert_id:VertId)->&Vec<EdgeId>{
+		&self.vert_topology[vert_id.0].edges
 	}
-	pub fn vert_faces(vert_id:VertId)->Vec<FaceId>{
-		todo!()
+	pub fn vert_faces(&self,vert_id:VertId)->&Vec<FaceId>{
+		&self.vert_topology[vert_id.0].faces
 	}
 }
 
