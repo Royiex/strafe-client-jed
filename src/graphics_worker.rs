@@ -1,6 +1,6 @@
 pub enum Instruction{
 	Render(crate::physics::PhysicsOutputState,crate::integer::Time,glam::IVec2),
-	//UpdateModel(crate::graphics::ModelUpdate),
+	//UpdateModel(crate::graphics::GraphicsModelUpdate),
 	Resize(winit::dpi::PhysicalSize<u32>,crate::settings::UserSettings),
 	GenerateModels(crate::model::IndexedModelInstances),
 	ClearModels,

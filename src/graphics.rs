@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 use wgpu::{util::DeviceExt,AstcBlock,AstcChannel};
-use crate::model_graphics::{GraphicsVertex,ModelGraphicsColor4,ModelGraphicsInstance,ModelGraphicsSingleTexture,IndexedModelGraphicsSingleTexture,IndexedGroupFixedTexture};
+use crate::model_graphics::{GraphicsVertex,GraphicsModelColor4,GraphicsModelInstance,GraphicsModelSingleTexture,IndexedGraphicsModelSingleTexture,IndexedGroupFixedTexture};
 
 #[derive(Clone)]
-pub struct ModelUpdate{
+pub struct GraphicsModelUpdate{
 	transform:Option<glam::Mat4>,
 	color:Option<glam::Vec4>,
 }
@@ -26,13 +26,13 @@ fn create_entities<T:bytemuck::Pod>(device:&wgpu::Device,entities:&Vec<Vec<T>>)-
 	}).collect()
 }
 
-struct ModelGraphics{
+struct GraphicsModel{
 	entities:Vec<Entity>,
 	model_buf:wgpu::Buffer,
 	vertex_buf:wgpu::Buffer,
 	bind_group:wgpu::BindGroup,
 	index_format:wgpu::IndexFormat,
-	instances:Vec<ModelGraphicsInstance>,
+	instances:Vec<GraphicsModelInstance>,
 }
 
 pub struct GraphicsSamplers{
@@ -110,7 +110,7 @@ pub struct GraphicsState{
 	camera:GraphicsCamera,
 	camera_buf: wgpu::Buffer,
 	temp_squid_texture_view: wgpu::TextureView,
-	models: Vec<ModelGraphics>,
+	models: Vec<GraphicsModel>,
 	depth_view: wgpu::TextureView,
 	staging_belt: wgpu::util::StagingBelt,
 }
@@ -214,15 +214,15 @@ impl GraphicsState{
 		let indexed_models_len=indexed_models.models.len();
 		let mut unique_texture_models=Vec::with_capacity(indexed_models_len);
 		for model in indexed_models.models.into_iter(){
-			//convert ModelInstance into ModelGraphicsInstance
-			let instances:Vec<ModelGraphicsInstance>=model.instances.into_iter().filter_map(|instance|{
+			//convert ModelInstance into GraphicsModelInstance
+			let instances:Vec<GraphicsModelInstance>=model.instances.into_iter().filter_map(|instance|{
 				if instance.color.w==0.0{
 					None
 				}else{
-					Some(ModelGraphicsInstance{
+					Some(GraphicsModelInstance{
 						transform: instance.transform.into(),
 						normal_transform: Into::<glam::Mat3>::into(instance.transform.matrix3).inverse().transpose(),
-						color:ModelGraphicsColor4::from(instance.color),
+						color:GraphicsModelColor4::from(instance.color),
 					})
 				}
 			}).collect();
@@ -241,7 +241,7 @@ impl GraphicsState{
 					//create new texture_index
 					let texture_index=unique_textures.len();
 					unique_textures.push(group.texture);
-					unique_texture_models.push(IndexedModelGraphicsSingleTexture{
+					unique_texture_models.push(IndexedGraphicsModelSingleTexture{
 						unique_pos:model.unique_pos.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
 						unique_tex:model.unique_tex.iter().map(|v|*v.as_ref()).collect(),
 						unique_normal:model.unique_normal.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
@@ -396,7 +396,7 @@ impl GraphicsState{
 						}
 					}
 					//push model into dedup
-					deduplicated_models.push(IndexedModelGraphicsSingleTexture{
+					deduplicated_models.push(IndexedGraphicsModelSingleTexture{
 						unique_pos,
 						unique_tex,
 						unique_normal,
@@ -406,7 +406,7 @@ impl GraphicsState{
 						groups:vec![IndexedGroupFixedTexture{
 							polys
 						}],
-						instances:vec![ModelGraphicsInstance{
+						instances:vec![GraphicsModelInstance{
 							transform:glam::Mat4::IDENTITY,
 							normal_transform:glam::Mat3::IDENTITY,
 							color
@@ -424,7 +424,7 @@ impl GraphicsState{
 
 		//de-index models
 		let deduplicated_models_len=deduplicated_models.len();
-		let models:Vec<ModelGraphicsSingleTexture>=deduplicated_models.into_iter().map(|model|{
+		let models:Vec<GraphicsModelSingleTexture>=deduplicated_models.into_iter().map(|model|{
 			let mut vertices = Vec::new();
 			let mut index_from_vertex = std::collections::HashMap::new();//::<IndexedVertex,usize>
 			//this mut be combined in a more complex way if the models use different render patterns per group
@@ -452,7 +452,7 @@ impl GraphicsState{
 					}
 				}
 			}
-			ModelGraphicsSingleTexture{
+			GraphicsModelSingleTexture{
 				instances:model.instances,
 				entities:if (u16::MAX as usize)<vertices.len(){
 					crate::model_graphics::Entities::U32(vec![indices.into_iter().map(|vertex_id|vertex_id as u32).collect()])
@@ -512,7 +512,7 @@ impl GraphicsState{
 					usage: wgpu::BufferUsages::VERTEX,
 				});
 				//all of these are being moved here
-				self.models.push(ModelGraphics{
+				self.models.push(GraphicsModel{
 					instances:instances_chunk.to_vec(),
 					vertex_buf,
 					index_format:match &model.entities{
@@ -982,7 +982,7 @@ impl GraphicsState{
 }
 const MODEL_BUFFER_SIZE:usize=4*4 + 12 + 4;//let size=std::mem::size_of::<ModelInstance>();
 const MODEL_BUFFER_SIZE_BYTES:usize=MODEL_BUFFER_SIZE*4;
-fn get_instances_buffer_data(instances:&[ModelGraphicsInstance]) -> Vec<f32> {
+fn get_instances_buffer_data(instances:&[GraphicsModelInstance]) -> Vec<f32> {
 	let mut raw = Vec::with_capacity(MODEL_BUFFER_SIZE*instances.len());
 	for (i,mi) in instances.iter().enumerate(){
 		let mut v = raw.split_off(MODEL_BUFFER_SIZE*i);

@@ -155,7 +155,7 @@ impl Default for Modes{
 }
 
 struct PhysicsModels{
-	models:Vec<ModelPhysics>,
+	models:Vec<PhysicsModel>,
 	model_id_from_wormhole_id:std::collections::HashMap::<u32,usize>,
 }
 impl PhysicsModels{
@@ -163,13 +163,13 @@ impl PhysicsModels{
 		self.models.clear();
 		self.model_id_from_wormhole_id.clear();
 	}
-	fn get(&self,i:usize)->Option<&ModelPhysics>{
+	fn get(&self,i:usize)->Option<&PhysicsModel>{
 		self.models.get(i)
 	}
-	fn get_wormhole_model(&self,wormhole_id:u32)->Option<&ModelPhysics>{
+	fn get_wormhole_model(&self,wormhole_id:u32)->Option<&PhysicsModel>{
 		self.models.get(*self.model_id_from_wormhole_id.get(&wormhole_id)?)
 	}
-	fn push(&mut self,model:ModelPhysics)->usize{
+	fn push(&mut self,model:PhysicsModel)->usize{
 		let model_id=self.models.len();
 		self.models.push(model);
 		model_id
@@ -602,7 +602,7 @@ enum PhysicsCollisionAttributes{
 	},
 }
 
-pub struct ModelPhysics {
+pub struct PhysicsModel {
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
 	mesh: TreyMesh,
@@ -610,7 +610,7 @@ pub struct ModelPhysics {
 	attributes:PhysicsCollisionAttributes,
 }
 
-impl ModelPhysics {
+impl PhysicsModel {
 	fn from_model_transform_attributes(model:&crate::model::IndexedModel,transform:&crate::integer::Planar64Affine3,attributes:PhysicsCollisionAttributes)->Self{
 		let mut aabb=TreyMesh::default();
 		for indexed_vertex in &model.unique_vertices {
@@ -624,8 +624,8 @@ impl ModelPhysics {
 	}
 	pub fn from_model(model:&crate::model::IndexedModel,instance:&crate::model::ModelInstance) -> Option<Self> {
 		match &instance.attributes{
-			crate::model::CollisionAttributes::Contact{contacting,general}=>Some(ModelPhysics::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Contact{contacting:contacting.clone(),general:general.clone()})),
-			crate::model::CollisionAttributes::Intersect{intersecting,general}=>Some(ModelPhysics::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Intersect{intersecting:intersecting.clone(),general:general.clone()})),
+			crate::model::CollisionAttributes::Contact{contacting,general}=>Some(PhysicsModel::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Contact{contacting:contacting.clone(),general:general.clone()})),
+			crate::model::CollisionAttributes::Intersect{intersecting,general}=>Some(PhysicsModel::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Intersect{intersecting:intersecting.clone(),general:general.clone()})),
 			crate::model::CollisionAttributes::Decoration=>None,
 		}
 	}
@@ -652,10 +652,10 @@ pub struct RelativeCollision {
 }
 
 impl RelativeCollision {
-	fn model<'a>(&self,models:&'a PhysicsModels)->Option<&'a ModelPhysics>{
+	fn model<'a>(&self,models:&'a PhysicsModels)->Option<&'a PhysicsModel>{
 		models.get(self.model)
 	}
-	// pub fn mesh(&self,models:&Vec<ModelPhysics>) -> TreyMesh {
+	// pub fn mesh(&self,models:&Vec<PhysicsModel>) -> TreyMesh {
 	// 	return self.model(models).unwrap().face_mesh(self.face).clone()
 	// }
 	fn normal(&self,models:&PhysicsModels) -> Planar64Vec3 {
@@ -792,7 +792,7 @@ impl PhysicsState {
 		for model in &indexed_models.models{
 			//make aabb and run vertices to get realistic bounds
 			for model_instance in &model.instances{
-				if let Some(model_physics)=ModelPhysics::from_model(model,model_instance){
+				if let Some(model_physics)=PhysicsModel::from_model(model,model_instance){
 					let model_id=self.models.push(model_physics);
 					for attr in &model_instance.temp_indexing{
 						match attr{
@@ -1263,7 +1263,7 @@ fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModi
 	Some(teleport(body,touching,style,point))
 }
 
-fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&PhysicsModels,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body,model:&ModelPhysics)->Option<MoveState>{
+fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&PhysicsModels,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body,model:&PhysicsModel)->Option<MoveState>{
 	match teleport_behaviour{
 		Some(crate::model::TeleportBehaviour::StageElement(stage_element))=>{
 			if stage_element.force||game.stage_id<stage_element.stage_id{
