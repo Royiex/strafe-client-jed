@@ -767,6 +767,33 @@ impl std::fmt::Display for Body{
 	}
 }
 
+struct VirtualBody<'a>{
+	body0:&'a Body,
+	body1:&'a Body,
+}
+impl VirtualBody<'_>{
+	fn relative<'a>(body0:&'a Body,body1:&'a Body)->VirtualBody<'a>{
+		//(p0,v0,a0,t0)
+		//(p1,v1,a1,t1)
+		VirtualBody{
+			body0,
+			body1,
+		}
+	}
+	fn extrapolated_position(&self,time:Time)->Planar64Vec3{
+		self.body1.extrapolated_position(time)-self.body0.extrapolated_position(time)
+	}
+	fn extrapolated_velocity(&self,time:Time)->Planar64Vec3{
+		self.body1.extrapolated_velocity(time)-self.body0.extrapolated_velocity(time)
+	}
+	fn acceleration(&self)->Planar64Vec3{
+		self.body1.acceleration-self.body0.acceleration
+	}
+	fn body(&self,time:Time)->Body{
+		Body::new(self.extrapolated_position(time),self.extrapolated_velocity(time),self.acceleration(),time)
+	}
+}
+
 impl Default for PhysicsState{
 	fn default()->Self{
  		Self{
