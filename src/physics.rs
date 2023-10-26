@@ -37,11 +37,11 @@ pub enum PhysicsInputInstruction {
 }
 
 #[derive(Clone,Hash,Default)]
-pub struct Body {
-	position: Planar64Vec3,//I64 where 2^32 = 1 u
-	velocity: Planar64Vec3,//I64 where 2^32 = 1 u/s
-	acceleration: Planar64Vec3,//I64 where 2^32 = 1 u/s/s
-	time:Time,//nanoseconds x xxxxD!
+pub struct Body{
+	pub position:Planar64Vec3,//I64 where 2^32 = 1 u
+	pub velocity:Planar64Vec3,//I64 where 2^32 = 1 u/s
+	pub acceleration:Planar64Vec3,//I64 where 2^32 = 1 u/s/s
+	pub time:Time,//nanoseconds x xxxxD!
 }
 
 //hey dumbass just use a delta
