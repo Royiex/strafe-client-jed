@@ -36,6 +36,10 @@ pub struct PhysicsMesh{
 	vert_topology:Vec<VertRefs>,
 }
 impl PhysicsMesh{
+	pub fn face_normal(&self,face_id:FaceId)->Planar64Vec3{
+		self.faces[face_id.0].normal
+	}
+	//ideally I never calculate the vertex position, but I have to for the graphical meshes...
 	pub fn face_edges(&self,face_id:FaceId)->&Vec<EdgeId>{
 		&self.face_topology[face_id.0].edges
 	}
