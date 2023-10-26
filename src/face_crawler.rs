@@ -1,16 +1,6 @@
 use crate::physics::Body;
+use crate::model_physics::{VirtualMesh,FEV,FaceId};
 use crate::integer::{Time,Planar64Vec3};
-
-struct VertexId(usize);
-struct EdgeId(usize);
-struct FaceId(usize);
-
-//Vertex <-> Edge <-> Face -> Collide
-enum FEV{
-	Face(FaceId),
-	Edge(EdgeId),
-	Vertex(VertexId),
-}
 
 struct State{
 	time:Time,
@@ -54,39 +44,17 @@ impl State{
 	}
 }
 
-//Note that a face on a minkowski mesh refers to a pair of fevs on the meshes it's summed from
-//(face,vertex)
-//(edge,edge)
-//(vertex,face)
-
-struct VirtualMesh<'a>{
-	mesh0:&'a PhysicsMesh,
-	mesh1:&'a PhysicsMesh,
-}
-
-impl VirtualMesh<'_>{
-	pub fn minkowski_sum<'a>(mesh0:&PhysicsMesh,mesh1:&PhysicsMesh)->VirtualMesh<'a>{
-		Self{
-			mesh0,
-			mesh1,
-		}
-	}
-	fn closest_fev(&self,point:Planar64Vec3)->FEV{
-		//put some genius code right here
-		todo!()
-	}
-	pub fn predict_collision(&self,relative_body:&Body,time_limit:Time)->Option<(FaceId,Time)>{
-		let mut state=State{
-			time:relative_body.time,
-			fev:self.closest_fev(relative_body.position),
-		};
-		//it would be possible to write down the point of closest approach...
-		loop{
-			match state.next_transition(self,relative_body,time_limit){
-				Transition::Miss=>return None,
-				Transition::NextState(next_state)=>state=next_state,
-				Transition::Hit(hit_face,hit_time)=>return Some((hit_face,hit_time)),
-			}
+pub fn predict_collision(mesh:&VirtualMesh,relative_body:&Body,time_limit:Time)->Option<(FaceId,Time)>{
+	let mut state=State{
+		time:relative_body.time,
+		fev:mesh.closest_fev(relative_body.position),
+	};
+	//it would be possible to write down the point of closest approach...
+	loop{
+		match state.next_transition(mesh,relative_body,time_limit){
+			Transition::Miss=>return None,
+			Transition::NextState(next_state)=>state=next_state,
+			Transition::Hit(hit_face,hit_time)=>return Some((hit_face,hit_time)),
 		}
 	}
 }

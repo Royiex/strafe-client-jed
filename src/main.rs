@@ -14,6 +14,7 @@ mod instruction;
 mod load_roblox;
 mod face_crawler;
 mod compat_worker;
+mod model_physics;
 mod model_graphics;
 mod physics_worker;
 mod graphics_worker;
