@@ -49,7 +49,7 @@ impl<F:Copy,E:Copy,V:Copy> State<FEV<F,E,V>>{
 			},
 			&FEV::<F,E,V>::Edge(edge_id)=>{
 				//test each face collision time, ignoring roots with zero or conflicting derivative
-				for &test_face_id in mesh.edge_side_faces(edge_id).iter(){
+				for &test_face_id in mesh.edge_faces(edge_id).iter(){
 					let (n,d)=mesh.face_nd(test_face_id);
 					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
@@ -61,7 +61,7 @@ impl<F:Copy,E:Copy,V:Copy> State<FEV<F,E,V>>{
 					}
 				}
 				//test each vertex collision time, ignoring roots with zero or conflicting derivative
-				for &(vert_id,test_face_id) in mesh.edge_ends(edge_id).iter(){
+				for &(vert_id,test_face_id) in mesh.edge_verts(edge_id).iter(){
 					let (n,d)=mesh.face_nd(test_face_id);
 					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
