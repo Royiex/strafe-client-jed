@@ -206,6 +206,16 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 		}
 	}
 	fn vert_edges(&self,vert_id:MinkowskiVert)->Cow<Vec<(MinkowskiEdge,MinkowskiFace)>>{
-		todo!()
+		match vert_id{
+			MinkowskiVert::VertVert(v0,v1)=>{
+				let v0e=self.mesh0.vert_edges(v0);
+				let v1e=self.mesh1.vert_edges(v1);
+				//uh oh dot product
+				//pass all dots?
+				//it's a convex hull of {v0e,-v1e}
+				//each edge needs to know which vert to use from the other mesh
+				todo!()
+			},
+		}
 	}
 }
