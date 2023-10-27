@@ -3,13 +3,13 @@ use crate::model_physics::{VirtualMesh,FEV,FaceId};
 use crate::integer::{Time,Planar64Vec3};
 
 struct State{
-	time:Time,
 	fev:FEV,
+	time:Time,
 }
 
 enum Transition{
 	Miss,
-	NextState(State),
+	Next(FEV,Time),
 	Hit(FaceId,Time),
 }
 

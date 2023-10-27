@@ -1,14 +1,17 @@
 use crate::integer::{Planar64,Planar64Vec3};
 
+#[derive(Clone,Copy)]
 pub struct VertId(usize);
+#[derive(Clone,Copy)]
 pub struct EdgeId(usize);
+#[derive(Clone,Copy)]
 pub struct FaceId(usize);
 
 //Vertex <-> Edge <-> Face -> Collide
 pub enum FEV{
 	Face(FaceId),
 	Edge(EdgeId),
-	Vertex(VertId),
+	Vert(VertId),
 }
 
 //use Unit32 #[repr(C)] for map files
@@ -17,17 +20,15 @@ struct Face{
 	dot:Planar64,
 }
 struct FaceRefs{
-	edges:Vec<EdgeId>,
+	edges:Vec<(EdgeId,FaceId)>,
 	verts:Vec<VertId>,
 }
 struct EdgeRefs{
 	faces:[FaceId;2],//left, right
-	verts:[VertId;2],//bottom, top
-	vert_faces:[FaceId;2],//bottom, top
+	verts:[(VertId,FaceId);2],//bottom, top
 }
 struct VertRefs{
-	faces:Vec<FaceId>,
-	edges:Vec<EdgeId>,
+	edges:Vec<(EdgeId,FaceId)>,
 }
 pub struct PhysicsMesh{
 	faces:Vec<Face>,
@@ -36,27 +37,21 @@ pub struct PhysicsMesh{
 	vert_topology:Vec<VertRefs>,
 }
 impl PhysicsMesh{
-	pub fn face_normal(&self,face_id:FaceId)->Planar64Vec3{
-		self.faces[face_id.0].normal
+	pub fn face_nd(&self,face_id:FaceId)->(Planar64Vec3,Planar64){
+		(self.faces[face_id.0].normal,self.faces[face_id.0].dot)
 	}
 	//ideally I never calculate the vertex position, but I have to for the graphical meshes...
-	pub fn face_edges(&self,face_id:FaceId)->&Vec<EdgeId>{
+	pub fn face_edges(&self,face_id:FaceId)->&Vec<(EdgeId,FaceId)>{
 		&self.face_topology[face_id.0].edges
 	}
 	pub fn edge_side_faces(&self,edge_id:EdgeId)->&[FaceId;2]{
 		&self.edge_topology[edge_id.0].faces
 	}
-	pub fn edge_end_faces(&self,edge_id:EdgeId)->&[FaceId;2]{
-		&self.edge_topology[edge_id.0].vert_faces
-	}
-	pub fn edge_verts(&self,edge_id:EdgeId)->&[VertId;2]{
+	pub fn edge_ends(&self,edge_id:EdgeId)->&[(VertId,FaceId);2]{
 		&self.edge_topology[edge_id.0].verts
 	}
-	pub fn vert_edges(&self,vert_id:VertId)->&Vec<EdgeId>{
+	pub fn vert_edges(&self,vert_id:VertId)->&Vec<(EdgeId,FaceId)>{
 		&self.vert_topology[vert_id.0].edges
-	}
-	pub fn vert_faces(&self,vert_id:VertId)->&Vec<FaceId>{
-		&self.vert_topology[vert_id.0].faces
 	}
 }
 
