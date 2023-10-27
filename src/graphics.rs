@@ -802,6 +802,7 @@ impl GraphicsState{
 			}),
 			primitive: wgpu::PrimitiveState {
 				front_face: wgpu::FrontFace::Cw,
+				cull_mode:Some(wgpu::Face::Front),
 				..Default::default()
 			},
 			depth_stencil: Some(wgpu::DepthStencilState {
