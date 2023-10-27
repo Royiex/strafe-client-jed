@@ -192,7 +192,18 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 		}
 	}
 	fn edge_verts(&self,edge_id:MinkowskiEdge)->Cow<[(MinkowskiVert,MinkowskiFace);2]>{
-		todo!()
+		match edge_id{
+			MinkowskiEdge::VertEdge(v0,e1)=>{
+				Cow::Owned(self.mesh1.edge_verts(e1).map(|(vert_id1,face_id1)|{
+					(MinkowskiVert::VertVert(v0,vert_id1),MinkowskiFace::VertFace(v0,face_id1))
+				}))
+			},
+			MinkowskiEdge::EdgeVert(e0,v1)=>{
+				Cow::Owned(self.mesh0.edge_verts(e0).map(|(vert_id0,face_id0)|{
+					(MinkowskiVert::VertVert(vert_id0,v1),MinkowskiFace::FaceVert(face_id0,v1))
+				}))
+			},
+		}
 	}
 	fn vert_edges(&self,vert_id:MinkowskiVert)->Cow<Vec<(MinkowskiEdge,MinkowskiFace)>>{
 		todo!()
