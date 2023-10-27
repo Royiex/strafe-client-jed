@@ -108,3 +108,11 @@ pub fn predict_collision(mesh:&VirtualMesh,relative_body:&Body,time_limit:Time)-
 		}
 	}
 }
+
+pub fn predict_collision_end(mesh:&VirtualMesh,relative_body:&Body,time_limit:Time,c:&crate::physics::RelativeCollision)->Option<(FaceId,Time)>{
+	//imagine the mesh without the collision face
+	//no algorithm needed, there is only one state and three cases (Face,Edge,None)
+	//determine when it passes an edge ("sliding off" case) or if it leaves the surface directly
+	//the state can be constructed from the RelativeCollision directly
+	None
+}
