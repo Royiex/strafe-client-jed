@@ -1,6 +1,7 @@
 use crate::physics::Body;
 use crate::model_physics::{VirtualMesh,FEV,FaceId};
-use crate::integer::{Time,Planar64Vec3};
+use crate::integer::{Time,Planar64,Planar64Vec3};
+use crate::zeroes::zeroes2;
 
 struct State{
 	fev:FEV,
@@ -46,15 +47,15 @@ impl State{
 
 pub fn predict_collision(mesh:&VirtualMesh,relative_body:&Body,time_limit:Time)->Option<(FaceId,Time)>{
 	let mut state=State{
-		time:relative_body.time,
 		fev:mesh.closest_fev(relative_body.position),
+		time:relative_body.time,
 	};
 	//it would be possible to write down the point of closest approach...
 	loop{
 		match state.next_transition(mesh,relative_body,time_limit){
 			Transition::Miss=>return None,
-			Transition::NextState(next_state)=>state=next_state,
-			Transition::Hit(hit_face,hit_time)=>return Some((hit_face,hit_time)),
+			Transition::Next(fev,time)=>(state.fev,state.time)=(fev,time),
+			Transition::Hit(face,time)=>return Some((face,time)),
 		}
 	}
 }
