@@ -113,7 +113,23 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 		todo!()
 	}
 	fn face_nd(&self,face_id:MinkowskiFace)->(Planar64Vec3,Planar64){
-		todo!()
+		match face_id{
+			MinkowskiFace::FaceVert(f0,v1)=>{
+				let (n,d)=self.mesh0.face_nd(f0);
+				(n,d+n.dot(self.mesh1.vert(v1)))
+			},
+			MinkowskiFace::EdgeEdge(e0,e1)=>{
+				let [e0f0,e0f1]=self.mesh0.edge_faces(e0).into_owned();
+				let [e1f0,e1f1]=self.mesh1.edge_faces(e1).into_owned();
+				//cross edge faces
+				//cross crosses
+				todo!()
+			},
+			MinkowskiFace::VertFace(v0,f1)=>{
+				let (n,d)=self.mesh1.face_nd(f1);
+				(-n,d-n.dot(self.mesh0.vert(v0)))
+			},
+		}
 	}
 	fn vert(&self,vert_id:MinkowskiVert)->Planar64Vec3{
 		todo!()
