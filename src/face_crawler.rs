@@ -1,27 +1,27 @@
 use crate::physics::Body;
-use crate::model_physics::{VirtualMesh,FEV,FaceId};
+use crate::model_physics::{FEV,MeshQuery};
 use crate::integer::{Time,Planar64,Planar64Vec3};
 use crate::zeroes::zeroes2;
 
-struct State{
+struct State<FEV>{
 	fev:FEV,
 	time:Time,
 }
 
-enum Transition{
+enum Transition<F,E,V>{
 	Miss,
-	Next(FEV,Time),
-	Hit(FaceId,Time),
+	Next(FEV<F,E,V>,Time),
+	Hit(F,Time),
 }
 
-impl State{
-	fn next_transition(&self,mesh:&VirtualMesh,body:&Body,time_limit:Time)->Transition{
+impl<F:Copy,E:Copy,V:Copy> State<FEV<F,E,V>>{
+	fn next_transition(&self,mesh:&impl MeshQuery<F,E,V>,body:&Body,time_limit:Time)->Transition<F,E,V>{
 		//conflicting derivative means it crosses in the wrong direction.
 		//if the transition time is equal to an already tested transition, do not replace the current best.
 		let mut best_time=time_limit;
 		let mut best_transtition=Transition::Miss;
 		match &self.fev{
-			&FEV::Face(face_id)=>{
+			&FEV::<F,E,V>::Face(face_id)=>{
 				//test own face collision time, ignoring roots with zero or conflicting derivative
 				//n=face.normal d=face.dot
 				//n.a t^2+n.v t+n.p-d==0
@@ -40,14 +40,14 @@ impl State{
 						let t=body.time+Time::from(t);
 						if self.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
 							best_time=t;
-							best_transtition=Transition::Next(FEV::Edge(edge_id),t);
+							best_transtition=Transition::Next(FEV::<F,E,V>::Edge(edge_id),t);
 							break;
 						}
 					}
 				}
 				//if none:
 			},
-			&FEV::Edge(edge_id)=>{
+			&FEV::<F,E,V>::Edge(edge_id)=>{
 				//test each face collision time, ignoring roots with zero or conflicting derivative
 				for &test_face_id in mesh.edge_side_faces(edge_id){
 					let (n,d)=mesh.face_nd(test_face_id);
@@ -55,7 +55,7 @@ impl State{
 						let t=body.time+Time::from(t);
 						if self.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
 							best_time=t;
-							best_transtition=Transition::Next(FEV::Face(test_face_id),t);
+							best_transtition=Transition::Next(FEV::<F,E,V>::Face(test_face_id),t);
 							break;
 						}
 					}
@@ -67,14 +67,14 @@ impl State{
 						let t=body.time+Time::from(t);
 						if self.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
 							best_time=t;
-							best_transtition=Transition::Next(FEV::Vert(vert_id),t);
+							best_transtition=Transition::Next(FEV::<F,E,V>::Vert(vert_id),t);
 							break;
 						}
 					}
 				}
 				//if none:
 			},
-			&FEV::Vert(vertex_id)=>{
+			&FEV::<F,E,V>::Vert(vertex_id)=>{
 				//test each edge collision time, ignoring roots with zero or conflicting derivative
 				for &(edge_id,test_face_id) in mesh.vert_edges(vertex_id){
 					let (n,d)=mesh.face_nd(test_face_id);
@@ -82,7 +82,7 @@ impl State{
 						let t=body.time+Time::from(t);
 						if self.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
 							best_time=t;
-							best_transtition=Transition::Next(FEV::Edge(edge_id),t);
+							best_transtition=Transition::Next(FEV::<F,E,V>::Edge(edge_id),t);
 							break;
 						}
 					}
@@ -94,7 +94,7 @@ impl State{
 	}
 }
 
-pub fn predict_collision(mesh:&VirtualMesh,relative_body:&Body,time_limit:Time)->Option<(FaceId,Time)>{
+pub fn predict_collision<F:Copy,E:Copy,V:Copy>(mesh:&impl MeshQuery<F,E,V>,relative_body:&Body,time_limit:Time)->Option<(F,Time)>{
 	let mut state=State{
 		fev:mesh.closest_fev(relative_body.position),
 		time:relative_body.time,
@@ -109,7 +109,7 @@ pub fn predict_collision(mesh:&VirtualMesh,relative_body:&Body,time_limit:Time)-
 	}
 }
 
-pub fn predict_collision_end(mesh:&VirtualMesh,relative_body:&Body,time_limit:Time,c:&crate::physics::RelativeCollision)->Option<(FaceId,Time)>{
+pub fn predict_collision_end<F:Copy,E:Copy,V:Copy>(mesh:&impl MeshQuery<F,E,V>,relative_body:&Body,time_limit:Time,c:&crate::physics::RelativeCollision)->Option<(F,Time)>{
 	//imagine the mesh without the collision face
 	//no algorithm needed, there is only one state and three cases (Face,Edge,None)
 	//determine when it passes an edge ("sliding off" case) or if it leaves the surface directly
