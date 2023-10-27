@@ -133,10 +133,49 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 		}
 	}
 	fn vert(&self,vert_id:MinkowskiVert)->Planar64Vec3{
-		todo!()
+		match vert_id{
+			MinkowskiVert::VertVert(v0,v1)=>{
+				self.mesh0.vert(v0)-self.mesh1.vert(v1)
+			},
+		}
 	}
 	fn face_edges(&self,face_id:MinkowskiFace)->Cow<Vec<(MinkowskiEdge,MinkowskiFace)>>{
-		todo!()
+		match face_id{
+			MinkowskiFace::FaceVert(f0,v1)=>{
+				Cow::Owned(self.mesh0.face_edges(f0).iter().map(|&(edge_id0,face_id0)|{
+					(MinkowskiEdge::EdgeVert(edge_id0,v1),MinkowskiFace::FaceVert(face_id0,v1))
+				}).collect())
+			},
+			MinkowskiFace::EdgeEdge(e0,e1)=>{
+				let e0v=self.mesh0.edge_verts(e0);
+				let e1v=self.mesh1.edge_verts(e1);
+				let [r0,r1]=e0v.map(|(vert_id0,face_id0)|{
+					//sort e1 ends by e0 edge dir to get v1
+					//find face normal formulation without cross products
+					let v1=if 0<(e0.v1-e0.v0).dot(e1.v1-e1.v0){
+						e1.v0
+					}else{
+						e1.v1
+					};
+					(MinkowskiEdge::VertEdge(vert_id0,e1),MinkowskiFace::FaceVert(face_id0,v1))
+				});
+				let [r2,r3]=e1v.map(|(vert_id1,face_id1)|{
+					//sort e0 ends by e1 edge dir to get v0
+					let v0=if 0<(e0.v1-e0.v0).dot(e1.v1-e1.v0){
+						e0.v0
+					}else{
+						e0.v1
+					};
+					(MinkowskiEdge::EdgeVert(e0,vert_id1),MinkowskiFace::VertFace(v0,face_id1))
+				});
+				Cow::Owned(vec![r0,r1,r2,r3])
+			},
+			MinkowskiFace::VertFace(v0,f1)=>{
+				Cow::Owned(self.mesh1.face_edges(f1).iter().map(|&(edge_id1,face_id1)|{
+					(MinkowskiEdge::VertEdge(v0,edge_id1),MinkowskiFace::VertFace(v0,face_id1))
+				}).collect())
+			},
+		}
 	}
 	fn edge_faces(&self,edge_id:MinkowskiEdge)->Cow<[MinkowskiFace;2]>{
 		todo!()
