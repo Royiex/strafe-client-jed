@@ -57,12 +57,6 @@ fn perspective_rh(fov_x_slope: f32, fov_y_slope: f32, z_near: f32, z_far: f32) -
 	)
 }
 impl GraphicsCamera{
-	pub fn new(screen_size:glam::UVec2,fov:glam::Vec2)->Self{
-		Self{
-			screen_size,
-			fov,
-		}
-	}
 	pub fn proj(&self)->glam::Mat4{
 		perspective_rh(self.fov.x, self.fov.y, 0.5, 2000.0)
 	}

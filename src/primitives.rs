@@ -189,18 +189,6 @@ impl std::default::Default for FaceDescription{
 		}
 	}
 }
-impl FaceDescription{
-	pub fn new(texture:u32,transform:glam::Affine2,color:Color4)->Self{
-		Self{texture:Some(texture),transform,color}
-	}
-	pub fn from_texture(texture:u32)->Self{
-		Self{
-			texture:Some(texture),
-			transform:glam::Affine2::IDENTITY,
-			color:Color4::ONE,
-		}
-	}
-}
 //TODO: it's probably better to use a shared vertex buffer between all primitives and use indexed rendering instead of generating a unique vertex buffer for each primitive.
 //implementation: put all roblox primitives into one model.groups <- this won't work but I forget why
 pub fn generate_partial_unit_cube(face_descriptions:CubeFaceDescription)->crate::model::IndexedModel{
