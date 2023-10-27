@@ -18,30 +18,79 @@ impl State{
 	fn next_transition(&self,mesh:&VirtualMesh,body:&Body,time_limit:Time)->Transition{
 		//conflicting derivative means it crosses in the wrong direction.
 		//if the transition time is equal to an already tested transition, do not replace the current best.
+		let mut best_time=time_limit;
+		let mut best_transtition=Transition::Miss;
 		match &self.fev{
-			FEV::Face(face_id)=>{
-				//test own face collision time, ignoring edges with zero or conflicting derivative
-				//test each edge collision time, ignoring edges with zero or conflicting derivative
-				//if face: Transition::Hit(Face,Time)
-				//if edge: Transition::NextState(State{time,fev:FEV::Edge(edge_id)})
+			&FEV::Face(face_id)=>{
+				//test own face collision time, ignoring roots with zero or conflicting derivative
+				//n=face.normal d=face.dot
+				//n.a t^2+n.v t+n.p-d==0
+				let (n,d)=mesh.face_nd(face_id);
+				for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
+					let t=body.time+Time::from(t);
+					if self.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
+						best_time=t;
+						best_transtition=Transition::Hit(face_id,t);
+					}
+				}
+				//test each edge collision time, ignoring roots with zero or conflicting derivative
+				for &(edge_id,test_face_id) in mesh.face_edges(face_id){
+					let (n,d)=mesh.face_nd(test_face_id);
+					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
+						let t=body.time+Time::from(t);
+						if self.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
+							best_time=t;
+							best_transtition=Transition::Next(FEV::Edge(edge_id),t);
+							break;
+						}
+					}
+				}
 				//if none:
-				Transition::Miss
 			},
-			FEV::Edge(edge_id)=>{
-				//test each face collision time, ignoring faces with zero or conflicting derivative
-				//test each vertex collision time, ignoring vertices with zero or conflicting derivative
-				//if face: Transition::NextState(State{time,fev:FEV::Face(face_id)})
-				//if vert: Transition::NextState(State{time,fev:FEV::Vertex(vertex_id)})
+			&FEV::Edge(edge_id)=>{
+				//test each face collision time, ignoring roots with zero or conflicting derivative
+				for &test_face_id in mesh.edge_side_faces(edge_id){
+					let (n,d)=mesh.face_nd(test_face_id);
+					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
+						let t=body.time+Time::from(t);
+						if self.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
+							best_time=t;
+							best_transtition=Transition::Next(FEV::Face(test_face_id),t);
+							break;
+						}
+					}
+				}
+				//test each vertex collision time, ignoring roots with zero or conflicting derivative
+				for &(vert_id,test_face_id) in mesh.edge_ends(edge_id){
+					let (n,d)=mesh.face_nd(test_face_id);
+					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
+						let t=body.time+Time::from(t);
+						if self.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
+							best_time=t;
+							best_transtition=Transition::Next(FEV::Vert(vert_id),t);
+							break;
+						}
+					}
+				}
 				//if none:
-				Transition::Miss
 			},
-			FEV::Vertex(vertex_id)=>{
-				//test each edge collision time, ignoring edges with zero or conflicting derivative
-				//if some: Transition::NextState(State{time,fev:FEV::Edge(edge_id)})
+			&FEV::Vert(vertex_id)=>{
+				//test each edge collision time, ignoring roots with zero or conflicting derivative
+				for &(edge_id,test_face_id) in mesh.vert_edges(vertex_id){
+					let (n,d)=mesh.face_nd(test_face_id);
+					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
+						let t=body.time+Time::from(t);
+						if self.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
+							best_time=t;
+							best_transtition=Transition::Next(FEV::Edge(edge_id),t);
+							break;
+						}
+					}
+				}
 				//if none:
-				Transition::Miss
 			},
 		}
+		best_transtition
 	}
 }
 
