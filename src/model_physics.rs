@@ -76,4 +76,20 @@ impl VirtualMesh<'_>{
 		//put some genius code right here
 		todo!()
 	}
+	pub fn face_nd(&self,face_id:FaceId)->(Planar64Vec3,Planar64){
+		todo!()
+	}
+	//ideally I never calculate the vertex position, but I have to for the graphical meshes...
+	pub fn face_edges(&self,face_id:FaceId)->&Vec<(EdgeId,FaceId)>{
+		todo!()
+	}
+	pub fn edge_side_faces(&self,edge_id:EdgeId)->&[FaceId;2]{
+		todo!()
+	}
+	pub fn edge_ends(&self,edge_id:EdgeId)->&[(VertId,FaceId);2]{
+		todo!()
+	}
+	pub fn vert_edges(&self,vert_id:VertId)->&Vec<(EdgeId,FaceId)>{
+		todo!()
+	}
 }
