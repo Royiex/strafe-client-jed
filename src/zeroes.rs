@@ -12,12 +12,12 @@ pub fn zeroes2<'a>(a0:Planar64,a1:Planar64,a2:Planar64)->&'a [Planar64]{
 		let planar_radicand=Planar64::raw(unsafe{(radicand as f64).sqrt().to_int_unchecked()});
 		//TODO: one or two newtons
 		if Planar64::ZERO<a2{
-			&[(-a1-planar_radicand)/(a2*2),(-a1+planar_radicand)/(a2*2)]
+			[(-a1-planar_radicand)/(a2*2),(-a1+planar_radicand)/(a2*2)].as_slice()
 		}else{
-			&[(-a1+planar_radicand)/(a2*2),(-a1-planar_radicand)/(a2*2)]
+			[(-a1+planar_radicand)/(a2*2),(-a1-planar_radicand)/(a2*2)].as_slice()
 		}
 	}else if radicand==0{
-		&[a1/(a2*-2)]
+		[a1/(a2*-2)].as_slice()
 	}else{
 		&[]
 	}
@@ -27,6 +27,6 @@ pub fn zeroes1<'a>(a0:Planar64,a1:Planar64)->&'a [Planar64]{
 	if a1==Planar64::ZERO{
 		&[]
 	}else{
-		&[-a0/a1]
+		[-a0/a1].as_slice()
 	}
 }
