@@ -1,4 +1,5 @@
 use crate::integer::{Planar64,Planar64Vec3};
+use std::borrow::Cow;
 
 #[derive(Clone,Copy)]
 pub struct VertId(usize);
@@ -39,14 +40,14 @@ pub struct PhysicsMesh{
 	vert_topology:Vec<VertRefs>,
 }
 
-pub trait MeshQuery<FACE,EDGE,VERT>{
+pub trait MeshQuery<FACE:Clone,EDGE:Clone,VERT:Clone>{
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<FACE,EDGE,VERT>;
 	fn face_nd(&self,face_id:FACE)->(Planar64Vec3,Planar64);
 	fn vert(&self,vert_id:VERT)->Planar64Vec3;
-	fn face_edges(&self,face_id:FACE)->&Vec<(EDGE,FACE)>;
-	fn edge_side_faces(&self,edge_id:EDGE)->&[FACE;2];
-	fn edge_ends(&self,edge_id:EDGE)->&[(VERT,FACE);2];
-	fn vert_edges(&self,vert_id:VERT)->&Vec<(EDGE,FACE)>;
+	fn face_edges(&self,face_id:FACE)->Cow<Vec<(EDGE,FACE)>>;
+	fn edge_side_faces(&self,edge_id:EDGE)->Cow<[FACE;2]>;
+	fn edge_ends(&self,edge_id:EDGE)->Cow<[(VERT,FACE);2]>;
+	fn vert_edges(&self,vert_id:VERT)->Cow<Vec<(EDGE,FACE)>>;
 }
 impl MeshQuery<FaceId,EdgeId,VertId> for PhysicsMesh{
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<FaceId,EdgeId,VertId>{
@@ -60,17 +61,17 @@ impl MeshQuery<FaceId,EdgeId,VertId> for PhysicsMesh{
 	fn vert(&self,vert_id:VertId)->Planar64Vec3{
 		todo!()
 	}
-	fn face_edges(&self,face_id:FaceId)->&Vec<(EdgeId,FaceId)>{
-		&self.face_topology[face_id.0].edges
+	fn face_edges(&self,face_id:FaceId)->Cow<Vec<(EdgeId,FaceId)>>{
+		Cow::Borrowed(&self.face_topology[face_id.0].edges)
 	}
-	fn edge_side_faces(&self,edge_id:EdgeId)->&[FaceId;2]{
-		&self.edge_topology[edge_id.0].faces
+	fn edge_side_faces(&self,edge_id:EdgeId)->Cow<[FaceId;2]>{
+		Cow::Borrowed(&self.edge_topology[edge_id.0].faces)
 	}
-	fn edge_ends(&self,edge_id:EdgeId)->&[(VertId,FaceId);2]{
-		&self.edge_topology[edge_id.0].verts
+	fn edge_ends(&self,edge_id:EdgeId)->Cow<[(VertId,FaceId);2]>{
+		Cow::Borrowed(&self.edge_topology[edge_id.0].verts)
 	}
-	fn vert_edges(&self,vert_id:VertId)->&Vec<(EdgeId,FaceId)>{
-		&self.vert_topology[vert_id.0].edges
+	fn vert_edges(&self,vert_id:VertId)->Cow<Vec<(EdgeId,FaceId)>>{
+		Cow::Borrowed(&self.vert_topology[vert_id.0].edges)
 	}
 }
 
@@ -134,16 +135,16 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 	fn vert(&self,vert_id:MinkowskiVert)->Planar64Vec3{
 		todo!()
 	}
-	fn face_edges(&self,face_id:MinkowskiFace)->&Vec<(MinkowskiEdge,MinkowskiFace)>{
+	fn face_edges(&self,face_id:MinkowskiFace)->Cow<Vec<(MinkowskiEdge,MinkowskiFace)>>{
 		todo!()
 	}
-	fn edge_side_faces(&self,edge_id:MinkowskiEdge)->&[MinkowskiFace;2]{
+	fn edge_side_faces(&self,edge_id:MinkowskiEdge)->Cow<[MinkowskiFace;2]>{
 		todo!()
 	}
-	fn edge_ends(&self,edge_id:MinkowskiEdge)->&[(MinkowskiVert,MinkowskiFace);2]{
+	fn edge_ends(&self,edge_id:MinkowskiEdge)->Cow<[(MinkowskiVert,MinkowskiFace);2]>{
 		todo!()
 	}
-	fn vert_edges(&self,vert_id:MinkowskiVert)->&Vec<(MinkowskiEdge,MinkowskiFace)>{
+	fn vert_edges(&self,vert_id:MinkowskiVert)->Cow<Vec<(MinkowskiEdge,MinkowskiFace)>>{
 		todo!()
 	}
 }
