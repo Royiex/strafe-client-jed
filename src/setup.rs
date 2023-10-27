@@ -41,6 +41,7 @@ fn create_instance()->SetupContextPartial1{
 		instance:wgpu::Instance::new(wgpu::InstanceDescriptor{
 			backends,
 			dx12_shader_compiler,
+			..Default::default()
 		}),
 	}
 }
