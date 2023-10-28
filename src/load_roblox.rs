@@ -52,6 +52,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 			force_can_collide=false;
 			general.accelerator=Some(crate::model::GameMechanicAccelerator{acceleration:velocity});
 		},
+		"UnorderedCheckpoint"=>general.checkpoint=Some(crate::model::GameMechanicCheckpoint::Unordered{mode_id:0}),
 		"SetVelocity"=>general.trajectory=Some(crate::model::GameMechanicSetTrajectory::Velocity(velocity)),
 		"MapFinish"=>{force_can_collide=false;general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Finish})},
 		"MapAnticheat"=>{force_can_collide=false;general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Anitcheat})},
@@ -108,6 +109,12 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 				force_can_collide=false;
 				match &captures[1]{
 					"WormholeIn"=>general.teleport_behaviour=Some(crate::model::TeleportBehaviour::Wormhole(crate::model::GameMechanicWormhole{destination_model_id:captures[2].parse::<u32>().unwrap()})),
+					_=>panic!("regex3[1] messed up bad"),
+				}
+			}else if let Some(captures)=lazy_regex::regex!(r"^(OrderedCheckpoint)(\d+)$")
+			.captures(other){
+				match &captures[1]{
+					"OrderedCheckpoint"=>general.checkpoint=Some(crate::model::GameMechanicCheckpoint::Ordered{mode_id:0,checkpoint_id:captures[2].parse::<u32>().unwrap()}),
 					_=>panic!("regex3[1] messed up bad"),
 				}
 			}
@@ -257,14 +264,12 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 						spawn_point=model_transform.transform_point3(Planar64Vec3::ZERO)+Planar64Vec3::Y*5/2;
 						Some(crate::model::TempIndexedAttributes::Start(crate::model::TempAttrStart{mode_id:0}))
 					},
-					"UnorderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::UnorderedCheckpoint(crate::model::TempAttrUnorderedCheckpoint{mode_id:0})),
 					other=>{
-						let regman=lazy_regex::regex!(r"^(BonusStart|Spawn|ForceSpawn|OrderedCheckpoint|WormholeOut)(\d+)$");
+						let regman=lazy_regex::regex!(r"^(BonusStart|Spawn|ForceSpawn|WormholeOut)(\d+)$");
 						if let Some(captures) = regman.captures(other) {
 							match &captures[1]{
 								"BonusStart"=>Some(crate::model::TempIndexedAttributes::Start(crate::model::TempAttrStart{mode_id:captures[2].parse::<u32>().unwrap()})),
 								"Spawn"|"ForceSpawn"=>Some(crate::model::TempIndexedAttributes::Spawn(crate::model::TempAttrSpawn{mode_id:0,stage_id:captures[2].parse::<u32>().unwrap()})),
-								"OrderedCheckpoint"=>Some(crate::model::TempIndexedAttributes::OrderedCheckpoint(crate::model::TempAttrOrderedCheckpoint{mode_id:0,checkpoint_id:captures[2].parse::<u32>().unwrap()})),
 								"WormholeOut"=>Some(crate::model::TempIndexedAttributes::Wormhole(crate::model::TempAttrWormhole{wormhole_id:captures[2].parse::<u32>().unwrap()})),
 								_=>None,
 							}

@@ -258,13 +258,18 @@ impl std::default::Default for PhysicsCamera{
 }
 
 pub struct GameMechanicsState{
-	pub stage_id:u32,
-	//jump_counts:HashMap<u32,u32>,
+	stage_id:u32,
+	jump_counts:std::collections::HashMap<usize,u32>,//model_id -> jump count
+	next_ordered_checkpoint_id:u32,//which OrderedCheckpoint model_id you must pass next (if 0 you haven't passed OrderedCheckpoint0)
+	unordered_checkpoints:std::collections::HashSet<usize>,//hashset of UnorderedCheckpoint model ids
 }
 impl std::default::Default for GameMechanicsState{
-	fn default() -> Self {
+	fn default()->Self{
 		Self{
 			stage_id:0,
+			next_ordered_checkpoint_id:0,
+			unordered_checkpoints:std::collections::HashSet::new(),
+			jump_counts:std::collections::HashMap::new(),
 		}
 	}
 }
@@ -784,8 +789,6 @@ impl PhysicsState {
 	pub fn generate_models(&mut self,indexed_models:&crate::model::IndexedModelInstances){
 		let mut starts=Vec::new();
 		let mut spawns=Vec::new();
-		let mut ordered_checkpoints=Vec::new();
-		let mut unordered_checkpoints=Vec::new();
 		for model in &indexed_models.models{
 			//make aabb and run vertices to get realistic bounds
 			for model_instance in &model.instances{
@@ -795,8 +798,6 @@ impl PhysicsState {
 						match attr{
 							crate::model::TempIndexedAttributes::Start(s)=>starts.push((model_id,s.clone())),
 							crate::model::TempIndexedAttributes::Spawn(s)=>spawns.push((model_id,s.clone())),
-							crate::model::TempIndexedAttributes::OrderedCheckpoint(s)=>ordered_checkpoints.push((model_id,s.clone())),
-							crate::model::TempIndexedAttributes::UnorderedCheckpoint(s)=>unordered_checkpoints.push((model_id,s.clone())),
 							crate::model::TempIndexedAttributes::Wormhole(s)=>{self.models.model_id_from_wormhole_id.insert(s.wormhole_id,model_id);},
 						}
 					}
@@ -808,9 +809,9 @@ impl PhysicsState {
 		//this code builds ModeDescriptions from the unsorted lists at the top of the function
 		starts.sort_by_key(|tup|tup.1.mode_id);
 		let mut mode_id_from_map_mode_id=std::collections::HashMap::new();
-		let mut modedatas:Vec<(usize,Vec<(u32,usize)>,Vec<(u32,usize)>,Vec<usize>,u32)>=starts.into_iter().enumerate().map(|(i,(model_id,s))|{
+		let mut modedatas:Vec<(usize,Vec<(u32,usize)>,u32)>=starts.into_iter().enumerate().map(|(i,(model_id,s))|{
 			mode_id_from_map_mode_id.insert(s.mode_id,i);
-			(model_id,Vec::new(),Vec::new(),Vec::new(),s.mode_id)
+			(model_id,Vec::new(),s.mode_id)
 		}).collect();
 		for (model_id,s) in spawns{
 			if let Some(mode_id)=mode_id_from_map_mode_id.get(&s.mode_id){
@@ -819,30 +820,13 @@ impl PhysicsState {
 				}
 			}
 		}
-		for (model_id,s) in ordered_checkpoints{
-			if let Some(mode_id)=mode_id_from_map_mode_id.get(&s.mode_id){
-				if let Some(modedata)=modedatas.get_mut(*mode_id){
-					modedata.2.push((s.checkpoint_id,model_id));
-				}
-			}
-		}
-		for (model_id,s) in unordered_checkpoints{
-			if let Some(mode_id)=mode_id_from_map_mode_id.get(&s.mode_id){
-				if let Some(modedata)=modedatas.get_mut(*mode_id){
-					modedata.3.push(model_id);
-				}
-			}
-		}
 		for mut tup in modedatas.into_iter(){
 			tup.1.sort_by_key(|tup|tup.0);
-			tup.2.sort_by_key(|tup|tup.0);
 			let mut eshmep1=std::collections::HashMap::new();
 			let mut eshmep2=std::collections::HashMap::new();
-			self.modes.insert(tup.4,crate::model::ModeDescription{
+			self.modes.insert(tup.2,crate::model::ModeDescription{
 				start:tup.0,
 				spawns:tup.1.into_iter().enumerate().map(|(i,tup)|{eshmep1.insert(tup.0,i);tup.1}).collect(),
-				ordered_checkpoints:tup.2.into_iter().enumerate().map(|(i,tup)|{eshmep2.insert(tup.0,i);tup.1}).collect(),
-				unordered_checkpoints:tup.3,
 				spawn_from_stage_id:eshmep1,
 				ordered_checkpoint_from_checkpoint_id:eshmep2,
 			});
@@ -1273,6 +1257,11 @@ fn teleport(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,poi
 	//TODO: calculate contacts and determine the actual state
 	//touching.recalculate(body);
 }
+fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,mode:&crate::model::ModeDescription,models:&PhysicsModels,stage_id:u32)->Option<MoveState>{
+	let model=models.get(*mode.get_spawn_model_id(stage_id)? as usize)?;
+	let point=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(style.hitbox_halfsize.y()+Planar64::ONE/16);
+	Some(teleport(body,touching,style,point))
+}
 
 fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&PhysicsModels,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body,model:&ModelPhysics)->Option<MoveState>{
 	match teleport_behaviour{
@@ -1285,12 +1274,24 @@ fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehav
 				crate::model::StageElementBehaviour::Trigger
 				|crate::model::StageElementBehaviour::Teleport=>{
 					//I guess this is correct behaviour when trying to teleport to a non-existent spawn but it's still weird
-					let model=models.get(*modes.get_mode(stage_element.mode_id)?.get_spawn_model_id(game.stage_id)? as usize)?;
-					let point=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(style.hitbox_halfsize.y()+Planar64::ONE/16);
-					Some(teleport(body,touching,style,point))
+					teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
 				},
 				crate::model::StageElementBehaviour::Platform=>None,
-				crate::model::StageElementBehaviour::JumpLimit(_)=>None,//TODO
+				&crate::model::StageElementBehaviour::JumpLimit(jump_limit)=>{
+					//let count=game.jump_counts.get(&model.id);
+					//TODO
+					None
+				},
+				&crate::model::StageElementBehaviour::Checkpoint{ordered_checkpoint_id,unordered_checkpoint_count}=>{
+					if (ordered_checkpoint_id.is_none()||ordered_checkpoint_id.is_some_and(|id|id<game.next_ordered_checkpoint_id))
+						&&unordered_checkpoint_count<=game.unordered_checkpoints.len() as u32{
+						//pass
+						None
+					}else{
+						//fail
+						teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
+					}
+				},
 			}
 		},
 		Some(crate::model::TeleportBehaviour::Wormhole(wormhole))=>{

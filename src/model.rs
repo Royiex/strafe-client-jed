@@ -52,17 +52,12 @@ pub struct IndexedModelInstances{
 pub struct ModeDescription{
 	pub start:usize,//start=model_id
 	pub spawns:Vec<usize>,//spawns[spawn_id]=model_id
-	pub ordered_checkpoints:Vec<usize>,//ordered_checkpoints[checkpoint_id]=model_id
-	pub unordered_checkpoints:Vec<usize>,//unordered_checkpoints[checkpoint_id]=model_id
 	pub spawn_from_stage_id:std::collections::HashMap::<u32,usize>,
 	pub ordered_checkpoint_from_checkpoint_id:std::collections::HashMap::<u32,usize>,
 }
 impl ModeDescription{
 	pub fn get_spawn_model_id(&self,stage_id:u32)->Option<&usize>{
 		self.spawns.get(*self.spawn_from_stage_id.get(&stage_id)?)
-	}
-	pub fn get_ordered_checkpoint_model_id(&self,checkpoint_id:u32)->Option<&usize>{
-		self.ordered_checkpoints.get(*self.ordered_checkpoint_from_checkpoint_id.get(&checkpoint_id)?)
 	}
 }
 //I don't want this code to exist!
@@ -76,23 +71,12 @@ pub struct TempAttrSpawn{
 	pub stage_id:u32,
 }
 #[derive(Clone)]
-pub struct TempAttrOrderedCheckpoint{
-	pub mode_id:u32,
-	pub checkpoint_id:u32,
-}
-#[derive(Clone)]
-pub struct TempAttrUnorderedCheckpoint{
-	pub mode_id:u32,
-}
-#[derive(Clone)]
 pub struct TempAttrWormhole{
 	pub wormhole_id:u32,
 }
 pub enum TempIndexedAttributes{
 	Start(TempAttrStart),
 	Spawn(TempAttrSpawn),
-	OrderedCheckpoint(TempAttrOrderedCheckpoint),
-	UnorderedCheckpoint(TempAttrUnorderedCheckpoint),
 	Wormhole(TempAttrWormhole),
 }
 
@@ -124,6 +108,16 @@ pub enum GameMechanicBooster{
 	Affine(Planar64Affine3),//capable of SetVelocity,DotVelocity,normal booster,bouncy part,redirect velocity, and much more
 	Velocity(Planar64Vec3),//straight up boost velocity adds to your current velocity
 	Energy{direction:Planar64Vec3,energy:Planar64},//increase energy in direction
+}
+#[derive(Clone)]
+pub enum GameMechanicCheckpoint{
+	Ordered{
+		mode_id:u32,
+		checkpoint_id:u32,
+	},
+	Unordered{
+		mode_id:u32,
+	},
 }
 #[derive(Clone)]
 pub enum TrajectoryChoice{
@@ -171,6 +165,13 @@ pub enum StageElementBehaviour{
  	Trigger,
  	Teleport,
  	Platform,
+ 	//Acts like a trigger if you haven't hit all the checkpoints.
+ 	Checkpoint{
+ 		//if this is 2 you must have hit OrderedCheckpoint(0) OrderedCheckpoint(1) OrderedCheckpoint(2) to pass
+ 		ordered_checkpoint_id:Option<u32>,
+ 		//if this is 2 you must have hit at least 2 UnorderedCheckpoints to pass
+ 		unordered_checkpoint_count:u32,
+ 	},
  	JumpLimit(u32),
  	//Speedtrap(TrapCondition),//Acts as a trigger with a speed condition
 }
@@ -199,15 +200,17 @@ pub enum TeleportBehaviour{
 pub struct GameMechanicAttributes{
 	pub zone:Option<GameMechanicZone>,
 	pub booster:Option<GameMechanicBooster>,
+	pub checkpoint:Option<GameMechanicCheckpoint>,
 	pub trajectory:Option<GameMechanicSetTrajectory>,
 	pub teleport_behaviour:Option<TeleportBehaviour>,
 	pub accelerator:Option<GameMechanicAccelerator>,
 }
 impl GameMechanicAttributes{
 	pub fn any(&self)->bool{
-		self.booster.is_some()
+		self.zone.is_some()
+		||self.booster.is_some()
+		||self.checkpoint.is_some()
 		||self.trajectory.is_some()
-		||self.zone.is_some()
 		||self.teleport_behaviour.is_some()
 		||self.accelerator.is_some()
 	}
