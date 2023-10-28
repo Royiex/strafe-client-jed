@@ -170,6 +170,7 @@ impl SetupContextPartial4{
 			.expect("Surface isn't supported by the adapter.");
 		let surface_view_format=config.format.add_srgb_suffix();
 		config.view_formats.push(surface_view_format);
+		config.present_mode=wgpu::PresentMode::AutoNoVsync;
 		self.surface.configure(&self.device, &config);
 
 		SetupContext{
