@@ -414,6 +414,7 @@ pub struct Planar64(i64);
 impl Planar64{
 	pub const ZERO:Self=Self(0);
 	pub const ONE:Self=Self(1<<32);
+	pub const MAX:Self=Self(i64::MAX);
 	#[inline]
 	pub const fn int(num:i32)->Self{
 		Self(Self::ONE.0*num as i64)
