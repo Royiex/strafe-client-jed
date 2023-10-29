@@ -52,6 +52,46 @@ pub trait MeshQuery<FACE:Clone,EDGE:Clone,VERT:Clone>{
 impl MeshQuery<FaceId,EdgeId,VertId> for PhysicsMesh{
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<FaceId,EdgeId,VertId>{
 		//put some genius code right here
+
+		//TODO write genius code
+		//brute force
+		let mut best_distance_squared=Planar64::MAX;
+		let mut best_fev:FEV<FaceId,EdgeId,VertId>;
+		//check each vert
+		for (i,v) in self.verts.iter().enumerate(){
+			let d=(v.0-point).dot(v.0-point);
+			if d<best_distance_squared{
+				best_distance_squared=d;
+				best_fev=FEV::<FaceId,EdgeId,VertId>::Vert(VertId(i));
+			}
+		}
+		let face_dots=self.faces.iter().map(|f|f.normal.dot(point));
+		//check each edge
+		for (i,v) in self.edge_topology.iter().enumerate(){
+			let verts=self.edge_verts(EdgeId(i));
+			if verts.iter().all(|&(vert_id,face_id)|{
+				let (n,d)=self.face_nd(face_id);
+				n.dot(point)<d
+			}){
+				//this is also wrong
+			}
+			let faces=self.edge_faces(EdgeId(i));
+			//try not to do this
+			//let edge_dir=self.faces[faces[0].0].normal.cross(self.faces[faces[1].0].normal);
+			let face_dot=self.faces[faces[0].0].normal.dot(self.faces[faces[1].0].normal);
+			let edge_face_dots=faces.map(|face_id|{
+				let (n,d)=self.face_nd(face_id);
+				n.dot(point)-d
+			});
+			//wrong! face normals are not normalized! 1+d will not work!
+			let edge_distance=(edge_face_dots[0]+edge_face_dots[1])/(Planar64::ONE+face_dot);
+			//use the face d values and 1+d
+			if edge_distance*edge_distance<best_distance_squared{
+				best_distance_squared=edge_distance*edge_distance;
+				best_fev=FEV::<FaceId,EdgeId,VertId>::Edge(EdgeId(i));
+			}
+		}
+		//check each face
 		todo!()
 	}
 	fn face_nd(&self,face_id:FaceId)->(Planar64Vec3,Planar64){
