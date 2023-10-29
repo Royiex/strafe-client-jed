@@ -59,7 +59,7 @@ impl MeshQuery<FaceId,EdgeId,VertId> for PhysicsMesh{
 	}
 	//ideally I never calculate the vertex position, but I have to for the graphical meshes...
 	fn vert(&self,vert_id:VertId)->Planar64Vec3{
-		todo!()
+		self.verts[vert_id.0].0
 	}
 	fn face_edges(&self,face_id:FaceId)->Cow<Vec<(EdgeId,FaceId)>>{
 		Cow::Borrowed(&self.face_topology[face_id.0].edges)
