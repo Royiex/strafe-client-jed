@@ -361,10 +361,10 @@ impl GraphicsState{
 						//creating the vertex map is slightly different because the vertices are directly hashable
 						let map_vertex_id:Vec<u32>=model.unique_vertices.iter().map(|unmapped_vertex|{
 							let vertex=crate::model::IndexedVertex{
-								pos:map_pos_id[unmapped_vertex.pos as usize] as u32,
-								tex:map_tex_id[unmapped_vertex.tex as usize] as u32,
-								normal:map_normal_id[unmapped_vertex.normal as usize] as u32,
-								color:map_color_id[unmapped_vertex.color as usize] as u32,
+								pos:map_pos_id[unmapped_vertex.pos as usize],
+								tex:map_tex_id[unmapped_vertex.tex as usize],
+								normal:map_normal_id[unmapped_vertex.normal as usize],
+								color:map_color_id[unmapped_vertex.color as usize],
 							};
 							(if let Some(&vertex_id)=vertex_id_from.get(&vertex){
 								vertex_id
