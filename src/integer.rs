@@ -315,8 +315,8 @@ impl Angle32{
 	pub fn clamp(&self,theta_min:Self,theta_max:Self)->Self{
 		//((max-min as u32)/2 as i32)+min
 		let midpoint=((
-			u32::from_ne_bytes(theta_max.0.to_ne_bytes())
-			.wrapping_sub(u32::from_ne_bytes(theta_min.0.to_ne_bytes()))
+			(theta_max.0 as u32)
+			.wrapping_sub(theta_min.0 as u32)
 			/2
 		) as i32)//(u32::MAX/2) as i32 ALWAYS works
 		.wrapping_add(theta_min.0);
