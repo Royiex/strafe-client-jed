@@ -972,19 +972,19 @@ const MODEL_BUFFER_SIZE_BYTES:usize=MODEL_BUFFER_SIZE*4;
 fn get_instances_buffer_data(instances:&[ModelGraphicsInstance]) -> Vec<f32> {
 	let mut raw = Vec::with_capacity(MODEL_BUFFER_SIZE*instances.len());
 	for (i,mi) in instances.iter().enumerate(){
-    	let mut v = raw.split_off(MODEL_BUFFER_SIZE*i);
-    	//model transform
-    	raw.extend_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&mi.transform)[..]);
-    	//normal transform
-    	raw.extend_from_slice(AsRef::<[f32; 3]>::as_ref(&mi.normal_transform.x_axis));
-    	raw.extend_from_slice(&[0.0]);
-    	raw.extend_from_slice(AsRef::<[f32; 3]>::as_ref(&mi.normal_transform.y_axis));
-    	raw.extend_from_slice(&[0.0]);
-    	raw.extend_from_slice(AsRef::<[f32; 3]>::as_ref(&mi.normal_transform.z_axis));
-    	raw.extend_from_slice(&[0.0]);
-    	//color
-    	raw.extend_from_slice(AsRef::<[f32; 4]>::as_ref(&mi.color.get()));
-    	raw.append(&mut v);
+		let mut v = raw.split_off(MODEL_BUFFER_SIZE*i);
+		//model transform
+		raw.extend_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&mi.transform)[..]);
+		//normal transform
+		raw.extend_from_slice(AsRef::<[f32; 3]>::as_ref(&mi.normal_transform.x_axis));
+		raw.extend_from_slice(&[0.0]);
+		raw.extend_from_slice(AsRef::<[f32; 3]>::as_ref(&mi.normal_transform.y_axis));
+		raw.extend_from_slice(&[0.0]);
+		raw.extend_from_slice(AsRef::<[f32; 3]>::as_ref(&mi.normal_transform.z_axis));
+		raw.extend_from_slice(&[0.0]);
+		//color
+		raw.extend_from_slice(AsRef::<[f32; 4]>::as_ref(&mi.color.get()));
+		raw.append(&mut v);
 	}
 	raw
 }
