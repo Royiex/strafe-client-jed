@@ -8,17 +8,31 @@ pub struct ModelUpdate{
 	color:Option<glam::Vec4>,
 }
 
-struct Entity {
-	index_count: u32,
-	index_buf: wgpu::Buffer,
+struct Entity{
+	index_count:u32,
+	index_buf:wgpu::Buffer,
+}
+fn create_entities<T:bytemuck::Pod>(device:&wgpu::Device,entities:&Vec<Vec<T>>)->Vec<Entity>{
+	entities.iter().map(|indices|{
+		let index_buf=device.create_buffer_init(&wgpu::util::BufferInitDescriptor{
+			label:Some("Index"),
+			contents:bytemuck::cast_slice(indices),
+			usage:wgpu::BufferUsages::INDEX,
+		});
+		Entity{
+			index_buf,
+			index_count:indices.len() as u32,
+		}
+	}).collect()
 }
 
-struct ModelGraphics {
-	instances: Vec<ModelGraphicsInstance>,
-	vertex_buf: wgpu::Buffer,
-	entities: Vec<Entity>,
-	bind_group: wgpu::BindGroup,
-	model_buf: wgpu::Buffer,
+struct ModelGraphics{
+	entities:Vec<Entity>,
+	model_buf:wgpu::Buffer,
+	vertex_buf:wgpu::Buffer,
+	bind_group:wgpu::BindGroup,
+	index_format:wgpu::IndexFormat,
+	instances:Vec<ModelGraphicsInstance>,
 }
 
 pub struct GraphicsSamplers{
@@ -413,7 +427,6 @@ impl GraphicsState{
 		let models:Vec<ModelGraphicsSingleTexture>=deduplicated_models.into_iter().map(|model|{
 			let mut vertices = Vec::new();
 			let mut index_from_vertex = std::collections::HashMap::new();//::<IndexedVertex,usize>
-			let mut entities = Vec::new();
 			//this mut be combined in a more complex way if the models use different render patterns per group
 				let mut indices = Vec::new();
 			for group in model.groups {
@@ -424,7 +437,7 @@ impl GraphicsState{
 							if let Some(&i)=index_from_vertex.get(&vertex_index){
 								indices.push(i);
 							}else{
-								let i=vertices.len() as u16;
+								let i=vertices.len();
 								let vertex=&model.unique_vertices[vertex_index as usize];
 								vertices.push(GraphicsVertex{
 									pos: model.unique_pos[vertex.pos as usize],
@@ -439,11 +452,14 @@ impl GraphicsState{
 					}
 				}
 			}
-				entities.push(indices);
 			ModelGraphicsSingleTexture{
 				instances:model.instances,
+				entities:if (u16::MAX as usize)<vertices.len(){
+					crate::model_graphics::Entities::U32(vec![indices.into_iter().map(|vertex_id|vertex_id as u32).collect()])
+				}else{
+					crate::model_graphics::Entities::U16(vec![indices.into_iter().map(|vertex_id|vertex_id as u16).collect()])
+				},
 				vertices,
-				entities,
 				texture:model.texture,
 			}
 		}).collect();
@@ -499,17 +515,14 @@ impl GraphicsState{
 				self.models.push(ModelGraphics{
 					instances:instances_chunk.to_vec(),
 					vertex_buf,
-					entities: model.entities.iter().map(|indices|{
-						let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-							label: Some("Index"),
-							contents: bytemuck::cast_slice(&indices),
-							usage: wgpu::BufferUsages::INDEX,
-						});
-						Entity {
-							index_buf,
-							index_count: indices.len() as u32,
-						}
-					}).collect(),
+					index_format:match &model.entities{
+						crate::model_graphics::Entities::U32(_)=>wgpu::IndexFormat::Uint32,
+						crate::model_graphics::Entities::U16(_)=>wgpu::IndexFormat::Uint16,
+					},
+					entities:match &model.entities{
+						crate::model_graphics::Entities::U32(entities)=>create_entities(device,entities),
+						crate::model_graphics::Entities::U16(entities)=>create_entities(device,entities),
+					},
 					bind_group: model_bind_group,
 					model_buf,
 				});
@@ -952,9 +965,9 @@ impl GraphicsState{
 				rpass.set_bind_group(2, &model.bind_group, &[]);
 				rpass.set_vertex_buffer(0, model.vertex_buf.slice(..));
 
-				for entity in model.entities.iter() {
-					rpass.set_index_buffer(entity.index_buf.slice(..), wgpu::IndexFormat::Uint16);
-					rpass.draw_indexed(0..entity.index_count, 0, 0..model.instances.len() as u32);
+				for entity in model.entities.iter(){
+					rpass.set_index_buffer(entity.index_buf.slice(..),model.index_format);
+					rpass.draw_indexed(0..entity.index_count,0,0..model.instances.len() as u32);
 				}
 			}
 

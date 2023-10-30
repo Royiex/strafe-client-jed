@@ -21,11 +21,15 @@ pub struct IndexedModelGraphicsSingleTexture{
 	pub groups: Vec<IndexedGroupFixedTexture>,
 	pub instances:Vec<ModelGraphicsInstance>,
 }
+pub enum Entities{
+	U32(Vec<Vec<u32>>),
+	U16(Vec<Vec<u16>>),
+}
 pub struct ModelGraphicsSingleTexture{
-	pub instances: Vec<ModelGraphicsInstance>,
-	pub vertices: Vec<GraphicsVertex>,
-	pub entities: Vec<Vec<u16>>,
-	pub texture: Option<u32>,
+	pub instances:Vec<ModelGraphicsInstance>,
+	pub vertices:Vec<GraphicsVertex>,
+	pub entities:Entities,
+	pub texture:Option<u32>,
 }
 #[derive(Clone,PartialEq)]
 pub struct ModelGraphicsColor4(glam::Vec4);
