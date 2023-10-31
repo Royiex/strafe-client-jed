@@ -185,8 +185,7 @@ impl Default for PhysicsModels{
 }
 
 #[derive(Clone)]
-pub struct PhysicsCamera {
-	offset: Planar64Vec3,
+pub struct PhysicsCamera{
 	//punch: Planar64Vec3,
 	//punch_velocity: Planar64Vec3,
 	sensitivity:Ratio64Vec2,//dots to Angle32 ratios
@@ -204,16 +203,6 @@ pub struct PhysicsCamera {
 }
 
 impl PhysicsCamera {
-	pub fn from_offset(offset:Planar64Vec3) -> Self {
-		Self{
-			offset,
-			sensitivity:Ratio64Vec2::ONE*200_000,
-			mouse:MouseState::default(),//t=0 does not cause divide by zero because it's immediately replaced
-			clamped_mouse_pos:glam::IVec2::ZERO,
-			angle_pitch_lower_limit:-Angle32::FRAC_PI_2,
-			angle_pitch_upper_limit:Angle32::FRAC_PI_2,
-		}
-	}
 	pub fn move_mouse(&mut self,mouse_pos:glam::IVec2){
 		let mut unclamped_mouse_pos=self.clamped_mouse_pos+mouse_pos-self.mouse.pos;
 		unclamped_mouse_pos.y=unclamped_mouse_pos.y.clamp(
@@ -247,7 +236,6 @@ impl PhysicsCamera {
 impl std::default::Default for PhysicsCamera{
 	fn default()->Self{
 		Self{
-			offset:Planar64Vec3::ZERO,//TODO: delete this from PhysicsCamera, it should be GraphicsCamera only
 			sensitivity:Ratio64Vec2::ONE*200_000,
 			mouse:MouseState::default(),//t=0 does not cause divide by zero because it's immediately replaced
 			clamped_mouse_pos:glam::IVec2::ZERO,
@@ -313,6 +301,7 @@ struct StyleModifiers{
 	rocket_force:Option<Planar64>,
 	gravity:Planar64Vec3,
 	hitbox_halfsize:Planar64Vec3,
+	camera_offset:Planar64Vec3,
 }
 impl std::default::Default for StyleModifiers{
 	fn default() -> Self {
@@ -354,6 +343,7 @@ impl StyleModifiers{
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
 			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
 	}
 
@@ -378,6 +368,7 @@ impl StyleModifiers{
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
 			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
 	}
 	fn roblox_surf()->Self{
@@ -401,11 +392,11 @@ impl StyleModifiers{
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
 			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
 	}
 
 	fn source_bhop()->Self{
-		//camera_offset=vec3(0,64/16-73/16/2,0),
 		Self{
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			controls_held:0,
@@ -426,6 +417,7 @@ impl StyleModifiers{
 			ladder_dot:(Planar64::int(1)/2).sqrt(),//?
 			swim_speed:Planar64::int(12),//?
 			hitbox_halfsize:Planar64Vec3::raw(33<<28,73<<28,33<<28)/2,
+			camera_offset:Planar64Vec3::raw(0,(64<<28)-(73<<27),0),
 		}
 	}
 	fn source_surf()->Self{
@@ -450,6 +442,7 @@ impl StyleModifiers{
 			ladder_dot:(Planar64::int(1)/2).sqrt(),//?
 			swim_speed:Planar64::int(12),//?
 			hitbox_halfsize:Planar64Vec3::raw(33<<28,73<<28,33<<28)/2,
+			camera_offset:Planar64Vec3::raw(0,(64<<28)-(73<<27),0),
 		}
 	}
 	fn roblox_rocket()->Self{
@@ -473,6 +466,7 @@ impl StyleModifiers{
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
 			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
 	}
 
@@ -578,12 +572,13 @@ pub struct PhysicsState{
 }
 #[derive(Clone,Default)]
 pub struct PhysicsOutputState{
-	camera:PhysicsCamera,
 	body:Body,
+	camera:PhysicsCamera,
+	camera_offset:Planar64Vec3,
 }
 impl PhysicsOutputState{
 	pub fn extrapolate(&self,mouse_pos:glam::IVec2,time:Time)->(glam::Vec3,glam::Vec2){
-		((self.body.extrapolated_position(time)+self.camera.offset).into(),self.camera.simulate_move_angles(mouse_pos))
+		((self.body.extrapolated_position(time)+self.camera_offset).into(),self.camera.simulate_move_angles(mouse_pos))
 	}
 }
 
@@ -742,19 +737,19 @@ impl std::fmt::Display for Body{
 }
 
 impl Default for PhysicsState{
-	fn default() -> Self {
+	fn default()->Self{
  		Self{
 			spawn_point:Planar64Vec3::int(0,50,0),
-			body: Body::with_pva(Planar64Vec3::int(0,50,0),Planar64Vec3::int(0,0,0),Planar64Vec3::int(0,-100,0)),
-			time: Time::ZERO,
+			body:Body::with_pva(Planar64Vec3::int(0,50,0),Planar64Vec3::int(0,0,0),Planar64Vec3::int(0,-100,0)),
+			time:Time::ZERO,
 			style:StyleModifiers::default(),
 			touching:TouchingState::default(),
 			models:PhysicsModels::default(),
 			bvh:crate::bvh::BvhNode::default(),
 			move_state: MoveState::Air,
-			camera: PhysicsCamera::from_offset(Planar64Vec3::int(0,2,0)),//4.5-2.5=2
-			next_mouse: MouseState::default(),
-			controls: 0,
+			camera:PhysicsCamera::default(),
+			next_mouse:MouseState::default(),
+			controls:0,
 			world:WorldState{},
 			game:GameMechanicsState::default(),
 			modes:Modes::default(),
@@ -774,6 +769,7 @@ impl PhysicsState {
 		PhysicsOutputState{
 			body:self.body.clone(),
 			camera:self.camera.clone(),
+			camera_offset:self.style.camera_offset.clone(),
 		}
 	}
 
