@@ -9,22 +9,30 @@ use crate::aabb::Aabb;
 //start with bisection into octrees because a bad bvh is still 1000x better than no bvh
 //sort the centerpoints on each axis (3 lists)
 //bv is put into octant based on whether it is upper or lower in each list
+enum BvhNodeContent{
+	Branch(Vec<BvhNode>),
+	Leaf(usize),
+}
+impl Default for BvhNodeContent{
+	fn default()->Self{
+		Self::Branch(Vec::new())
+	}
+}
 #[derive(Default)]
 pub struct BvhNode{
-	children:Vec<Self>,
-	models:Vec<usize>,
+	content:BvhNodeContent,
 	aabb:Aabb,
 }
 
 impl BvhNode{
 	pub fn the_tester<F:FnMut(usize)>(&self,aabb:&Aabb,f:&mut F){
-		for &model in &self.models{
-			f(model);
-		}
-		for child in &self.children{
-			if aabb.intersects(&child.aabb){
-				child.the_tester(aabb,f);
-			}
+		match &self.content{
+			&BvhNodeContent::Leaf(model)=>f(model),
+			BvhNodeContent::Branch(children)=>for child in children{
+				if aabb.intersects(&child.aabb){
+					child.the_tester(aabb,f);
+				}
+			},
 		}
 	}
 }
@@ -37,10 +45,15 @@ fn generate_bvh_node(boxen:Vec<(usize,Aabb)>)->BvhNode{
 	let n=boxen.len();
 	if n<20{
 		let mut aabb=Aabb::default();
-		let models=boxen.into_iter().map(|b|{aabb.join(&b.1);b.0}).collect();
+		let nodes=boxen.into_iter().map(|b|{
+			aabb.join(&b.1);
+			BvhNode{
+				content:BvhNodeContent::Leaf(b.0),
+				aabb:b.1,
+			}
+		}).collect();
 		BvhNode{
-			children:Vec::new(),
-			models,
+			content:BvhNodeContent::Branch(nodes),
 			aabb,
 		}
 	}else{
@@ -99,8 +112,7 @@ fn generate_bvh_node(boxen:Vec<(usize,Aabb)>)->BvhNode{
 			node
 		}).collect();
 		BvhNode{
-			children,
-			models:Vec::new(),
+			content:BvhNodeContent::Branch(children),
 			aabb,
 		}
 	}
