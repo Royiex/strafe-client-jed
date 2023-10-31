@@ -454,7 +454,9 @@ impl GraphicsState{
 			}
 			GraphicsModelSingleTexture{
 				instances:model.instances,
-				entities:if (u16::MAX as usize)<vertices.len(){
+				entities:if (u32::MAX as usize)<vertices.len(){
+					panic!("Model has too many vertices!")
+				}else if (u16::MAX as usize)<vertices.len(){
 					crate::model_graphics::Entities::U32(vec![indices.into_iter().map(|vertex_id|vertex_id as u32).collect()])
 				}else{
 					crate::model_graphics::Entities::U16(vec![indices.into_iter().map(|vertex_id|vertex_id as u16).collect()])
