@@ -1,11 +1,11 @@
 use crate::integer::{Planar64,Planar64Vec3};
 use std::borrow::Cow;
 
-#[derive(Clone,Copy)]
+#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
 pub struct VertId(usize);
-#[derive(Clone,Copy)]
+#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
 pub struct EdgeId(usize);
-#[derive(Clone,Copy)]
+#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
 pub struct FaceId(usize);
 
 //Vertex <-> Edge <-> Face -> Collide
@@ -115,6 +115,42 @@ impl MeshQuery<FaceId,EdgeId,VertId> for PhysicsMesh{
 	}
 }
 
+pub struct VirtualMesh<'a>{
+	mesh:&'a PhysicsMesh,
+	transform:&'a crate::integer::Planar64Affine3,
+	normal_transform:&'a crate::integer::Planar64Mat3,
+	normal_determinant:Planar64,
+}
+impl MeshQuery<FaceId,EdgeId,VertId> for VirtualMesh<'_>{
+	fn closest_fev(&self,point:Planar64Vec3)->FEV<FaceId,EdgeId,VertId>{
+		//put some genius code right here
+		todo!()
+	}
+	fn face_nd(&self,face_id:FaceId)->(Planar64Vec3,Planar64){
+		let (n,d)=self.mesh.face_nd(face_id);
+		(self.normal_transform*n,self.normal_determinant*d)
+	}
+	fn vert(&self,vert_id:VertId)->Planar64Vec3{
+		self.transform.transform_point3(self.mesh.vert(vert_id))
+	}
+	#[inline]
+	fn face_edges(&self,face_id:FaceId)->Cow<Vec<(EdgeId,FaceId)>>{
+		self.mesh.face_edges(face_id)
+	}
+	#[inline]
+	fn edge_faces(&self,edge_id:EdgeId)->Cow<[FaceId;2]>{
+		self.mesh.edge_faces(edge_id)
+	}
+	#[inline]
+	fn edge_verts(&self,edge_id:EdgeId)->Cow<[(VertId,FaceId);2]>{
+		self.mesh.edge_verts(edge_id)
+	}
+	#[inline]
+	fn vert_edges(&self,vert_id:VertId)->Cow<Vec<(EdgeId,FaceId)>>{
+		self.mesh.vert_edges(vert_id)
+	}
+}
+
 //Note that a face on a minkowski mesh refers to a pair of fevs on the meshes it's summed from
 //(face,vertex)
 //(edge,edge)
@@ -128,20 +164,20 @@ enum MinkowskiEdge{
 	VertEdge(VertId,EdgeId),
 	EdgeVert(EdgeId,VertId),
 }
-#[derive(Clone,Copy)]
-enum MinkowskiFace{
+#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
+pub enum MinkowskiFace{
 	FaceVert(FaceId,VertId),
 	EdgeEdge(EdgeId,EdgeId),
 	VertFace(VertId,FaceId),
 }
 
 pub struct MinkowskiMesh<'a>{
-	mesh0:&'a PhysicsMesh,
-	mesh1:&'a PhysicsMesh,
+	mesh0:&'a VirtualMesh<'a>,
+	mesh1:&'a VirtualMesh<'a>,
 }
 
 impl MinkowskiMesh<'_>{
-	pub fn minkowski_sum<'a>(mesh0:&'a PhysicsMesh,mesh1:&'a PhysicsMesh)->MinkowskiMesh<'a>{
+	pub fn minkowski_sum<'a>(mesh0:&'a VirtualMesh,mesh1:&'a VirtualMesh)->MinkowskiMesh<'a>{
 		MinkowskiMesh{
 			mesh0,
 			mesh1,

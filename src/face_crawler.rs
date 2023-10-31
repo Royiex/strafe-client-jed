@@ -109,10 +109,10 @@ pub fn predict_collision<F:Copy,E:Copy,V:Copy>(mesh:&impl MeshQuery<F,E,V>,relat
 	}
 }
 
-pub fn predict_collision_end<F:Copy,E:Copy,V:Copy>(mesh:&impl MeshQuery<F,E,V>,relative_body:&Body,time_limit:Time,c:&crate::physics::RelativeCollision)->Option<(F,Time)>{
+pub fn predict_collision_end<F:Copy,E:Copy,V:Copy>(mesh:&impl MeshQuery<F,E,V>,relative_body:&Body,time_limit:Time,c:&crate::physics::ContactCollision)->Option<(F,Time)>{
 	//imagine the mesh without the collision face
 	//no algorithm needed, there is only one state and three cases (Face,Edge,None)
 	//determine when it passes an edge ("sliding off" case) or if it leaves the surface directly
-	//the state can be constructed from the RelativeCollision directly
+	//the state can be constructed from the ContactCollision directly
 	None
 }

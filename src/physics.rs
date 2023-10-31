@@ -1,11 +1,12 @@
-use crate::{instruction::{InstructionEmitter, InstructionConsumer, TimedInstruction}, zeroes::zeroes2};
-
+use crate::zeroes::zeroes2;
+use crate::instruction::{InstructionEmitter,InstructionConsumer,TimedInstruction};
 use crate::integer::{Time,Planar64,Planar64Vec3,Planar64Mat3,Angle32,Ratio64,Ratio64Vec2};
+use crate::model_physics::{PhysicsMesh,VirtualMesh,MinkowskiMesh};
 
 #[derive(Debug)]
 pub enum PhysicsInstruction {
-	CollisionStart(RelativeCollision),
-	CollisionEnd(RelativeCollision),
+	CollisionStart(Collision),
+	CollisionEnd(Collision),
 	StrafeTick,
 	ReachWalkTargetVelocity,
 	// Water,
@@ -154,6 +155,7 @@ impl Default for Modes{
 	}
 }
 
+#[derive(Default)]
 struct PhysicsModels{
 	models:Vec<PhysicsModel>,
 	model_id_from_wormhole_id:std::collections::HashMap::<u32,usize>,
@@ -163,8 +165,8 @@ impl PhysicsModels{
 		self.models.clear();
 		self.model_id_from_wormhole_id.clear();
 	}
-	fn get(&self,i:usize)->Option<&PhysicsModel>{
-		self.models.get(i)
+	fn get(&self,model_id:usize)->Option<&PhysicsModel>{
+		self.models.get(model_id)
 	}
 	fn get_wormhole_model(&self,wormhole_id:u32)->Option<&PhysicsModel>{
 		self.models.get(*self.model_id_from_wormhole_id.get(&wormhole_id)?)
@@ -173,14 +175,6 @@ impl PhysicsModels{
 		let model_id=self.models.len();
 		self.models.push(model);
 		model_id
-	}
-}
-impl Default for PhysicsModels{
-	fn default() -> Self {
-		Self{
-			models:Vec::new(),
-			model_id_from_wormhole_id:std::collections::HashMap::new(),
-		}
 	}
 }
 
@@ -592,7 +586,7 @@ pub struct PhysicsState{
 	pub next_mouse:MouseState,//Where is the mouse headed next
 	controls:u32,
 	move_state:MoveState,
-	//all models
+	meshes:Vec<PhysicsMesh>,
 	models:PhysicsModels,
 	bvh:crate::bvh::BvhNode,
 	
@@ -613,10 +607,6 @@ impl PhysicsOutputState{
 	}
 }
 
-//pretend to be using what we want to eventually do
-type TreyMeshFace = crate::aabb::AabbFace;
-type TreyMesh = crate::aabb::Aabb;
-
 enum PhysicsCollisionAttributes{
 	Contact{//track whether you are contacting the object
 		contacting:crate::model::ContactingAttributes,
@@ -628,113 +618,94 @@ enum PhysicsCollisionAttributes{
 	},
 }
 
-pub struct PhysicsModel {
+pub struct PhysicsModel{
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
-	mesh: TreyMesh,
-	transform:crate::integer::Planar64Affine3,
+	mesh_id:usize,
 	attributes:PhysicsCollisionAttributes,
+	transform:crate::integer::Planar64Affine3,
+	normal_transform:crate::integer::Planar64Mat3,
 }
 
-impl PhysicsModel {
-	fn from_model_transform_attributes(model:&crate::model::IndexedModel,transform:&crate::integer::Planar64Affine3,attributes:PhysicsCollisionAttributes)->Self{
-		let mut aabb=TreyMesh::default();
-		for indexed_vertex in &model.unique_vertices {
-			aabb.grow(transform.transform_point3(model.unique_pos[indexed_vertex.pos as usize]));
-		}
+impl PhysicsModel{
+	fn new(mesh_id:usize,transform:crate::integer::Planar64Affine3,attributes:PhysicsCollisionAttributes)->Self{
 		Self{
-			mesh:aabb,
+			mesh_id,
 			attributes,
-			transform:transform.clone(),
+			transform,
+			normal_transform:transform.matrix3.inverse().transpose(),
 		}
 	}
-	pub fn from_model(model:&crate::model::IndexedModel,instance:&crate::model::ModelInstance) -> Option<Self> {
+	pub fn from_model(mesh_id:usize,instance:&crate::model::ModelInstance) -> Option<Self> {
 		match &instance.attributes{
-			crate::model::CollisionAttributes::Contact{contacting,general}=>Some(PhysicsModel::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Contact{contacting:contacting.clone(),general:general.clone()})),
-			crate::model::CollisionAttributes::Intersect{intersecting,general}=>Some(PhysicsModel::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Intersect{intersecting:intersecting.clone(),general:general.clone()})),
+			crate::model::CollisionAttributes::Contact{contacting,general}=>Some(PhysicsModel::new(mesh_id,instance.transform.clone(),PhysicsCollisionAttributes::Contact{contacting:contacting.clone(),general:general.clone()})),
+			crate::model::CollisionAttributes::Intersect{intersecting,general}=>Some(PhysicsModel::new(mesh_id,instance.transform.clone(),PhysicsCollisionAttributes::Intersect{intersecting:intersecting.clone(),general:general.clone()})),
 			crate::model::CollisionAttributes::Decoration=>None,
 		}
 	}
-	pub fn unit_vertices(&self) -> [Planar64Vec3;8] {
-		TreyMesh::unit_vertices()
-	}
-	pub fn mesh(&self) -> &TreyMesh {
-		return &self.mesh;
-	}
-	// pub fn face_mesh(&self,face:TreyMeshFace)->TreyMesh{
-	// 	self.mesh.face(face)
-	// }
-	pub fn face_normal(&self,face:TreyMeshFace) -> Planar64Vec3 {
-		TreyMesh::normal(face)//this is wrong for scale
+	pub fn mesh<'a>(&self,meshes:&Vec<PhysicsMesh>)->VirtualMesh<'a>{
+		VirtualMesh{
+			mesh:&meshes[self.mesh_id],
+			transform:&self.transform,
+			normal_transform:&self.normal_transform,
+			normal_determinant:self.normal_transform.determinant(),
+		}
 	}
 }
 
-//need non-face (full model) variant for CanCollide false objects
-//OR have a separate list from contacts for model intersection
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
-pub struct RelativeCollision {
-	face:TreyMeshFace,//just an id
-	model:usize,//using id to avoid lifetimes
+struct ContactCollision{
+	face_id:crate::model_physics::MinkowskiFace,
+	model_id:usize,//using id to avoid lifetimes
 }
-
-impl RelativeCollision {
-	fn model<'a>(&self,models:&'a PhysicsModels)->Option<&'a PhysicsModel>{
-		models.get(self.model)
-	}
-	// pub fn mesh(&self,models:&Vec<PhysicsModel>) -> TreyMesh {
-	// 	return self.model(models).unwrap().face_mesh(self.face).clone()
-	// }
-	fn normal(&self,models:&PhysicsModels) -> Planar64Vec3 {
-		return self.model(models).unwrap().face_normal(self.face)
-	}
+#[derive(Debug,Clone,Eq,Hash,PartialEq)]
+struct IntersectCollision{
+	model_id:usize,
 }
-
+#[derive(Debug,Clone,Eq,Hash,PartialEq)]
+enum Collision{
+	Contact(ContactCollision),
+	Intersect(IntersectCollision),
+}
+#[derive(Default)]
 struct TouchingState{
-	contacts:std::collections::HashMap::<usize,RelativeCollision>,
-	intersects:std::collections::HashMap::<usize,RelativeCollision>,
+	contacts:std::collections::HashSet::<ContactCollision>,
+	intersects:std::collections::HashSet::<IntersectCollision>,
 }
 impl TouchingState{
 	fn clear(&mut self){
 		self.contacts.clear();
 		self.intersects.clear();
 	}
-	fn insert_contact(&mut self,model_id:usize,collision:RelativeCollision)->Option<RelativeCollision>{
-		self.contacts.insert(model_id,collision)
-	}
-	fn remove_contact(&mut self,model_id:usize)->Option<RelativeCollision>{
-		self.contacts.remove(&model_id)
-	}
-	fn insert_intersect(&mut self,model_id:usize,collision:RelativeCollision)->Option<RelativeCollision>{
-		self.intersects.insert(model_id,collision)
-	}
-	fn remove_intersect(&mut self,model_id:usize)->Option<RelativeCollision>{
-		self.intersects.remove(&model_id)
-	}
-	fn constrain_velocity(&self,models:&PhysicsModels,velocity:&mut Planar64Vec3){
-		for (_,contact) in &self.contacts {
-			let n=contact.normal(models);
-			let d=velocity.dot(n);
-			if d<Planar64::ZERO{
-				(*velocity)-=n*(d/n.dot(n));
-			}
+	fn insert(&mut self,collision:Collision)->bool{
+		match collision{
+			Collision::Contact(collision)=>self.contacts.insert(collision),
+			Collision::Intersect(collision)=>self.intersects.insert(collision),
 		}
+	}
+	fn remove(&mut self,collision:&Collision)->bool{
+		match collision{
+			Collision::Contact(collision)=>self.contacts.remove(collision),
+			Collision::Intersect(collision)=>self.intersects.remove(collision),
+		}
+	}
+	fn get_acceleration(&self,gravity:Planar64Vec3)->Planar64Vec3{
+		//accelerators
+		//water
+		//contact constrain?
+		todo!()
+	}
+	fn constrain_velocity(&self,meshes:&Vec<PhysicsModel>,models:&PhysicsModels,velocity:&mut Planar64Vec3){
+		for contact in &self.contacts{
+			//trey push solve
+		}
+		todo!()
 	}
 	fn constrain_acceleration(&self,models:&PhysicsModels,acceleration:&mut Planar64Vec3){
-		for (_,contact) in &self.contacts {
-			let n=contact.normal(models);
-			let d=acceleration.dot(n);
-			if d<Planar64::ZERO{
-				(*acceleration)-=n*(d/n.dot(n));
-			}
+		for contact in &self.contacts{
+			//trey push solve
 		}
-	}
-}
-impl Default for TouchingState{
-	fn default() -> Self {
-		Self{
-			contacts: std::collections::HashMap::new(),
-			intersects: std::collections::HashMap::new(),
-		}
+		todo!()
 	}
 }
 
@@ -803,6 +774,7 @@ impl Default for PhysicsState{
 			style:StyleModifiers::default(),
 			touching:TouchingState::default(),
 			models:PhysicsModels::default(),
+			meshes:Vec::new(),
 			bvh:crate::bvh::BvhNode::default(),
 			move_state: MoveState::Air,
 			camera:PhysicsCamera::default(),
@@ -844,9 +816,11 @@ impl PhysicsState {
 		let mut starts=Vec::new();
 		let mut spawns=Vec::new();
 		for model in &indexed_models.models{
-			//make aabb and run vertices to get realistic bounds
+			let mesh_id=self.meshes.len();
+			let mut make_mesh=false;
 			for model_instance in &model.instances{
-				if let Some(model_physics)=PhysicsModel::from_model(model,model_instance){
+				if let Some(model_physics)=PhysicsModel::from_model(mesh_id,model_instance){
+					make_mesh=true;
 					let model_id=self.models.push(model_physics);
 					for attr in &model_instance.temp_indexing{
 						match attr{
@@ -857,8 +831,11 @@ impl PhysicsState {
 					}
 				}
 			}
+			if make_mesh{
+				self.meshes.push(PhysicsMesh::from_model(model));
+			}
 		}
-		self.bvh=crate::bvh::generate_bvh(self.models.models.iter().map(|m|m.mesh().clone()).collect());
+		self.bvh=crate::bvh::generate_bvh(self.models.aabb_list(&self.meshes));
 		//I don't wanna write structs for temporary structures
 		//this code builds ModeDescriptions from the unsorted lists at the top of the function
 		starts.sort_by_key(|tup|tup.1.mode_id);
@@ -1000,7 +977,7 @@ impl PhysicsState {
 		}
 		aabb
 	}
-	fn predict_collision_end(&self,time:Time,time_limit:Time,collision_data:&RelativeCollision) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn predict_collision_end(&self,time:Time,time_limit:Time,collision_data:&ContactCollision) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//must treat cancollide false objects differently: you may not exit through the same face you entered.
 		//RelativeCollsion must reference the full model instead of a particular face
 		//this is Ctrl+C Ctrl+V of predict_collision_start but with v=-v before the calc and t=-t after the calc
@@ -1264,7 +1241,7 @@ impl PhysicsState {
 		if let Some(face)=best_face{
 			return Some(TimedInstruction{
 				time: best_time,
-				instruction:PhysicsInstruction::CollisionStart(RelativeCollision{
+				instruction:PhysicsInstruction::CollisionStart(ContactCollision{
 					face,
 					model:model_id
 				})
