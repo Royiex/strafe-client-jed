@@ -281,10 +281,23 @@ enum JumpImpulse{
 //Energy means it adds energy
 //Linear means it linearly adds on
 
+enum EnableStrafe{
+	Always,
+	MaskAny(u32),//hsw, shsw
+	MaskAll(u32),
+	//Function(Box<dyn Fn(u32)->bool>),
+}
+
+struct StrafeSettings{
+	enable:EnableStrafe,
+	air_accel_limit:Option<Planar64>,
+	tick_rate:Ratio64,
+}
+
 struct StyleModifiers{
-	controls_mask:u32,//controls which are unable to be activated
-	controls_held:u32,//controls which must be active to be able to strafe
-	strafe_tick_rate:Option<Ratio64>,
+	controls_used:u32,//controls which are allowed to pass into gameplay
+	controls_mask:u32,//controls which are masked from control state (e.g. jump in scroll style)
+	strafe:Option<StrafeSettings>,
 	jump_impulse:JumpImpulse,
 	jump_calculation:JumpCalculation,
 	static_friction:Planar64,
@@ -297,14 +310,13 @@ struct StyleModifiers{
 	swim_speed:Planar64,
 	mass:Planar64,
 	mv:Planar64,
-	air_accel_limit:Option<Planar64>,
 	rocket_force:Option<Planar64>,
 	gravity:Planar64Vec3,
 	hitbox_halfsize:Planar64Vec3,
 	camera_offset:Planar64Vec3,
 }
 impl std::default::Default for StyleModifiers{
-	fn default() -> Self {
+	fn default()->Self{
 		Self::roblox_bhop()
 	}
 }
@@ -324,9 +336,13 @@ impl StyleModifiers{
 
 	fn new()->Self{
 		Self{
+			controls_used:!0,
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
-			controls_held:0,
-			strafe_tick_rate:Some(Ratio64::new(128,Time::ONE_SECOND.nanos() as u64).unwrap()),
+			strafe:Some(StrafeSettings{
+				enable:EnableStrafe::Always,
+				air_accel_limit:None,
+				tick_rate:Ratio64::new(128,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			}),
 			jump_impulse:JumpImpulse::FromEnergy(Planar64::int(512)),
 			jump_calculation:JumpCalculation::Energy,
 			gravity:Planar64Vec3::int(0,-80,0),
@@ -334,7 +350,6 @@ impl StyleModifiers{
 			kinetic_friction:Planar64::int(3),//unrealistic: kinetic friction is typically lower than static
 			mass:Planar64::int(1),
 			mv:Planar64::int(2),
-			air_accel_limit:None,
 			rocket_force:None,
 			walk_speed:Planar64::int(16),
 			walk_accel:Planar64::int(80),
@@ -349,9 +364,13 @@ impl StyleModifiers{
 
 	fn roblox_bhop()->Self{
 		Self{
+			controls_used:!0,
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
-			controls_held:0,
-			strafe_tick_rate:Some(Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap()),
+			strafe:Some(StrafeSettings{
+				enable:EnableStrafe::Always,
+				air_accel_limit:None,
+				tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			}),
 			jump_impulse:JumpImpulse::FromTime(Time::from_micros(715_588)),
 			jump_calculation:JumpCalculation::Capped,
 			gravity:Planar64Vec3::int(0,-100,0),
@@ -359,7 +378,6 @@ impl StyleModifiers{
 			kinetic_friction:Planar64::int(3),//unrealistic: kinetic friction is typically lower than static
 			mass:Planar64::int(1),
 			mv:Planar64::int(27)/10,
-			air_accel_limit:None,
 			rocket_force:None,
 			walk_speed:Planar64::int(18),
 			walk_accel:Planar64::int(90),
@@ -373,9 +391,13 @@ impl StyleModifiers{
 	}
 	fn roblox_surf()->Self{
 		Self{
+			controls_used:!0,
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
-			controls_held:0,
-			strafe_tick_rate:Some(Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap()),
+			strafe:Some(StrafeSettings{
+				enable:EnableStrafe::Always,
+				air_accel_limit:None,
+				tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			}),
 			jump_impulse:JumpImpulse::FromTime(Time::from_micros(715_588)),
 			jump_calculation:JumpCalculation::Capped,
 			gravity:Planar64Vec3::int(0,-50,0),
@@ -383,7 +405,6 @@ impl StyleModifiers{
 			kinetic_friction:Planar64::int(3),//unrealistic: kinetic friction is typically lower than static
 			mass:Planar64::int(1),
 			mv:Planar64::int(27)/10,
-			air_accel_limit:None,
 			rocket_force:None,
 			walk_speed:Planar64::int(18),
 			walk_accel:Planar64::int(90),
@@ -398,9 +419,13 @@ impl StyleModifiers{
 
 	fn source_bhop()->Self{
 		Self{
+			controls_used:!0,
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
-			controls_held:0,
-			strafe_tick_rate:Some(Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap()),
+			strafe:Some(StrafeSettings{
+				enable:EnableStrafe::Always,
+				air_accel_limit:Some(Planar64::raw(150<<28)*66),
+				tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			}),
 			jump_impulse:JumpImpulse::FromHeight(Planar64::raw(52<<28)),
 			jump_calculation:JumpCalculation::Linear,
 			gravity:Planar64Vec3::raw(0,-800<<28,0),
@@ -408,7 +433,6 @@ impl StyleModifiers{
 			kinetic_friction:Planar64::int(3),//?
 			mass:Planar64::int(1),
 			mv:Planar64::raw(30<<28),
-			air_accel_limit:Some(Planar64::raw(150<<28)*66),
 			rocket_force:None,
 			walk_speed:Planar64::int(18),//?
 			walk_accel:Planar64::int(90),//?
@@ -421,11 +445,14 @@ impl StyleModifiers{
 		}
 	}
 	fn source_surf()->Self{
-		//camera_offset=vec3(0,64/16-73/16/2,0),
 		Self{
+			controls_used:!0,
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
-			controls_held:0,
-			strafe_tick_rate:Some(Ratio64::new(66,Time::ONE_SECOND.nanos() as u64).unwrap()),
+			strafe:Some(StrafeSettings{
+				enable:EnableStrafe::Always,
+				air_accel_limit:Some(Planar64::raw(150<<28)*66),
+				tick_rate:Ratio64::new(66,Time::ONE_SECOND.nanos() as u64).unwrap(),
+			}),
 			jump_impulse:JumpImpulse::FromHeight(Planar64::raw(52<<28)),
 			jump_calculation:JumpCalculation::Linear,
 			gravity:Planar64Vec3::raw(0,-800<<28,0),
@@ -433,7 +460,6 @@ impl StyleModifiers{
 			kinetic_friction:Planar64::int(3),//?
 			mass:Planar64::int(1),
 			mv:Planar64::raw(30<<28),
-			air_accel_limit:Some(Planar64::raw(150<<28)*66),
 			rocket_force:None,
 			walk_speed:Planar64::int(18),//?
 			walk_accel:Planar64::int(90),//?
@@ -447,9 +473,9 @@ impl StyleModifiers{
 	}
 	fn roblox_rocket()->Self{
 		Self{
-			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
-			controls_held:0,
-			strafe_tick_rate:None,
+			controls_used:!0,
+			controls_mask:!0,
+			strafe:None,
 			jump_impulse:JumpImpulse::FromTime(Time::from_micros(715_588)),
 			jump_calculation:JumpCalculation::Capped,
 			gravity:Planar64Vec3::int(0,-100,0),
@@ -457,7 +483,6 @@ impl StyleModifiers{
 			kinetic_friction:Planar64::int(3),//unrealistic: kinetic friction is typically lower than static
 			mass:Planar64::int(1),
 			mv:Planar64::int(27)/10,
-			air_accel_limit:None,
 			rocket_force:Some(Planar64::int(200)),
 			walk_speed:Planar64::int(18),
 			walk_accel:Planar64::int(90),
@@ -474,13 +499,19 @@ impl StyleModifiers{
 		controls&self.controls_mask&control==control
 	}
 
+	fn allow_strafe(&self,controls:u32)->bool{
+		//disable strafing according to strafe settings
+		match &self.strafe{
+			Some(StrafeSettings{enable:EnableStrafe::Always,air_accel_limit:_,tick_rate:_})=>true,
+			&Some(StrafeSettings{enable:EnableStrafe::MaskAny(mask),air_accel_limit:_,tick_rate:_})=>mask&controls!=0,
+			&Some(StrafeSettings{enable:EnableStrafe::MaskAll(mask),air_accel_limit:_,tick_rate:_})=>mask&controls==mask,
+			None=>false,
+		}
+	}
+
 	fn get_control_dir(&self,controls:u32)->Planar64Vec3{
 		//don't get fancy just do it
 		let mut control_dir:Planar64Vec3 = Planar64Vec3::ZERO;
-		//Disallow strafing if held controls are not held
-		if controls&self.controls_held!=self.controls_held{
-			return control_dir;
-		}
 		//Apply mask after held check so you can require non-allowed keys to be held for some reason
 		let controls=controls&self.controls_mask;
 		if controls & Self::CONTROL_MOVEFORWARD == Self::CONTROL_MOVEFORWARD {
@@ -863,10 +894,10 @@ impl PhysicsState {
 		}
 	}
 
-	fn next_strafe_instruction(&self) -> Option<TimedInstruction<PhysicsInstruction>> {
-		self.style.strafe_tick_rate.as_ref().map(|strafe_tick_rate|{
+	fn next_strafe_instruction(&self)->Option<TimedInstruction<PhysicsInstruction>>{
+		self.style.strafe.as_ref().map(|strafe|{
 			TimedInstruction{
-				time:Time::from_nanos(strafe_tick_rate.rhs_div_int(strafe_tick_rate.mul_int(self.time.nanos())+1)),
+				time:Time::from_nanos(strafe.tick_rate.rhs_div_int(strafe.tick_rate.mul_int(self.time.nanos())+1)),
 				//only poll the physics if there is a before and after mouse event
 				instruction:PhysicsInstruction::StrafeTick
 			}
