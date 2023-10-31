@@ -832,7 +832,7 @@ impl PhysicsState {
 				}
 			}
 			if make_mesh{
-				self.meshes.push(PhysicsMesh::from_model(model));
+				self.meshes.push(PhysicsMesh::from(model));
 			}
 		}
 		self.bvh=crate::bvh::generate_bvh(self.models.aabb_list(&self.meshes));

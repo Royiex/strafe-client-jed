@@ -41,6 +41,119 @@ pub struct PhysicsMesh{
 	vert_topology:Vec<VertRefs>,
 }
 
+#[derive(Default,Clone)]
+struct VertRefGuy{
+	edges:std::collections::HashSet<EdgeId>,
+}
+#[derive(Hash,Eq,PartialEq)]
+struct EdgeIdGuy([VertId;2]);
+impl EdgeIdGuy{
+	fn new(v0:VertId,v1:VertId)->Self{
+		if v0.0<v1.0{
+			Self([v0,v1])
+		}else{
+			Self([v1,v0])
+		}
+	}
+}
+struct EdgeRefGuy([FaceId;2]);
+impl EdgeRefGuy{
+	fn new()->Self{
+		Self([FaceId(0);2])
+	}
+	fn push(&mut self,i:usize,face_id:FaceId){
+		self.0[i]=face_id;
+	}
+}
+struct FaceRefGuy(Vec<EdgeId>);
+#[derive(Default)]
+struct EdgePool{
+	edge_guys:Vec<(EdgeIdGuy,EdgeRefGuy)>,
+	edge_id_from_guy:std::collections::HashMap<EdgeIdGuy,usize>,
+}
+impl EdgePool{
+	fn push(&mut self,edge_id_guy:EdgeIdGuy)->(&mut EdgeRefGuy,EdgeId,bool){
+		if let Some(&edge_id)=self.edge_id_from_guy.get(&edge_id_guy){
+			(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,EdgeId(edge_id),true)
+		}else{
+			let edge_id=self.edge_guys.len();
+			self.edge_guys.push((edge_id_guy,EdgeRefGuy::new()));
+			self.edge_id_from_guy.insert(edge_id_guy,edge_id);
+			(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,EdgeId(edge_id),false)
+		}
+	}
+}
+impl From<&crate::model::IndexedModel> for PhysicsMesh{
+	fn from(indexed_model:&crate::model::IndexedModel)->Self{
+		let verts=indexed_model.unique_pos.iter().map(|v|Vert(v.clone())).collect();
+		let mut vert_edges=vec![VertRefGuy::default();indexed_model.unique_pos.len()];
+		let mut edge_pool=EdgePool::default();
+		let (faces,face_ref_guys):(Vec<Face>,Vec<FaceRefGuy>)=indexed_model.groups[0].polys.iter().enumerate().map(|(i,poly)|{
+			let face_id=FaceId(i);
+			//one face per poly
+			let mut normal=Planar64Vec3::ZERO;
+			let len=poly.vertices.len();
+			let face_edges=poly.vertices.iter().enumerate().map(|(i,&vert_id)|{
+				let vert0_id=vert_id as usize;
+				let vert1_id=poly.vertices[(i+1)%len] as usize;
+				//https://www.khronos.org/opengl/wiki/Calculating_a_Surface_Normal (Newell's Method)
+				let v0=indexed_model.unique_pos[vert0_id];
+				let v1=indexed_model.unique_pos[vert1_id];
+				normal+=Planar64Vec3::new(
+					(v0.y()-v1.y())*(v0.z()+v1.z()),
+					(v0.z()-v1.z())*(v0.x()+v1.x()),
+					(v0.x()-v1.x())*(v0.y()+v1.y()),
+				);
+				//get/create edge and push face into it
+				let edge_id_guy=EdgeIdGuy::new(VertId(vert0_id),VertId(vert1_id));
+				let (edge_ref_guy,edge_id,exists)=edge_pool.push(edge_id_guy);
+				if exists{
+					edge_ref_guy.push(1,face_id);
+				}else{
+					edge_ref_guy.push(0,face_id);
+				}
+				//index edge into vertices
+				unsafe{vert_edges.get_unchecked_mut(vert0_id)}.edges.insert(edge_id);
+				unsafe{vert_edges.get_unchecked_mut(vert1_id)}.edges.insert(edge_id);
+				//return edge_id
+				edge_id
+			}).collect();
+			//choose precision loss randomly idk
+			normal=normal/len as i64;
+			let mut dot=Planar64::ZERO;
+			for &v in poly.vertices.iter(){
+				dot+=normal.dot(indexed_model.unique_pos[v as usize]);
+			}
+			(Face{normal,dot:dot/len as i64},FaceRefGuy(face_edges))
+		}).unzip();
+		//conceivably faces, edges, and vertices exist now
+		Self{
+			faces,
+			verts,
+			face_topology:face_ref_guys.into_iter().enumerate().map(|(i,face_ref_guy)|{
+				let face_id=FaceId(i);
+				FaceRefs{edges:face_ref_guy.0.into_iter().map(|edge_id|{
+					//get the edge face that's not this face
+					let edge_faces=edge_pool.edge_guys[edge_id.0].1.0;
+					if edge_faces[0]==face_id{
+						(edge_id,edge_faces[1])
+					}else if edge_faces[1]==face_id{
+						(edge_id,edge_faces[0])
+					}else{
+						panic!("edge does not contain face")
+					}
+				}).collect()}
+			}).collect(),
+			edge_topology:edge_pool.edge_guys.into_iter().map(|(edge_id_guy,edge_ref_guy)|
+				EdgeRefs{faces:edge_ref_guy.0,verts:edge_id_guy.0}
+			).collect(),
+			vert_topology:vert_edges.into_iter().map(|vert_ref_guy|
+				VertRefs{edges:vert_ref_guy.edges.into_iter().collect()}
+			).collect(),
+		}
+	}
+}
+
 pub trait MeshQuery<FACE:Clone,EDGE:Clone,VERT:Clone>{
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<FACE,EDGE,VERT>;
 	fn face_nd(&self,face_id:FACE)->(Planar64Vec3,Planar64);
