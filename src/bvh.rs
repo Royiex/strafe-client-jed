@@ -29,6 +29,10 @@ impl BvhNode{
 		match &self.content{
 			&BvhNodeContent::Leaf(model)=>f(model),
 			BvhNodeContent::Branch(children)=>for child in children{
+				//this test could be moved outside the match statement
+				//but that would test the root node aabb
+				//you're probably not going to spend a lot of time outside the map,
+				//so the test is extra work for nothing
 				if aabb.intersects(&child.aabb){
 					child.the_tester(aabb,f);
 				}
