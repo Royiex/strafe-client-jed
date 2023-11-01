@@ -173,12 +173,12 @@ pub enum MinkowskiFace{
 }
 
 pub struct MinkowskiMesh<'a>{
-	mesh0:&'a VirtualMesh<'a>,
-	mesh1:&'a VirtualMesh<'a>,
+	mesh0:&'a TransformedMesh<'a>,
+	mesh1:&'a TransformedMesh<'a>,
 }
 
 impl MinkowskiMesh<'_>{
-	pub fn minkowski_sum<'a>(mesh0:&'a VirtualMesh,mesh1:&'a VirtualMesh)->MinkowskiMesh<'a>{
+	pub fn minkowski_sum<'a>(mesh0:&'a TransformedMesh,mesh1:&'a TransformedMesh)->MinkowskiMesh<'a>{
 		MinkowskiMesh{
 			mesh0,
 			mesh1,

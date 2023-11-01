@@ -1,7 +1,7 @@
 use crate::zeroes::zeroes2;
 use crate::instruction::{InstructionEmitter,InstructionConsumer,TimedInstruction};
 use crate::integer::{Time,Planar64,Planar64Vec3,Planar64Mat3,Angle32,Ratio64,Ratio64Vec2};
-use crate::model_physics::{PhysicsMesh,VirtualMesh,MinkowskiMesh};
+use crate::model_physics::{PhysicsMesh,TransformedMesh,MinkowskiMesh};
 
 #[derive(Debug)]
 pub enum PhysicsInstruction {
@@ -643,8 +643,8 @@ impl PhysicsModel{
 			crate::model::CollisionAttributes::Decoration=>None,
 		}
 	}
-	pub fn mesh<'a>(&self,meshes:&Vec<PhysicsMesh>)->VirtualMesh<'a>{
-		VirtualMesh{
+	pub fn mesh<'a>(&self,meshes:&Vec<PhysicsMesh>)->TransformedMesh<'a>{
+		TransformedMesh{
 			mesh:&meshes[self.mesh_id],
 			transform:&self.transform,
 			normal_transform:&self.normal_transform,
