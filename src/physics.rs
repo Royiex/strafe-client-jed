@@ -976,25 +976,25 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 	fn next_instruction(&self,time_limit:Time) -> Option<TimedInstruction<PhysicsInstruction>> {
 		//JUST POLLING!!! NO MUTATION
 		let mut collector = crate::instruction::InstructionCollector::new(time_limit);
-		//check for collision stop instructions with curent contacts
-		//TODO: make this into a touching.next_instruction(&mut collector) member function
-		for (_,collision_data) in &self.touching.contacts {
-			collector.collect(self.predict_collision_end(self.time,time_limit,collision_data));
-		}
-		// for collision_data in &self.intersects{
-		// 	collector.collect(self.predict_collision_end2(self.time,time_limit,collision_data));
-		// }
-		//check for collision start instructions (against every part in the game with no optimization!!)
+
+		collector.collect(self.next_move_instruction());
+
+		//check for collision ends
+		self.touching.next_instruction(&mut collector,self.style.mesh,self.body,self.time,collector.time());
+		//check for collision starts
 		let mut aabb=crate::aabb::Aabb::default();
 		aabb.grow(self.body.extrapolated_position(self.time));
-		aabb.grow(self.body.extrapolated_position(time_limit));
+		aabb.grow(self.body.extrapolated_position(collector.time()));
 		aabb.inflate(self.style.hitbox_halfsize);
 		self.bvh.the_tester(&aabb,&mut |id|{
-			if !(self.touching.contacts.contains_key(&id)||self.touching.intersects.contains_key(&id)){
-				collector.collect(self.predict_collision_start(self.time,time_limit,id));
-			}
+			//no checks are needed because of the time limits.
+			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(self.style.mesh,self.models.mesh(id));
+			let relative_body=VirtualBody::relative(&self.body,&Body::default()).body(self.time);
+			collector.collect(crate::face_crawler::predict_collision(&minkowski,&relative_body,collector.time()).map(|(face,time)|{
+				//TODO: match model attribute and generate Collision::{Contact,Intersect}
+				TimedInstruction{time,instruction:PhysicsInstruction::CollisionStart(Collision::Contact(ContactCollision{model_id:id,face_id:face}))}
+			}));
 		});
-		collector.collect(self.next_move_instruction());
 		collector.instruction()
 	}
 }
