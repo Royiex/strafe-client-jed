@@ -50,6 +50,8 @@ pub struct IndexedModelInstances{
 }
 //stage description referencing flattened ids is spooky, but the map loading is meant to be deterministic.
 pub struct ModeDescription{
+	//TODO: put "default" style modifiers in mode
+	//pub style:StyleModifiers,
 	pub start:usize,//start=model_id
 	pub spawns:Vec<usize>,//spawns[spawn_id]=model_id
 	pub spawn_from_stage_id:std::collections::HashMap::<u32,usize>,
