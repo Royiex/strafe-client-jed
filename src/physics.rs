@@ -168,6 +168,15 @@ impl PhysicsModels{
 		self.attributes.clear();
 		self.model_id_from_wormhole_id.clear();
 	}
+	fn aabb_list(&self)->Vec<crate::aabb::Aabb>{
+		self.models.iter().map(|model|{
+			let mut aabb=crate::aabb::Aabb::default();
+			for pos in self.meshes[model.mesh_id].verts(){
+				aabb.grow(model.transform.transform_point3(pos));
+			}
+			aabb
+		}).collect()
+	}
 	//TODO: "statically" verify the maps don't refer to any nonexistant data, if they do delete the references.
 	//then I can make these getter functions unchecked.
 	fn mesh(&self,model_id:usize)->TransformedMesh{
@@ -853,7 +862,7 @@ impl PhysicsState {
 				self.meshes.push(PhysicsMesh::from(model));
 			}
 		}
-		self.bvh=crate::bvh::generate_bvh(self.models.aabb_list(&self.meshes));
+		self.bvh=crate::bvh::generate_bvh(self.models.aabb_list());
 		//I don't wanna write structs for temporary structures
 		//this code builds ModeDescriptions from the unsorted lists at the top of the function
 		starts.sort_by_key(|tup|tup.1.mode_id);

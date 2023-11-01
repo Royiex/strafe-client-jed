@@ -167,6 +167,11 @@ pub trait MeshQuery<FACE:Clone,EDGE:Clone,VERT:Clone>{
 	fn edge_verts(&self,edge_id:EDGE)->Cow<[VERT;2]>;
 	fn vert_edges(&self,vert_id:VERT)->Cow<Vec<EDGE>>;
 }
+impl PhysicsMesh{
+	pub fn verts<'a>(&'a self)->impl Iterator<Item=Planar64Vec3>+'a{
+		self.verts.iter().map(|Vert(pos)|*pos)
+	}
+}
 impl MeshQuery<FaceId,EdgeId,VertId> for PhysicsMesh{
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<FaceId,EdgeId,VertId>{
 		//TODO: put some genius code right here
