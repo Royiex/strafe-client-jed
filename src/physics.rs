@@ -1085,15 +1085,15 @@ fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehav
 
 impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 	fn process_instruction(&mut self, ins:TimedInstruction<PhysicsInstruction>) {
-		match &ins.instruction {
+		match &ins.instruction{
 			PhysicsInstruction::Input(PhysicsInputInstruction::Idle)
 			|PhysicsInstruction::Input(PhysicsInputInstruction::SetNextMouse(_))
 			|PhysicsInstruction::Input(PhysicsInputInstruction::ReplaceMouse(_,_))
-			|PhysicsInstruction::StrafeTick => (),
+			|PhysicsInstruction::StrafeTick=>(),
 			_=>println!("{}|{:?}",ins.time,ins.instruction),
 		}
 		//selectively update body
-		match &ins.instruction {
+		match &ins.instruction{
 			PhysicsInstruction::Input(PhysicsInputInstruction::Idle)=>self.time=ins.time,//idle simply updates time
 			PhysicsInstruction::Input(_)
 			|PhysicsInstruction::ReachWalkTargetVelocity
@@ -1101,10 +1101,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			|PhysicsInstruction::CollisionEnd(_)
 			|PhysicsInstruction::StrafeTick=>self.advance_time(ins.time),
 		}
-		match ins.instruction {
-			PhysicsInstruction::CollisionStart(c) => {
-				let model=c.model(&self.models).unwrap();
-				match &model.attributes{
+		match ins.instruction{
+			PhysicsInstruction::CollisionStart(c)=>{
+				match self.models.attr(c.model_id()){
 					PhysicsCollisionAttributes::Contact{contacting,general}=>{
 						let mut v=self.body.velocity;
 						match &contacting.contact_behaviour{
