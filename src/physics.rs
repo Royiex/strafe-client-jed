@@ -156,6 +156,7 @@ impl Default for Modes{
 
 #[derive(Default)]
 struct PhysicsModels{
+	//TODO: put meshes, attributes in here, indexed!
 	models:Vec<PhysicsModel>,
 	model_id_from_wormhole_id:std::collections::HashMap::<u32,usize>,
 }
@@ -164,6 +165,8 @@ impl PhysicsModels{
 		self.models.clear();
 		self.model_id_from_wormhole_id.clear();
 	}
+	//TODO: "statically" verify the maps don't refer to any nonexistant data, if they do delete the references.
+	//then I can make these getter functions unchecked.
 	fn get(&self,model_id:usize)->Option<&PhysicsModel>{
 		self.models.get(model_id)
 	}

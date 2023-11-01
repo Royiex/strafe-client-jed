@@ -237,6 +237,7 @@ impl IntersectingAttributes{
 	}
 }
 //Spawn(u32) NO! spawns are indexed in the map header instead of marked with attibutes
+//TODO: deduplicate attributes
 pub enum CollisionAttributes{
 	Decoration,//visual only
 	Contact{//track whether you are contacting the object
