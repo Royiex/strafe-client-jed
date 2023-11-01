@@ -645,6 +645,14 @@ impl Planar64Vec3{
 		)>>32) as i64)
 	}
 	#[inline]
+	pub fn cross(&self,rhs:Self)->Planar64Vec3{
+		Planar64Vec3(glam::i64vec3(
+			(((self.0.y as i128)*(rhs.0.y as i128)-(self.0.z as i128)*(rhs.0.z as i128))>>32) as i64,
+			(((self.0.z as i128)*(rhs.0.z as i128)-(self.0.x as i128)*(rhs.0.x as i128))>>32) as i64,
+			(((self.0.x as i128)*(rhs.0.x as i128)-(self.0.y as i128)*(rhs.0.y as i128))>>32) as i64,
+		))
+	}
+	#[inline]
 	pub fn length(&self)->Planar64{
 		let radicand=(self.0.x as i128)*(self.0.x as i128)+(self.0.y as i128)*(self.0.y as i128)+(self.0.z as i128)*(self.0.z as i128);
 		Planar64(unsafe{(radicand as f64).sqrt().to_int_unchecked()})
