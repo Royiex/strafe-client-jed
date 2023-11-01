@@ -589,6 +589,10 @@ impl Planar64Vec3{
 	pub const MIN:Self=Planar64Vec3(glam::I64Vec3::MIN);
 	pub const MAX:Self=Planar64Vec3(glam::I64Vec3::MAX);
 	#[inline]
+	pub const fn new(x:Planar64,y:Planar64,z:Planar64)->Self{
+		Self(glam::i64vec3(x.0,y.0,z.0))
+	}
+	#[inline]
 	pub const fn int(x:i32,y:i32,z:i32)->Self{
 		Self(glam::i64vec3((x as i64)<<32,(y as i64)<<32,(z as i64)<<32))
 	}
