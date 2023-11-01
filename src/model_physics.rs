@@ -23,14 +23,15 @@ struct Face{
 struct Vert(Planar64Vec3);
 struct FaceRefs{
 	edges:Vec<(EdgeId,FaceId)>,
-	verts:Vec<VertId>,
+	//verts:Vec<VertId>,
 }
 struct EdgeRefs{
 	faces:[FaceId;2],//left, right
-	verts:[(VertId,FaceId);2],//bottom, top
+	verts:[VertId;2],//bottom, top
 }
 struct VertRefs{
-	edges:Vec<(EdgeId,FaceId)>,
+	//faces:Vec<FaceId>,
+	edges:Vec<EdgeId>,
 }
 pub struct PhysicsMesh{
 	faces:Vec<Face>,
@@ -46,8 +47,8 @@ pub trait MeshQuery<FACE:Clone,EDGE:Clone,VERT:Clone>{
 	fn vert(&self,vert_id:VERT)->Planar64Vec3;
 	fn face_edges(&self,face_id:FACE)->Cow<Vec<(EDGE,FACE)>>;
 	fn edge_faces(&self,edge_id:EDGE)->Cow<[FACE;2]>;
-	fn edge_verts(&self,edge_id:EDGE)->Cow<[(VERT,FACE);2]>;
-	fn vert_edges(&self,vert_id:VERT)->Cow<Vec<(EDGE,FACE)>>;
+	fn edge_verts(&self,edge_id:EDGE)->Cow<[VERT;2]>;
+	fn vert_edges(&self,vert_id:VERT)->Cow<Vec<EDGE>>;
 }
 impl MeshQuery<FaceId,EdgeId,VertId> for PhysicsMesh{
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<FaceId,EdgeId,VertId>{
@@ -107,21 +108,21 @@ impl MeshQuery<FaceId,EdgeId,VertId> for PhysicsMesh{
 	fn edge_faces(&self,edge_id:EdgeId)->Cow<[FaceId;2]>{
 		Cow::Borrowed(&self.edge_topology[edge_id.0].faces)
 	}
-	fn edge_verts(&self,edge_id:EdgeId)->Cow<[(VertId,FaceId);2]>{
+	fn edge_verts(&self,edge_id:EdgeId)->Cow<[VertId;2]>{
 		Cow::Borrowed(&self.edge_topology[edge_id.0].verts)
 	}
-	fn vert_edges(&self,vert_id:VertId)->Cow<Vec<(EdgeId,FaceId)>>{
+	fn vert_edges(&self,vert_id:VertId)->Cow<Vec<EdgeId>>{
 		Cow::Borrowed(&self.vert_topology[vert_id.0].edges)
 	}
 }
 
-pub struct VirtualMesh<'a>{
+pub struct TransformedMesh<'a>{
 	mesh:&'a PhysicsMesh,
 	transform:&'a crate::integer::Planar64Affine3,
 	normal_transform:&'a crate::integer::Planar64Mat3,
 	normal_determinant:Planar64,
 }
-impl MeshQuery<FaceId,EdgeId,VertId> for VirtualMesh<'_>{
+impl MeshQuery<FaceId,EdgeId,VertId> for TransformedMesh<'_>{
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<FaceId,EdgeId,VertId>{
 		//put some genius code right here
 		todo!()
@@ -142,11 +143,11 @@ impl MeshQuery<FaceId,EdgeId,VertId> for VirtualMesh<'_>{
 		self.mesh.edge_faces(edge_id)
 	}
 	#[inline]
-	fn edge_verts(&self,edge_id:EdgeId)->Cow<[(VertId,FaceId);2]>{
+	fn edge_verts(&self,edge_id:EdgeId)->Cow<[VertId;2]>{
 		self.mesh.edge_verts(edge_id)
 	}
 	#[inline]
-	fn vert_edges(&self,vert_id:VertId)->Cow<Vec<(EdgeId,FaceId)>>{
+	fn vert_edges(&self,vert_id:VertId)->Cow<Vec<EdgeId>>{
 		self.mesh.vert_edges(vert_id)
 	}
 }
@@ -267,7 +268,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 			},
 		}
 	}
-	fn edge_verts(&self,edge_id:MinkowskiEdge)->Cow<[(MinkowskiVert,MinkowskiFace);2]>{
+	fn edge_verts(&self,edge_id:MinkowskiEdge)->Cow<[MinkowskiVert;2]>{
 		match edge_id{
 			MinkowskiEdge::VertEdge(v0,e1)=>{
 				Cow::Owned(self.mesh1.edge_verts(e1).map(|(vert_id1,face_id1)|{
@@ -281,7 +282,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 			},
 		}
 	}
-	fn vert_edges(&self,vert_id:MinkowskiVert)->Cow<Vec<(MinkowskiEdge,MinkowskiFace)>>{
+	fn vert_edges(&self,vert_id:MinkowskiVert)->Cow<Vec<MinkowskiEdge>>{
 		match vert_id{
 			MinkowskiVert::VertVert(v0,v1)=>{
 				let v0e=self.mesh0.vert_edges(v0);
