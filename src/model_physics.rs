@@ -239,8 +239,47 @@ pub struct TransformedMesh<'a>{
 }
 impl MeshQuery<FaceId,EdgeId,VertId> for TransformedMesh<'_>{
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<FaceId,EdgeId,VertId>{
-		//put some genius code right here
-		todo!()
+		//TODO: put some genius code right here
+
+		//brute force for now
+		let mut best_distance_squared=Planar64::MAX;
+		//make something up as default ret
+		//hopefully empty meshes don't make their way through here
+		let mut best_fev=FEV::<FaceId,EdgeId,VertId>::Vert(VertId(0));
+		//check each vert
+		for i in 0..self.mesh.verts.len(){
+			let v=self.vert(VertId(i));
+			let d=(v-point).dot(v-point);
+			if d<best_distance_squared{
+				best_distance_squared=d;
+				best_fev=FEV::<FaceId,EdgeId,VertId>::Vert(VertId(i));
+			}
+		}
+		//check each edge
+		for (i,e) in self.mesh.edge_topology.iter().enumerate(){
+			let v0=self.vert(e.verts[0]);
+			let v1=self.vert(e.verts[1]);
+			let n=v1-v0;
+			//n.cross(point-v0)=sin(t)*n*dis
+			let d=n.dot(point-v0);
+			if d<n.dot(v1)&&n.dot(v0)<d{
+				let c=n.cross(point-v0);
+				let edge_distance_squared=c.dot(c)/n.dot(n);
+				if edge_distance_squared<best_distance_squared{
+					best_distance_squared=edge_distance_squared;
+					best_fev=FEV::<FaceId,EdgeId,VertId>::Edge(EdgeId(i));
+				}
+			}
+		}
+		let face_dots:Vec<Planar64>=self.mesh.faces.iter().map(|f|(*self.normal_transform*f.normal).dot(point)).collect();
+		//check each face
+		for (i,f) in self.mesh.face_topology.iter().enumerate(){
+			if face_dots[i]<best_distance_squared&&f.edges.iter().all(|&(_,face_id)|face_dots[face_id.0]<=Planar64::ZERO){
+				best_distance_squared=face_dots[i];
+				best_fev=FEV::<FaceId,EdgeId,VertId>::Face(FaceId(i));
+			}
+		}
+		best_fev
 	}
 	fn face_nd(&self,face_id:FaceId)->(Planar64Vec3,Planar64){
 		let (n,d)=self.mesh.face_nd(face_id);
