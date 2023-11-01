@@ -156,8 +156,12 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 
 pub trait MeshQuery<FACE:Clone,EDGE:Clone,VERT:Clone>{
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<FACE,EDGE,VERT>;
-	fn face_nd(&self,face_id:FACE)->(Planar64Vec3,Planar64);
+	fn edge_n(&self,edge_id:EDGE)->Planar64Vec3{
+		let verts=self.edge_verts(edge_id);
+		self.vert(verts[1])-self.vert(verts[0])
+	}
 	fn vert(&self,vert_id:VERT)->Planar64Vec3;
+	fn face_nd(&self,face_id:FACE)->(Planar64Vec3,Planar64);
 	fn face_edges(&self,face_id:FACE)->Cow<Vec<(EDGE,FACE)>>;
 	fn edge_faces(&self,edge_id:EDGE)->Cow<[FACE;2]>;
 	fn edge_verts(&self,edge_id:EDGE)->Cow<[VERT;2]>;
