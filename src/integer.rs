@@ -519,6 +519,12 @@ impl std::ops::Add<Planar64> for Planar64{
 		Planar64(self.0+rhs.0)
 	}
 }
+impl std::ops::AddAssign<Planar64> for Planar64{
+	#[inline]
+	fn add_assign(&mut self,rhs:Self){
+		*self=*self+rhs;
+	}
+}
 impl std::ops::Sub<Planar64> for Planar64{
 	type Output=Planar64;
 	#[inline]
