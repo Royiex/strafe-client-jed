@@ -156,27 +156,47 @@ impl Default for Modes{
 
 #[derive(Default)]
 struct PhysicsModels{
-	//TODO: put meshes, attributes in here, indexed!
+	meshes:Vec<PhysicsMesh>,
 	models:Vec<PhysicsModel>,
+	attributes:Vec<PhysicsCollisionAttributes>,
 	model_id_from_wormhole_id:std::collections::HashMap::<u32,usize>,
 }
 impl PhysicsModels{
 	fn clear(&mut self){
+		self.meshes.clear();
 		self.models.clear();
+		self.attributes.clear();
 		self.model_id_from_wormhole_id.clear();
 	}
 	//TODO: "statically" verify the maps don't refer to any nonexistant data, if they do delete the references.
 	//then I can make these getter functions unchecked.
-	fn get(&self,model_id:usize)->Option<&PhysicsModel>{
-		self.models.get(model_id)
+	fn mesh(&self,model_id:usize)->TransformedMesh{
+		TransformedMesh{
+			mesh:&self.meshes[self.models[model_id].mesh_id],
+			transform:&self.models[model_id].transform,
+			normal_transform:&self.models[model_id].normal_transform,
+			normal_determinant:self.models[model_id].normal_determinant,
+		}
+	}
+	fn model(&self,model_id:usize)->&PhysicsModel{
+		&self.models[model_id]
+	}
+	fn attr(&self,model_id:usize)->&PhysicsCollisionAttributes{
+		&self.attributes[self.models[model_id].attr_id]
 	}
 	fn get_wormhole_model(&self,wormhole_id:u32)->Option<&PhysicsModel>{
 		self.models.get(*self.model_id_from_wormhole_id.get(&wormhole_id)?)
 	}
-	fn push(&mut self,model:PhysicsModel)->usize{
+	fn push_mesh(&mut self,mesh:PhysicsMesh){
+		self.meshes.push(mesh);
+	}
+	fn push_model(&mut self,model:PhysicsModel)->usize{
 		let model_id=self.models.len();
 		self.models.push(model);
 		model_id
+	}
+	fn push_attr(&mut self,attr:PhysicsCollisionAttributes){
+		self.attributes.push(attr);
 	}
 }
 
@@ -624,33 +644,28 @@ pub struct PhysicsModel{
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
 	mesh_id:usize,
-	attributes:PhysicsCollisionAttributes,
+	attr_id:usize,
 	transform:crate::integer::Planar64Affine3,
 	normal_transform:crate::integer::Planar64Mat3,
+	normal_determinant:Planar64,
 }
 
 impl PhysicsModel{
-	fn new(mesh_id:usize,transform:crate::integer::Planar64Affine3,attributes:PhysicsCollisionAttributes)->Self{
+	fn new(mesh_id:usize,attr_id:usize,transform:crate::integer::Planar64Affine3)->Self{
+		let normal_transform=transform.matrix3.inverse().transpose();
 		Self{
 			mesh_id,
-			attributes,
+			attr_id,
 			transform,
-			normal_transform:transform.matrix3.inverse().transpose(),
+			normal_transform,
+			normal_determinant:normal_transform.determinant(),
 		}
 	}
-	pub fn from_model(mesh_id:usize,instance:&crate::model::ModelInstance) -> Option<Self> {
+	pub fn from_model(mesh_id:usize,instance:&crate::model::ModelInstance)->Option<Self>{
 		match &instance.attributes{
 			crate::model::CollisionAttributes::Contact{contacting,general}=>Some(PhysicsModel::new(mesh_id,instance.transform.clone(),PhysicsCollisionAttributes::Contact{contacting:contacting.clone(),general:general.clone()})),
 			crate::model::CollisionAttributes::Intersect{intersecting,general}=>Some(PhysicsModel::new(mesh_id,instance.transform.clone(),PhysicsCollisionAttributes::Intersect{intersecting:intersecting.clone(),general:general.clone()})),
 			crate::model::CollisionAttributes::Decoration=>None,
-		}
-	}
-	pub fn mesh<'a>(&self,meshes:&Vec<PhysicsMesh>)->TransformedMesh<'a>{
-		TransformedMesh{
-			mesh:&meshes[self.mesh_id],
-			transform:&self.transform,
-			normal_transform:&self.normal_transform,
-			normal_determinant:self.normal_transform.determinant(),
 		}
 	}
 }
@@ -697,7 +712,7 @@ impl TouchingState{
 		//contact constrain?
 		todo!()
 	}
-	fn constrain_velocity(&self,meshes:&Vec<PhysicsModel>,models:&PhysicsModels,velocity:&mut Planar64Vec3){
+	fn constrain_velocity(&self,models:&PhysicsModels,velocity:&mut Planar64Vec3){
 		for contact in &self.contacts{
 			//trey push solve
 		}
@@ -823,7 +838,8 @@ impl PhysicsState {
 			for model_instance in &model.instances{
 				if let Some(model_physics)=PhysicsModel::from_model(mesh_id,model_instance){
 					make_mesh=true;
-					let model_id=self.models.push(model_physics);
+					//TODO: index attributes
+					let model_id=self.models.push_model(model_physics);
 					for attr in &model_instance.temp_indexing{
 						match attr{
 							crate::model::TempIndexedAttributes::Start(s)=>starts.push((model_id,s.clone())),
@@ -991,7 +1007,7 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 		aabb.inflate(self.style.hitbox_halfsize);
 		self.bvh.the_tester(&aabb,&mut |id|{
 			//no checks are needed because of the time limits.
-			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(self.style.mesh,self.models.mesh(id));
+			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(self.style.mesh,&self.models.mesh(id));
 			let relative_body=VirtualBody::relative(&self.body,&Body::default()).body(self.time);
 			collector.collect(crate::face_crawler::predict_collision(&minkowski,&relative_body,collector.time()).map(|(face,time)|{
 				//TODO: match model attribute and generate Collision::{Contact,Intersect}
@@ -1012,12 +1028,12 @@ fn teleport(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,poi
 	//touching.recalculate(body);
 }
 fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,mode:&crate::model::ModeDescription,models:&PhysicsModels,stage_id:u32)->Option<MoveState>{
-	let model=models.get(*mode.get_spawn_model_id(stage_id)? as usize)?;
+	let model=models.model(*mode.get_spawn_model_id(stage_id)? as usize);
 	let point=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(style.hitbox_halfsize.y()+Planar64::ONE/16);
 	Some(teleport(body,touching,style,point))
 }
 
-fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&PhysicsModels,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body,model:&PhysicsModel)->Option<MoveState>{
+fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&PhysicsModels,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body,model_id:usize)->Option<MoveState>{
 	match teleport_behaviour{
 		Some(crate::model::TeleportBehaviour::StageElement(stage_element))=>{
 			if stage_element.force||game.stage_id<stage_element.stage_id{
@@ -1049,7 +1065,7 @@ fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehav
 			}
 		},
 		Some(crate::model::TeleportBehaviour::Wormhole(wormhole))=>{
-			let origin_model=model;
+			let origin_model=models.model(model_id);
 			let destination_model=models.get_wormhole_model(wormhole.destination_model_id)?;
 			//ignore the transform for now
 			Some(teleport(body,touching,style,body.position-origin_model.transform.translation+destination_model.transform.translation))
@@ -1110,9 +1126,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 							},
 						}
 						//check ground
-						self.touching.insert_contact(c.model,c);
+						self.touching.insert(c);
 						//I love making functions with 10 arguments to dodge the borrow checker
-						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model);
+						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model_id);
 						//flatten v
 						self.touching.constrain_velocity(&self.models,&mut v);
 						match &general.booster{
@@ -1150,16 +1166,15 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					},
 					PhysicsCollisionAttributes::Intersect{intersecting: _,general}=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
-						self.touching.insert_intersect(c.model,c);
-						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model);
+						self.touching.insert(c);
+						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model_id);
 					},
 				}
 			},
 			PhysicsInstruction::CollisionEnd(c) => {
-				let model=c.model(&self.models).unwrap();
-				match &model.attributes{
+				match self.models.attr(c.model_id()){
 					PhysicsCollisionAttributes::Contact{contacting: _,general: _}=>{
-						self.touching.remove_contact(c.model);//remove contact before calling contact_constrain_acceleration
+						self.touching.remove(&c);//remove contact before calling contact_constrain_acceleration
 						let mut a=self.style.gravity;
 						if let Some(rocket_force)=self.style.rocket_force{
 							a+=self.style.get_propulsion_control_dir(&self.camera,self.controls,&self.next_mouse,self.time)*rocket_force;
@@ -1179,7 +1194,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						}
 					},
 					PhysicsCollisionAttributes::Intersect{intersecting: _,general: _}=>{
-						self.touching.remove_intersect(c.model);
+						self.touching.remove(&c);
 					},
 				}
 			},
