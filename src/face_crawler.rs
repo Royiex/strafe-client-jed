@@ -61,8 +61,9 @@ impl<F:Copy,E:Copy,V:Copy> State<FEV<F,E,V>>{
 					}
 				}
 				//test each vertex collision time, ignoring roots with zero or conflicting derivative
-				for &(vert_id,test_face_id) in mesh.edge_verts(edge_id).iter(){
-					let (n,d)=mesh.face_nd(test_face_id);
+				let n=mesh.edge_n(edge_id);
+				for &vert_id in mesh.edge_verts(edge_id).iter(){
+					let d=n.dot(mesh.vert(vert_id));
 					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
 						if self.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
@@ -74,10 +75,11 @@ impl<F:Copy,E:Copy,V:Copy> State<FEV<F,E,V>>{
 				}
 				//if none:
 			},
-			&FEV::<F,E,V>::Vert(vertex_id)=>{
+			&FEV::<F,E,V>::Vert(vert_id)=>{
 				//test each edge collision time, ignoring roots with zero or conflicting derivative
-				for &(edge_id,test_face_id) in mesh.vert_edges(vertex_id).iter(){
-					let (n,d)=mesh.face_nd(test_face_id);
+				for &edge_id in mesh.vert_edges(vert_id).iter(){
+					let n=mesh.edge_n(edge_id);
+					let d=n.dot(mesh.vert(vert_id));
 					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
 						if self.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
