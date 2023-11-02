@@ -90,6 +90,7 @@ pub struct ContactingLadder{
 #[derive(Clone)]
 pub enum ContactingBehaviour{
 	Surf,
+	Cling,//usable as a zipline, or other weird and wonderful things
 	Ladder(ContactingLadder),
 	Elastic(u32),//[1/2^32,1] 0=None (elasticity+1)/2^32
 }

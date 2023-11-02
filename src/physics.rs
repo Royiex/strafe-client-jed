@@ -1108,6 +1108,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						let mut v=self.body.velocity;
 						match &contacting.contact_behaviour{
 							Some(crate::model::ContactingBehaviour::Surf)=>println!("I'm surfing!"),
+							Some(crate::model::ContactingBehaviour::Cling)=>println!("Unimplemented!"),
 							&Some(crate::model::ContactingBehaviour::Elastic(elasticity))=>{
 								let n=c.normal(&self.models);
 								let d=n.dot(v)*Planar64::raw(-1-elasticity as i64);
