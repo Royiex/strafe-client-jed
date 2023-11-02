@@ -89,9 +89,9 @@ pub struct ContactingLadder{
 }
 #[derive(Clone)]
 pub enum ContactingBehaviour{
-    Surf,
-    Ladder(ContactingLadder),
-    Elastic(u32),//[1/2^32,1] 0=None (elasticity+1)/2^32
+	Surf,
+	Ladder(ContactingLadder),
+	Elastic(u32),//[1/2^32,1] 0=None (elasticity+1)/2^32
 }
 //you have this effect while intersecting
 #[derive(Clone)]
@@ -162,20 +162,20 @@ pub struct GameMechanicZone{
 // }
 #[derive(Clone)]
 pub enum StageElementBehaviour{
- 	//Spawn,//The behaviour of stepping on a spawn setting the spawnid
- 	SpawnAt,
- 	Trigger,
- 	Teleport,
- 	Platform,
- 	//Acts like a trigger if you haven't hit all the checkpoints.
- 	Checkpoint{
- 		//if this is 2 you must have hit OrderedCheckpoint(0) OrderedCheckpoint(1) OrderedCheckpoint(2) to pass
- 		ordered_checkpoint_id:Option<u32>,
- 		//if this is 2 you must have hit at least 2 UnorderedCheckpoints to pass
- 		unordered_checkpoint_count:u32,
- 	},
- 	JumpLimit(u32),
- 	//Speedtrap(TrapCondition),//Acts as a trigger with a speed condition
+	//Spawn,//The behaviour of stepping on a spawn setting the spawnid
+	SpawnAt,
+	Trigger,
+	Teleport,
+	Platform,
+	//Acts like a trigger if you haven't hit all the checkpoints.
+	Checkpoint{
+		//if this is 2 you must have hit OrderedCheckpoint(0) OrderedCheckpoint(1) OrderedCheckpoint(2) to pass
+		ordered_checkpoint_id:Option<u32>,
+		//if this is 2 you must have hit at least 2 UnorderedCheckpoints to pass
+		unordered_checkpoint_count:u32,
+	},
+	JumpLimit(u32),
+	//Speedtrap(TrapCondition),//Acts as a trigger with a speed condition
 }
 #[derive(Clone)]
 pub struct GameMechanicStageElement{
