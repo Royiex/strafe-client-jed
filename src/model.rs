@@ -135,7 +135,7 @@ pub enum GameMechanicSetTrajectory{
 		target_point:Planar64Vec3,
 		time:Time,//short time = fast and direct, long time = launch high in the air, negative time = wrong way
 	},
-	TrajectoryTargetPoint{//launch at a fixed speed and land at a target point
+	TargetPointSpeed{//launch at a fixed speed and land at a target point
 		target_point:Planar64Vec3,
 		speed:Planar64,//if speed is too low this will fail to reach the target.  The closest-passing trajectory will be chosen instead
 		trajectory_choice:TrajectoryChoice,

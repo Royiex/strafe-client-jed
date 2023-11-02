@@ -1157,7 +1157,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 									crate::model::GameMechanicSetTrajectory::AirTime(_) => todo!(),
 									crate::model::GameMechanicSetTrajectory::Height(_) => todo!(),
 									crate::model::GameMechanicSetTrajectory::TargetPointTime { target_point: _, time: _ } => todo!(),
-									crate::model::GameMechanicSetTrajectory::TrajectoryTargetPoint { target_point: _, speed: _, trajectory_choice: _ } => todo!(),
+									crate::model::GameMechanicSetTrajectory::TargetPointSpeed { target_point: _, speed: _, trajectory_choice: _ } => todo!(),
 									&crate::model::GameMechanicSetTrajectory::Velocity(velocity)=>v=velocity,
 									crate::model::GameMechanicSetTrajectory::DotVelocity { direction: _, dot: _ } => todo!(),
 								}
