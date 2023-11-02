@@ -20,6 +20,11 @@ struct Face{
 	normal:Planar64Vec3,
 	dot:Planar64,
 }
+impl Face{
+	fn nd(&self)->(Planar64Vec3,Planar64){
+		(self.normal,self.dot)
+	}
+}
 struct Vert(Planar64Vec3);
 struct FaceRefs{
 	edges:Vec<(EdgeId,FaceId)>,
@@ -171,22 +176,23 @@ impl PhysicsMesh{
 	pub fn verts<'a>(&'a self)->impl Iterator<Item=Planar64Vec3>+'a{
 		self.verts.iter().map(|Vert(pos)|*pos)
 	}
-	pub fn brute_t(&self,body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(FaceId,crate::integer::Time)>{
+	pub fn brute(&self,body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(FaceId,crate::integer::Time)>{
 		//check each face
 		let mut best_time=time_limit;
 		let mut best_face=None;
-		for (i,f) in self.face_topology.iter().enumerate(){
-			let (n,d)=self.face_nd(FaceId(i));
+		for (i,face) in self.faces.iter().enumerate(){
+			let face_id=FaceId(i);
+			let (n,d)=face.nd();
 			for t in crate::zeroes::zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 				let t=body.time+crate::integer::Time::from(t);
 				if body.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
-				let p=body.extrapolated_position(t);
-					if f.edges.iter().all(|&(_,face_id)|{
+					let p=body.extrapolated_position(t);
+					if self.face_edges(face_id).iter().all(|&(_,face_id)|{
 						let (n,d)=self.face_nd(face_id);
 						n.dot(p)<=d
 					}){
 						best_time=t;
-						best_face=Some(FaceId(i));
+						best_face=Some(face_id);
 					}
 				}
 			}
@@ -263,6 +269,70 @@ pub struct TransformedMesh<'a>{
 	transform:&'a crate::integer::Planar64Affine3,
 	normal_transform:&'a crate::integer::Planar64Mat3,
 	normal_determinant:Planar64,
+}
+impl TransformedMesh<'_>{
+	pub fn brute_in(&self,body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(FaceId,crate::integer::Time)>{
+		//check each face
+		let mut best_time=time_limit;
+		let mut best_face=None;
+		for i in 0..self.mesh.faces.len(){
+			let face_id=FaceId(i);
+			let (n,d)=self.face_nd(face_id);
+			for t in crate::zeroes::zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
+				let t=body.time+crate::integer::Time::from(t);
+				if body.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
+					let p=body.extrapolated_position(t);
+					if self.face_edges(face_id).iter().all(|&(_,face_id)|{
+						let (n,d)=self.face_nd(face_id);
+						n.dot(p)<=d
+					}){
+						best_time=t;
+						best_face=Some(face_id);
+					}
+				}
+			}
+		}
+		best_face.map(|f|(f,best_time))
+	}
+	pub fn brute_out(&self,body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(FaceId,crate::integer::Time)>{
+		//check each face
+		let mut best_time=time_limit;
+		let mut best_face=None;
+		for i in 0..self.mesh.faces.len(){
+			let face_id=FaceId(i);
+			let (n,d)=self.face_nd(face_id);
+			for t in crate::zeroes::zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
+				let t=body.time+crate::integer::Time::from(t);
+				if body.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))>Planar64::ZERO{
+					let p=body.extrapolated_position(t);
+					if self.face_edges(face_id).iter().all(|&(_,face_id)|{
+						let (n,d)=self.face_nd(face_id);
+						n.dot(p)<=d
+					}){
+						best_time=t;
+						best_face=Some(face_id);
+					}
+				}
+			}
+		}
+		best_face.map(|f|(f,best_time))
+	}
+	pub fn brute_out_face(&self,body:&crate::physics::Body,time_limit:crate::integer::Time,face_id:FaceId)->Option<(FaceId,crate::integer::Time)>{
+		//check each face
+		let mut best_time=time_limit;
+		let mut best_face=None;
+		for &(edge_id,face_id) in self.mesh.face_edges(face_id).iter(){
+			let (n,d)=self.face_nd(face_id);
+			for t in crate::zeroes::zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
+				let t=body.time+crate::integer::Time::from(t);
+				if body.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))>Planar64::ZERO{
+					best_time=t;
+					best_face=Some(face_id);
+				}
+			}
+		}
+		best_face.map(|f|(f,best_time))
+	}
 }
 impl MeshQuery<FaceId,EdgeId,VertId> for TransformedMesh<'_>{
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<FaceId,EdgeId,VertId>{
@@ -405,6 +475,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 				}).collect())
 			},
 			MinkowskiFace::EdgeEdge(e0,e1)=>{
+				/*
 				let e0v=self.mesh0.edge_verts(e0);
 				let e1v=self.mesh1.edge_verts(e1);
 				let [r0,r1]=e0v.map(|vert_id0|{
@@ -427,6 +498,8 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 					(MinkowskiEdge::EdgeVert(e0,vert_id1),MinkowskiFace::VertFace(v0,face_id1))
 				});
 				Cow::Owned(vec![r0,r1,r2,r3])
+				*/
+				todo!()
 			},
 			MinkowskiFace::VertFace(v0,f1)=>{
 				Cow::Owned(self.mesh1.face_edges(f1).iter().map(|&(edge_id1,face_id1)|{

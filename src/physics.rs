@@ -85,15 +85,12 @@ struct WalkState{
 impl WalkEnum{
 	//args going crazy
 	//(walk_enum,body.acceleration)=with_target_velocity();
-	fn with_target_velocity(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&PhysicsModels,mut velocity:Planar64Vec3,normal:&Planar64Vec3)->(WalkEnum,Planar64Vec3){
-		touching.constrain_velocity(models,&mut velocity);
+	fn with_target_velocity(body:&Body,style:&StyleModifiers,models:&PhysicsModels,velocity:Planar64Vec3,normal:&Planar64Vec3)->(WalkEnum,Planar64Vec3){
 		let mut target_diff=velocity-body.velocity;
 		//remove normal component
 		target_diff-=normal.clone()*(normal.dot(target_diff)/normal.dot(normal.clone()));
 		if target_diff==Planar64Vec3::ZERO{
-			let mut a=Planar64Vec3::ZERO;
-			touching.constrain_acceleration(models,&mut a);
-			(WalkEnum::Reached,a)
+			(WalkEnum::Reached,Planar64Vec3::ZERO)
 		}else{
 			//normal friction acceleration is clippedAcceleration.dot(normal)*friction
 			let diff_len=target_diff.length();
@@ -105,21 +102,20 @@ impl WalkEnum{
 			let accel=style.walk_accel.min(style.gravity.dot(Planar64Vec3::NEG_Y)*friction);
 			let time_delta=diff_len/accel;
 			let mut a=target_diff.with_length(accel);
-			touching.constrain_acceleration(models,&mut a);
 			(WalkEnum::Transient(WalkTarget{velocity,time:body.time+Time::from(time_delta)}),a)
 		}
 	}
 }
 impl WalkState{
 	fn ground(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&PhysicsModels,velocity:Planar64Vec3)->(Self,Planar64Vec3){
-		let (walk_enum,a)=WalkEnum::with_target_velocity(touching,body,style,models,velocity,&Planar64Vec3::Y);
+		let (walk_enum,a)=WalkEnum::with_target_velocity(body,style,models,velocity,&Planar64Vec3::Y);
 		(Self{
 			state:walk_enum,
 			normal:Planar64Vec3::Y,
 		},a)
 	}
 	fn ladder(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&PhysicsModels,velocity:Planar64Vec3,normal:&Planar64Vec3)->(Self,Planar64Vec3){
-		let (walk_enum,a)=WalkEnum::with_target_velocity(touching,body,style,models,velocity,normal);
+		let (walk_enum,a)=WalkEnum::with_target_velocity(body,style,models,velocity,normal);
 		(Self{
 			state:walk_enum,
 			normal:normal.clone(),
@@ -208,8 +204,10 @@ impl PhysicsModels{
 		self.models.push(model);
 		model_id
 	}
-	fn push_attr(&mut self,attr:PhysicsCollisionAttributes){
+	fn push_attr(&mut self,attr:PhysicsCollisionAttributes)->usize{
+		let attr_id=self.attributes.len();
 		self.attributes.push(attr);
+		attr_id
 	}
 }
 
@@ -339,6 +337,7 @@ struct StyleModifiers{
 	swim_speed:Planar64,
 	mass:Planar64,
 	mv:Planar64,
+	surf_slope:Option<Planar64>,
 	rocket_force:Option<Planar64>,
 	gravity:Planar64Vec3,
 	hitbox_halfsize:Planar64Vec3,
@@ -386,6 +385,7 @@ impl StyleModifiers{
 			ladder_accel:Planar64::int(160),
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
+			surf_slope:Some(Planar64::raw(7)/8),
 			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
 			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
@@ -414,6 +414,7 @@ impl StyleModifiers{
 			ladder_accel:Planar64::int(180),
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
+			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
 			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
 			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
@@ -441,6 +442,7 @@ impl StyleModifiers{
 			ladder_accel:Planar64::int(180),
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
+			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
 			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
 			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
@@ -469,6 +471,7 @@ impl StyleModifiers{
 			ladder_accel:Planar64::int(180),//?
 			ladder_dot:(Planar64::int(1)/2).sqrt(),//?
 			swim_speed:Planar64::int(12),//?
+			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
 			hitbox_halfsize:Planar64Vec3::raw(33<<28,73<<28,33<<28)/2,
 			camera_offset:Planar64Vec3::raw(0,(64<<28)-(73<<27),0),
 		}
@@ -496,6 +499,7 @@ impl StyleModifiers{
 			ladder_accel:Planar64::int(180),//?
 			ladder_dot:(Planar64::int(1)/2).sqrt(),//?
 			swim_speed:Planar64::int(12),//?
+			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
 			hitbox_halfsize:Planar64Vec3::raw(33<<28,73<<28,33<<28)/2,
 			camera_offset:Planar64Vec3::raw(0,(64<<28)-(73<<27),0),
 		}
@@ -519,6 +523,7 @@ impl StyleModifiers{
 			ladder_accel:Planar64::int(180),
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
+			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
 			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
 			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
@@ -642,6 +647,7 @@ impl PhysicsOutputState{
 	}
 }
 
+#[derive(Clone,Hash,Eq,PartialEq)]
 enum PhysicsCollisionAttributes{
 	Contact{//track whether you are contacting the object
 		contacting:crate::model::ContactingAttributes,
@@ -651,6 +657,17 @@ enum PhysicsCollisionAttributes{
 		intersecting:crate::model::IntersectingAttributes,
 		general:crate::model::GameMechanicAttributes,
 	},
+}
+struct NonPhysicsError;
+impl TryFrom<&crate::model::CollisionAttributes> for PhysicsCollisionAttributes{
+	type Error=NonPhysicsError;
+	fn try_from(value:&crate::model::CollisionAttributes)->Result<Self,Self::Error>{
+		match value{
+			crate::model::CollisionAttributes::Decoration=>Err(NonPhysicsError),
+			crate::model::CollisionAttributes::Contact{contacting,general}=>Ok(Self::Contact{contacting:contacting.clone(),general:general.clone()}),
+			crate::model::CollisionAttributes::Intersect{intersecting,general}=>Ok(Self::Intersect{intersecting:intersecting.clone(),general:general.clone()}),
+		}
+	}
 }
 
 pub struct PhysicsModel{
@@ -664,7 +681,7 @@ pub struct PhysicsModel{
 }
 
 impl PhysicsModel{
-	fn new(mesh_id:usize,attr_id:usize,transform:crate::integer::Planar64Affine3)->Self{
+	pub fn new(mesh_id:usize,attr_id:usize,transform:crate::integer::Planar64Affine3)->Self{
 		let normal_transform=transform.matrix3.inverse().transpose();
 		Self{
 			mesh_id,
@@ -674,18 +691,12 @@ impl PhysicsModel{
 			normal_determinant:normal_transform.determinant(),
 		}
 	}
-	pub fn from_model(mesh_id:usize,instance:&crate::model::ModelInstance)->Option<Self>{
-		match &instance.attributes{
-			crate::model::CollisionAttributes::Contact{contacting,general}=>Some(PhysicsModel::new(mesh_id,instance.transform.clone(),PhysicsCollisionAttributes::Contact{contacting:contacting.clone(),general:general.clone()})),
-			crate::model::CollisionAttributes::Intersect{intersecting,general}=>Some(PhysicsModel::new(mesh_id,instance.transform.clone(),PhysicsCollisionAttributes::Intersect{intersecting:intersecting.clone(),general:general.clone()})),
-			crate::model::CollisionAttributes::Decoration=>None,
-		}
-	}
 }
 
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
 struct ContactCollision{
-	face_id:crate::model_physics::MinkowskiFace,
+	//face_id:crate::model_physics::MinkowskiFace,
+	face_id:crate::model_physics::FaceId,
 	model_id:usize,//using id to avoid lifetimes
 }
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
@@ -696,6 +707,14 @@ struct IntersectCollision{
 enum Collision{
 	Contact(ContactCollision),
 	Intersect(IntersectCollision),
+}
+impl Collision{
+	fn model_id(&self)->usize{
+		match self{
+			&Collision::Contact(ContactCollision{model_id,face_id:_})
+			|&Collision::Intersect(IntersectCollision{model_id})=>model_id,
+		}
+	}
 }
 #[derive(Default)]
 struct TouchingState{
@@ -719,23 +738,56 @@ impl TouchingState{
 			Collision::Intersect(collision)=>self.intersects.remove(collision),
 		}
 	}
-	fn get_acceleration(&self,gravity:Planar64Vec3)->Planar64Vec3{
-		//accelerators
-		//water
-		//contact constrain?
-		todo!()
-	}
 	fn constrain_velocity(&self,models:&PhysicsModels,velocity:&mut Planar64Vec3){
+		//TODO: trey push solve
 		for contact in &self.contacts{
-			//trey push solve
+			let n=contact.normal(models);
+			velocity-=n.dot(velocity)/n.length();
 		}
-		todo!()
 	}
 	fn constrain_acceleration(&self,models:&PhysicsModels,acceleration:&mut Planar64Vec3){
+		//TODO: trey push solve
 		for contact in &self.contacts{
-			//trey push solve
+			let n=contact.normal(models);
+			acceleration-=n.dot(acceleration)/n.length();
 		}
-		todo!()
+	}
+	fn get_move_state(&self,mut a:Planar64Vec3)->(MoveState,Planar64Vec3){
+		//check current move conditions and use heuristics to determine
+		//which ladder to climb on, which ground to walk on, etc
+		//collect move state affecting objects from contacts (accelerator,water,ladder,ground)
+		for contact in &self.contacts{
+			//
+		}
+		for intersect in &self.intersects{
+			//
+		}
+		(move_state,a)
+	}
+	fn predict_collision_end(&self,collector:&mut crate::instruction::InstructionCollector<PhysicsInstruction>,models:&PhysicsModels,body:&Body,time:Time){
+		for contact in &self.contacts{
+			//detect face slide off
+			collector.collect(models.mesh(contact.model_id).brute_out_face(body,collector.time(),contact.face_id).map(|(face,time)|{
+				TimedInstruction{
+					time,
+					instruction:PhysicsInstruction::CollisionStart(
+						Collision::Contact(ContactCollision{model_id:contact.model_id,face_id:face})
+					),
+				}
+			}));
+		}
+		let relative_body=VirtualBody::relative(&Body::default(),body).body(time);
+		for intersect in &self.intersects{
+			//detect model collision in reverse
+			collector.collect(models.mesh(intersect.model_id).brute_out(&relative_body,collector.time()).map(|(face,time)|{
+				TimedInstruction{
+					time,
+					instruction:PhysicsInstruction::CollisionStart(
+						Collision::Intersect(IntersectCollision{model_id:intersect.model_id})
+					),
+				}
+			}));
+		}
 	}
 }
 
@@ -845,13 +897,21 @@ impl PhysicsState {
 	pub fn generate_models(&mut self,indexed_models:&crate::model::IndexedModelInstances){
 		let mut starts=Vec::new();
 		let mut spawns=Vec::new();
+		let mut attr_hash=std::collections::HashMap::new();
 		for model in &indexed_models.models{
 			let mesh_id=self.meshes.len();
 			let mut make_mesh=false;
 			for model_instance in &model.instances{
-				if let Some(model_physics)=PhysicsModel::from_model(mesh_id,model_instance){
+				if let Ok(physics_attributes)=PhysicsCollisionAttributes::try_from(&model_instance.attributes){
+					let attr_id=if let Some(&attr_id)=attr_hash.get(&physics_attributes){
+						attr_id
+					}else{
+						let attr_id=self.models.push_attr(physics_attributes.clone());
+						attr_hash.insert(physics_attributes,attr_id);
+						attr_id
+					};
+					let model_physics=PhysicsModel::new(mesh_id,attr_id,model_instance.transform);
 					make_mesh=true;
-					//TODO: index attributes
 					let model_id=self.models.push_model(model_physics);
 					for attr in &model_instance.temp_indexing{
 						match attr{
@@ -918,6 +978,13 @@ impl PhysicsState {
 	fn set_control(&mut self,control:u32,state:bool){
 		self.controls=if state{self.controls|control}else{self.controls&!control};
 	}
+	fn gravity(&self)->Planar64Vec3{
+		let mut a=self.style.gravity;
+		if let Some(rocket_force)=self.style.rocket_force{
+			a+=self.style.get_propulsion_control_dir(&self.camera,self.controls,&self.next_mouse,self.time)*rocket_force;
+		}
+		a
+	}
 	fn jump(&mut self){
 		match &self.move_state{
 			MoveState::Walk(walk_state)|MoveState::Ladder(walk_state)=>{
@@ -976,13 +1043,13 @@ impl PhysicsState {
 			MoveState::Walk(WalkState{normal,state})=>{
 				let n=normal;
 				let a;
-				(*state,a)=WalkEnum::with_target_velocity(&self.touching,&self.body,&self.style,&self.models,self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
+				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,&self.models,self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
 				Some(a)
 			},
 			MoveState::Ladder(WalkState{normal,state})=>{
 				let n=normal;
 				let a;
-				(*state,a)=WalkEnum::with_target_velocity(&self.touching,&self.body,&self.style,&self.models,self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
+				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,&self.models,self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
 				Some(a)
 			},
 		}
@@ -1003,28 +1070,32 @@ impl PhysicsState {
 	}
 }
 
-impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState {
+impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState{
 	//this little next instruction function can cache its return value and invalidate the cached value by watching the State.
-	fn next_instruction(&self,time_limit:Time) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn next_instruction(&self,time_limit:Time)->Option<TimedInstruction<PhysicsInstruction>>{
 		//JUST POLLING!!! NO MUTATION
 		let mut collector = crate::instruction::InstructionCollector::new(time_limit);
 
 		collector.collect(self.next_move_instruction());
 
 		//check for collision ends
-		self.touching.next_instruction(&mut collector,self.style.mesh,self.body,self.time,collector.time());
+		self.touching.predict_collision_end(&mut collector,&self.models,&self.body,self.time);
 		//check for collision starts
 		let mut aabb=crate::aabb::Aabb::default();
 		aabb.grow(self.body.extrapolated_position(self.time));
 		aabb.grow(self.body.extrapolated_position(collector.time()));
 		aabb.inflate(self.style.hitbox_halfsize);
+		//common body
+		let relative_body=VirtualBody::relative(&Body::default(),&self.body).body(self.time);
 		self.bvh.the_tester(&aabb,&mut |id|{
 			//no checks are needed because of the time limits.
-			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(self.style.mesh,&self.models.mesh(id));
-			let relative_body=VirtualBody::relative(&self.body,&Body::default()).body(self.time);
-			collector.collect(crate::face_crawler::predict_collision(&minkowski,&relative_body,collector.time()).map(|(face,time)|{
-				//TODO: match model attribute and generate Collision::{Contact,Intersect}
-				TimedInstruction{time,instruction:PhysicsInstruction::CollisionStart(Collision::Contact(ContactCollision{model_id:id,face_id:face}))}
+			//let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(self.style.mesh,&self.models.mesh(id));
+			//collector.collect(crate::face_crawler::predict_collision(&minkowski,&relative_body,collector.time()).map(|(face,time)|{
+			collector.collect(self.models.mesh(id).brute_in(&relative_body,collector.time()).map(|(face,time)|{
+				TimedInstruction{time,instruction:PhysicsInstruction::CollisionStart(match self.models.attr(id){
+					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>Collision::Contact(ContactCollision{model_id:id,face_id:face}),
+					PhysicsCollisionAttributes::Intersect{intersecting:_,general:_}=>Collision::Intersect(IntersectCollision{model_id:id}),
+				})}
 			}));
 		});
 		collector.instruction()
@@ -1066,7 +1137,7 @@ fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehav
 					None
 				},
 				&crate::model::StageElementBehaviour::Checkpoint{ordered_checkpoint_id,unordered_checkpoint_count}=>{
-					if (ordered_checkpoint_id.is_none()||ordered_checkpoint_id.is_some_and(|id|id<game.next_ordered_checkpoint_id))
+					if ordered_checkpoint_id.map_or(true,|id|id<game.next_ordered_checkpoint_id)
 						&&unordered_checkpoint_count<=game.unordered_checkpoints.len() as u32{
 						//pass
 						None
@@ -1107,16 +1178,18 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		}
 		match ins.instruction{
 			PhysicsInstruction::CollisionStart(c)=>{
-				match self.models.attr(c.model_id()){
+				let model_id=c.model_id();
+				match self.models.attr(model_id){
 					PhysicsCollisionAttributes::Contact{contacting,general}=>{
 						let mut v=self.body.velocity;
 						match &contacting.contact_behaviour{
 							Some(crate::model::ContactingBehaviour::Surf)=>println!("I'm surfing!"),
 							Some(crate::model::ContactingBehaviour::Cling)=>println!("Unimplemented!"),
 							&Some(crate::model::ContactingBehaviour::Elastic(elasticity))=>{
-								let n=c.normal(&self.models);
-								let d=n.dot(v)*Planar64::raw(-1-elasticity as i64);
-								v-=n*(d/n.dot(n));
+								// let n=c.normal(&self.models);
+								// let d=n.dot(v)*Planar64::raw(-1-elasticity as i64);
+								// v-=n*(d/n.dot(n));
+								todo!()
 							},
 							Some(crate::model::ContactingBehaviour::Ladder(contacting_ladder))=>{
 								if contacting_ladder.sticky{
@@ -1124,18 +1197,21 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 									v=Planar64Vec3::ZERO;//model.velocity
 								}
 								//ladder walkstate
-								let (walk_state,a)=WalkState::ladder(&self.touching,&self.body,&self.style,&self.models,self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&c.normal(&self.models));
+								let mut target_velocity=self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
+								self.touching.constrain_velocity(&self.models,&mut target_velocity);
+								let (walk_state,mut a)=WalkState::ladder(&self.touching,&self.body,&self.style,&self.models,target_velocity,&c.normal(&self.models));
 								self.move_state=MoveState::Ladder(walk_state);
+								self.touching.constrain_acceleration(&self.models,&mut a);
 								self.body.acceleration=a;
 							}
-							None=>match &c.face {
-								TreyMeshFace::Top => {
-									//ground
-									let (walk_state,a)=WalkState::ground(&self.touching,&self.body,&self.style,&self.models,self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time));
-									self.move_state=MoveState::Walk(walk_state);
-									self.body.acceleration=a;
-								},
-								_ => (),
+							None=>if self.style.surf_slope.map_or(true,|s|s<c.normal(&self.models).slope(up)){
+								//ground
+								let mut target_velocity=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
+								self.touching.constrain_velocity(&self.models,&mut target_velocity);
+								let (walk_state,mut a)=WalkState::ground(&self.touching,&self.body,&self.style,&self.models,target_velocity);
+								self.move_state=MoveState::Walk(walk_state);
+								self.touching.constrain_acceleration(&self.models,&mut a);
+								self.body.acceleration=a;
 							},
 						}
 						//check ground
@@ -1173,7 +1249,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						if self.style.get_control(StyleModifiers::CONTROL_JUMP,self.controls){
 							self.jump();
 						}
-						if let Some(a)=self.refresh_walk_target(){
+						if let Some(mut a)=self.refresh_walk_target(){
+							self.touching.constrain_acceleration(&self.models,&mut a);
 							self.body.acceleration=a;
 						}
 					},
@@ -1186,18 +1263,12 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			},
 			PhysicsInstruction::CollisionEnd(c) => {
 				match self.models.attr(c.model_id()){
-					PhysicsCollisionAttributes::Contact{contacting: _,general: _}=>{
+					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>{
 						self.touching.remove(&c);//remove contact before calling contact_constrain_acceleration
-						let mut a=self.style.gravity;
-						if let Some(rocket_force)=self.style.rocket_force{
-							a+=self.style.get_propulsion_control_dir(&self.camera,self.controls,&self.next_mouse,self.time)*rocket_force;
-						}
-						self.touching.constrain_acceleration(&self.models,&mut a);
-						self.body.acceleration=a;
 						//check ground
-						self.move_state=self.touching.get_move_state();
+						(self.move_state,self.body.acceleration)=self.touching.get_move_state(self.gravity());
 					},
-					PhysicsCollisionAttributes::Intersect{intersecting: _,general: _}=>{
+					PhysicsCollisionAttributes::Intersect{intersecting:_,general:_}=>{
 						self.touching.remove(&c);
 					},
 				}
@@ -1271,7 +1342,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsInputInstruction::Idle => {refresh_walk_target=false;},//literally idle!
 				}
 				if refresh_walk_target{
-					if let Some(a)=self.refresh_walk_target(){
+					if let Some(mut a)=self.refresh_walk_target(){
+						self.touching.constrain_acceleration(&self.models,&mut a);
 						self.body.acceleration=a;
 					}else if let Some(rocket_force)=self.style.rocket_force{
 						let mut a=self.style.gravity;

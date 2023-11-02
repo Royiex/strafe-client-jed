@@ -83,11 +83,11 @@ pub enum TempIndexedAttributes{
 }
 
 //you have this effect while in contact
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub struct ContactingLadder{
 	pub sticky:bool
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum ContactingBehaviour{
 	Surf,
 	Cling,//usable as a zipline, or other weird and wonderful things
@@ -95,24 +95,24 @@ pub enum ContactingBehaviour{
 	Elastic(u32),//[1/2^32,1] 0=None (elasticity+1)/2^32
 }
 //you have this effect while intersecting
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub struct IntersectingWater{
 	pub viscosity:Planar64,
 	pub density:Planar64,
 	pub current:Planar64Vec3,
 }
 //All models can be given these attributes
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub struct GameMechanicAccelerator{
 	pub acceleration:Planar64Vec3
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum GameMechanicBooster{
 	Affine(Planar64Affine3),//capable of SetVelocity,DotVelocity,normal booster,bouncy part,redirect velocity, and much more
 	Velocity(Planar64Vec3),//straight up boost velocity adds to your current velocity
 	Energy{direction:Planar64Vec3,energy:Planar64},//increase energy in direction
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum GameMechanicCheckpoint{
 	Ordered{
 		mode_id:u32,
@@ -122,12 +122,12 @@ pub enum GameMechanicCheckpoint{
 		mode_id:u32,
 	},
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum TrajectoryChoice{
 	HighArcLongDuration,//underhand lob at target: less horizontal speed and more air time
 	LowArcShortDuration,//overhand throw at target: more horizontal speed and less air time
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum GameMechanicSetTrajectory{
 	AirTime(Time),//air time (relative to gravity direction) is invariant across mass and gravity changes
 	Height(Planar64),//boost height (relative to gravity direction) is invariant across mass and gravity changes
@@ -143,14 +143,14 @@ pub enum GameMechanicSetTrajectory{
 	Velocity(Planar64Vec3),//SetVelocity
 	DotVelocity{direction:Planar64Vec3,dot:Planar64},//set your velocity in a specific direction without touching other directions
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum ZoneBehaviour{
 	//Start is indexed
 	//Checkpoints are indexed
 	Finish,
 	Anitcheat,
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub struct GameMechanicZone{
 	pub mode_id:u32,
 	pub behaviour:ZoneBehaviour,
@@ -161,7 +161,7 @@ pub struct GameMechanicZone{
 // 	InRange(Planar64,Planar64),
 // 	OutsideRange(Planar64,Planar64),
 // }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum StageElementBehaviour{
 	//Spawn,//The behaviour of stepping on a spawn setting the spawnid
 	SpawnAt,
@@ -178,14 +178,14 @@ pub enum StageElementBehaviour{
 	JumpLimit(u32),
 	//Speedtrap(TrapCondition),//Acts as a trigger with a speed condition
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub struct GameMechanicStageElement{
 	pub mode_id:u32,
 	pub stage_id:u32,//which spawn to send to
 	pub force:bool,//allow setting to lower spawn id i.e. 7->3
 	pub behaviour:StageElementBehaviour
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub struct GameMechanicWormhole{
 	//destination does not need to be another wormhole
 	//this defines a one way portal to a destination model transform
@@ -193,13 +193,13 @@ pub struct GameMechanicWormhole{
 	pub destination_model_id:u32,
 	//(position,angles)*=origin.transform.inverse()*destination.transform
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum TeleportBehaviour{
 	StageElement(GameMechanicStageElement),
 	Wormhole(GameMechanicWormhole),
 }
 //attributes listed in order of handling
-#[derive(Default,Clone)]
+#[derive(Default,Clone,Hash,Eq,PartialEq)]
 pub struct GameMechanicAttributes{
 	pub zone:Option<GameMechanicZone>,
 	pub booster:Option<GameMechanicBooster>,
@@ -218,7 +218,7 @@ impl GameMechanicAttributes{
 		||self.accelerator.is_some()
 	}
 }
-#[derive(Default,Clone)]
+#[derive(Default,Clone,Hash,Eq,PartialEq)]
 pub struct ContactingAttributes{
 	//friction?
 	pub contact_behaviour:Option<ContactingBehaviour>,
@@ -228,7 +228,7 @@ impl ContactingAttributes{
 		self.contact_behaviour.is_some()
 	}
 }
-#[derive(Default,Clone)]
+#[derive(Default,Clone,Hash,Eq,PartialEq)]
 pub struct IntersectingAttributes{
 	pub water:Option<IntersectingWater>,
 }

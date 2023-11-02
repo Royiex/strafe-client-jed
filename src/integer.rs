@@ -1,5 +1,5 @@
 //integer units
-#[derive(Clone,Copy,Hash,PartialEq,PartialOrd,Debug)]
+#[derive(Clone,Copy,Hash,Eq,PartialEq,PartialOrd,Debug)]
 pub struct Time(i64);
 impl Time{
 	pub const ZERO:Self=Self(0);
@@ -800,7 +800,7 @@ impl std::ops::Div<i64> for Planar64Vec3{
 }
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Hash,Eq,PartialEq)]
 pub struct Planar64Mat3{
 	x_axis:Planar64Vec3,
 	y_axis:Planar64Vec3,
@@ -916,7 +916,7 @@ impl std::ops::Div<i64> for Planar64Mat3{
 }
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy,Default)]
+#[derive(Clone,Copy,Default,Hash,Eq,PartialEq)]
 pub struct Planar64Affine3{
 	pub matrix3:Planar64Mat3,//includes scale above 1
 	pub translation:Planar64Vec3,
