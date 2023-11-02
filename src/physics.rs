@@ -158,6 +158,10 @@ impl Default for Modes{
 struct PhysicsModels{
 	meshes:Vec<PhysicsMesh>,
 	models:Vec<PhysicsModel>,
+	//separate models into Contacting and Intersecting?
+	//wrap model id with ContactingModelId and IntersectingModelId
+	//attributes can be split into contacting and intersecting (this also saves a bit of memory)
+	//can go even further and deduplicate General attributes separately, reconstructing it when queried
 	attributes:Vec<PhysicsCollisionAttributes>,
 	model_id_from_wormhole_id:std::collections::HashMap::<u32,usize>,
 }
