@@ -168,7 +168,7 @@ pub struct GameMechanicZone{
 #[derive(Clone,Hash,Eq,PartialEq)]
 pub enum StageElementBehaviour{
 	//Spawn,//The behaviour of stepping on a spawn setting the spawnid
-	SpawnAt,
+	SpawnAt,//must be standing on top to get effect. except cancollide false
 	Trigger,
 	Teleport,
 	Platform,
