@@ -1,6 +1,6 @@
 use crate::instruction::{InstructionEmitter,InstructionConsumer,TimedInstruction};
 use crate::integer::{Time,Planar64,Planar64Vec3,Planar64Mat3,Angle32,Ratio64,Ratio64Vec2};
-use crate::model_physics::{PhysicsMesh,TransformedMesh};
+use crate::model_physics::{PhysicsMesh,TransformedMesh,MeshQuery};
 
 #[derive(Debug)]
 pub enum PhysicsInstruction {
@@ -741,15 +741,17 @@ impl TouchingState{
 	fn constrain_velocity(&self,models:&PhysicsModels,velocity:&mut Planar64Vec3){
 		//TODO: trey push solve
 		for contact in &self.contacts{
-			let n=contact.normal(models);
-			velocity-=n.dot(velocity)/n.length();
+			let (n,_)=models.mesh(contact.model_id).face_nd(contact.face_id);
+			let d=n.dot(*velocity);
+			*velocity-=n*(d/n.dot(n));
 		}
 	}
 	fn constrain_acceleration(&self,models:&PhysicsModels,acceleration:&mut Planar64Vec3){
 		//TODO: trey push solve
 		for contact in &self.contacts{
-			let n=contact.normal(models);
-			acceleration-=n.dot(acceleration)/n.length();
+			let n=models.mesh(contact.model_id).face_nd(contact.face_id).0;
+			let d=n.dot(*acceleration);
+			*acceleration-=n*(d/n.dot(n));
 		}
 	}
 	fn get_move_state(&self,mut a:Planar64Vec3)->(MoveState,Planar64Vec3){
@@ -1199,12 +1201,12 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 								//ladder walkstate
 								let mut target_velocity=self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
 								self.touching.constrain_velocity(&self.models,&mut target_velocity);
-								let (walk_state,mut a)=WalkState::ladder(&self.touching,&self.body,&self.style,&self.models,target_velocity,&c.normal(&self.models));
+								let (walk_state,mut a)=WalkState::ladder(&self.touching,&self.body,&self.style,&self.models,target_velocity,&self.models.mesh(c.model_id).face_nd(c.face_id).0);
 								self.move_state=MoveState::Ladder(walk_state);
 								self.touching.constrain_acceleration(&self.models,&mut a);
 								self.body.acceleration=a;
 							}
-							None=>if self.style.surf_slope.map_or(true,|s|s<c.normal(&self.models).slope(up)){
+							None=>if self.style.surf_slope.map_or(true,|s|s<self.models.mesh(model_id).face_nd(c.face_id).0.slope(up)){
 								//ground
 								let mut target_velocity=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
 								self.touching.constrain_velocity(&self.models,&mut target_velocity);
