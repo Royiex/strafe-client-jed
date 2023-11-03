@@ -99,7 +99,7 @@ pub enum ContactingBehaviour{
 pub struct IntersectingWater{
 	pub viscosity:Planar64,
 	pub density:Planar64,
-	pub current:Planar64Vec3,
+	pub velocity:Planar64Vec3,
 }
 //All models can be given these attributes
 #[derive(Clone,Hash,Eq,PartialEq)]
