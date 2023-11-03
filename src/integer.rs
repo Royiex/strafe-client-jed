@@ -872,6 +872,41 @@ impl Planar64Mat3{
 			Planar64Vec3(glam::i64vec3(s,0,c)),
 		)
 	}
+	#[inline]
+	pub const fn inverse(&self)->Self{
+		let det=
+			-self.x_axis.0.z as i128*self.y_axis.0.y as i128*self.z_axis.0.x as i128
+			+self.x_axis.0.y as i128*self.y_axis.0.z as i128*self.z_axis.0.x as i128
+			+self.x_axis.0.z as i128*self.y_axis.0.x as i128*self.z_axis.0.y as i128
+			-self.x_axis.0.x as i128*self.y_axis.0.z as i128*self.z_axis.0.y as i128
+			-self.x_axis.0.y as i128*self.y_axis.0.x as i128*self.z_axis.0.z as i128
+			+self.x_axis.0.x as i128*self.y_axis.0.y as i128*self.z_axis.0.z as i128
+			;
+		Self{
+			x_axis:Planar64Vec3::raw((((-(self.y_axis.0.z as i128*self.z_axis.0.y as i128)+self.y_axis.0.y as i128*self.z_axis.0.z as i128)<<32)/det) as i64,(((self.x_axis.0.z as i128*self.z_axis.0.y as i128-self.x_axis.0.y as i128*self.z_axis.0.z as i128)<<32)/det) as i64,(((-(self.x_axis.0.z as i128*self.y_axis.0.y as i128)+self.x_axis.0.y as i128*self.y_axis.0.z as i128)<<32)/det) as i64),
+			y_axis:Planar64Vec3::raw((((self.y_axis.0.z as i128*self.z_axis.0.x as i128-self.y_axis.0.x as i128*self.z_axis.0.z as i128)<<32)/det) as i64,(((-(self.x_axis.0.z as i128*self.z_axis.0.x as i128)+self.x_axis.0.x as i128*self.z_axis.0.z as i128)<<32)/det) as i64,(((self.x_axis.0.z as i128*self.y_axis.0.x as i128-self.x_axis.0.x as i128*self.y_axis.0.z as i128)<<32)/det) as i64),
+			z_axis:Planar64Vec3::raw((((-(self.y_axis.0.y as i128*self.z_axis.0.x as i128)+self.y_axis.0.x as i128*self.z_axis.0.y as i128)<<32)/det) as i64,(((self.x_axis.0.y as i128*self.z_axis.0.x as i128-self.x_axis.0.x as i128*self.z_axis.0.y as i128)<<32)/det) as i64,(((-(self.x_axis.0.y as i128*self.y_axis.0.x as i128)+self.x_axis.0.x as i128*self.y_axis.0.y as i128)<<32)/det) as i64),
+		}
+	}
+	#[inline]
+	pub const fn transpose(&self)->Self{
+		Self{
+			x_axis:Planar64Vec3::raw(self.x_axis.0.x,self.y_axis.0.x,self.z_axis.0.x),
+			y_axis:Planar64Vec3::raw(self.x_axis.0.y,self.y_axis.0.y,self.z_axis.0.y),
+			z_axis:Planar64Vec3::raw(self.x_axis.0.z,self.y_axis.0.z,self.z_axis.0.z),
+		}
+	}
+	#[inline]
+	pub const fn determinant(&self)->Planar64{
+		Planar64(((
+			-self.x_axis.0.z as i128*self.y_axis.0.y as i128*self.z_axis.0.x as i128
+			+self.x_axis.0.y as i128*self.y_axis.0.z as i128*self.z_axis.0.x as i128
+			+self.x_axis.0.z as i128*self.y_axis.0.x as i128*self.z_axis.0.y as i128
+			-self.x_axis.0.x as i128*self.y_axis.0.z as i128*self.z_axis.0.y as i128
+			-self.x_axis.0.y as i128*self.y_axis.0.x as i128*self.z_axis.0.z as i128
+			+self.x_axis.0.x as i128*self.y_axis.0.y as i128*self.z_axis.0.z as i128
+		)>>64) as i64)
+	}
 }
 impl Into<glam::Mat3> for Planar64Mat3{
 	#[inline]
