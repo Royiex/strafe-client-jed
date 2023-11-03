@@ -107,16 +107,6 @@ pub struct GameMechanicAccelerator{
 	pub acceleration:Planar64Vec3
 }
 #[derive(Clone,Hash,Eq,PartialEq)]
-pub enum GameMechanicCheckpoint{
-	Ordered{
-		mode_id:u32,
-		checkpoint_id:u32,
-	},
-	Unordered{
-		mode_id:u32,
-	},
-}
-#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum GameMechanicBooster{
 	Affine(Planar64Affine3),//capable of SetVelocity,DotVelocity,normal booster,bouncy part,redirect velocity, and much more
 	Velocity(Planar64Vec3),//straight up boost velocity adds to your current velocity
@@ -182,13 +172,14 @@ pub enum StageElementBehaviour{
 	Trigger,
 	Teleport,
 	Platform,
-	//Acts like a trigger if you haven't hit all the checkpoints.
-	Checkpoint{
-		//if this is 2 you must have hit OrderedCheckpoint(0) OrderedCheckpoint(1) OrderedCheckpoint(2) to pass
-		ordered_checkpoint_id:Option<u32>,
-		//if this is 2 you must have hit at least 2 UnorderedCheckpoints to pass
-		unordered_checkpoint_count:u32,
-	},
+	//Checkpoint acts like a trigger if you haven't hit all the checkpoints yet.
+	//Note that all stage elements act like this for the next stage.
+	Checkpoint,
+	//OrderedCheckpoint. You must pass through all of these in ascending order.
+	Ordered(u32),
+	//UnorderedCheckpoint. You must pass through all of these in any order.
+	Unordered,
+	//If you get reset by a jump limit
 	JumpLimit(u32),
 	//Speedtrap(TrapCondition),//Acts as a trigger with a speed condition
 }
