@@ -107,12 +107,6 @@ pub struct GameMechanicAccelerator{
 	pub acceleration:Planar64Vec3
 }
 #[derive(Clone,Hash,Eq,PartialEq)]
-pub enum GameMechanicBooster{
-	Affine(Planar64Affine3),//capable of SetVelocity,DotVelocity,normal booster,bouncy part,redirect velocity, and much more
-	Velocity(Planar64Vec3),//straight up boost velocity adds to your current velocity
-	Energy{direction:Planar64Vec3,energy:Planar64},//increase energy in direction
-}
-#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum GameMechanicCheckpoint{
 	Ordered{
 		mode_id:u32,
@@ -123,14 +117,23 @@ pub enum GameMechanicCheckpoint{
 	},
 }
 #[derive(Clone,Hash,Eq,PartialEq)]
+pub enum GameMechanicBooster{
+	Affine(Planar64Affine3),//capable of SetVelocity,DotVelocity,normal booster,bouncy part,redirect velocity, and much more
+	Velocity(Planar64Vec3),//straight up boost velocity adds to your current velocity
+	Energy{direction:Planar64Vec3,energy:Planar64},//increase energy in direction
+}
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum TrajectoryChoice{
 	HighArcLongDuration,//underhand lob at target: less horizontal speed and more air time
 	LowArcShortDuration,//overhand throw at target: more horizontal speed and less air time
 }
 #[derive(Clone,Hash,Eq,PartialEq)]
 pub enum GameMechanicSetTrajectory{
+	//Speed-type SetTrajectory
 	AirTime(Time),//air time (relative to gravity direction) is invariant across mass and gravity changes
 	Height(Planar64),//boost height (relative to gravity direction) is invariant across mass and gravity changes
+	DotVelocity{direction:Planar64Vec3,dot:Planar64},//set your velocity in a specific direction without touching other directions
+	//Velocity-type SetTrajectory
 	TargetPointTime{//launch on a trajectory that will land at a target point in a set amount of time
 		target_point:Planar64Vec3,
 		time:Time,//short time = fast and direct, long time = launch high in the air, negative time = wrong way
@@ -141,7 +144,18 @@ pub enum GameMechanicSetTrajectory{
 		trajectory_choice:TrajectoryChoice,
 	},
 	Velocity(Planar64Vec3),//SetVelocity
-	DotVelocity{direction:Planar64Vec3,dot:Planar64},//set your velocity in a specific direction without touching other directions
+}
+impl GameMechanicSetTrajectory{
+	fn is_velocity(&self)->bool{
+		match self{
+			GameMechanicSetTrajectory::AirTime(_)
+			|GameMechanicSetTrajectory::Height(_)
+			|GameMechanicSetTrajectory::DotVelocity{direction:_,dot:_}=>false,
+			GameMechanicSetTrajectory::TargetPointTime{target_point:_,time:_}
+			|GameMechanicSetTrajectory::TargetPointSpeed{target_point:_,speed:_,trajectory_choice:_}
+			|GameMechanicSetTrajectory::Velocity(_)=>true,
+		}
+	}
 }
 #[derive(Clone,Hash,Eq,PartialEq)]
 pub enum ZoneBehaviour{
@@ -216,6 +230,20 @@ impl GameMechanicAttributes{
 		||self.trajectory.is_some()
 		||self.teleport_behaviour.is_some()
 		||self.accelerator.is_some()
+	}
+	pub fn is_wrcp(&self,current_mode_id:u32)->bool{
+		self.trajectory.as_ref().map_or(false,|t|t.is_velocity())
+		&&match &self.teleport_behaviour{
+			Some(TeleportBehaviour::StageElement(
+				GameMechanicStageElement{
+					mode_id,
+					stage_id:_,
+					force:true,
+					behaviour:StageElementBehaviour::Trigger|StageElementBehaviour::Teleport
+				}
+			))=>current_mode_id==*mode_id,
+			_=>false,
+		}
 	}
 }
 #[derive(Default,Clone,Hash,Eq,PartialEq)]
