@@ -45,7 +45,7 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 		"Water"=>{
 			force_can_collide=false;
 			//TODO: read stupid CustomPhysicalProperties
-			intersecting.water=Some(crate::model::IntersectingWater{density:Planar64::ONE,viscosity:Planar64::ONE/10,current:velocity});
+			intersecting.water=Some(crate::model::IntersectingWater{density:Planar64::ONE,viscosity:Planar64::ONE/10,velocity});
 		},
 		"Accelerator"=>{
 			//although the new game supports collidable accelerators, this is a roblox compatability map loader
