@@ -653,6 +653,10 @@ impl Planar64Vec3{
 		))
 	}
 	#[inline]
+	pub fn slope(&self,up:Self)->Planar64{
+		self.dot(up)/self.cross(up).length()
+	}
+	#[inline]
 	pub fn length(&self)->Planar64{
 		let radicand=(self.0.x as i128)*(self.0.x as i128)+(self.0.y as i128)*(self.0.y as i128)+(self.0.z as i128)*(self.0.z as i128);
 		Planar64(unsafe{(radicand as f64).sqrt().to_int_unchecked()})

@@ -715,6 +715,12 @@ impl Collision{
 			|&Collision::Intersect(IntersectCollision{model_id})=>model_id,
 		}
 	}
+	fn face_id(&self)->Option<crate::model_physics::FaceId>{
+		match self{
+			&Collision::Contact(ContactCollision{model_id:_,face_id})=>Some(face_id),
+			&Collision::Intersect(IntersectCollision{model_id:_})=>None,
+		}
+	}
 }
 #[derive(Default)]
 struct TouchingState{
@@ -1225,12 +1231,12 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 								//ladder walkstate
 								let mut target_velocity=self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
 								self.touching.constrain_velocity(&self.models,&mut target_velocity);
-								let (walk_state,mut a)=WalkState::ladder(&self.touching,&self.body,&self.style,&self.models,target_velocity,&self.models.mesh(c.model_id).face_nd(c.face_id).0);
+								let (walk_state,mut a)=WalkState::ladder(&self.touching,&self.body,&self.style,&self.models,target_velocity,&self.models.mesh(model_id).face_nd(c.face_id().unwrap()).0);
 								self.move_state=MoveState::Ladder(walk_state);
 								self.touching.constrain_acceleration(&self.models,&mut a);
 								self.body.acceleration=a;
 							}
-							None=>if self.style.surf_slope.map_or(true,|s|s<self.models.mesh(model_id).face_nd(c.face_id).0.slope(up)){
+							None=>if self.style.surf_slope.map_or(true,|s|s<self.models.mesh(model_id).face_nd(c.face_id().unwrap()).0.slope(Planar64Vec3::Y)){
 								//ground
 								let mut target_velocity=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
 								self.touching.constrain_velocity(&self.models,&mut target_velocity);
