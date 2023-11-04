@@ -764,6 +764,7 @@ impl TouchingState{
 		//check current move conditions and use heuristics to determine
 		//which ladder to climb on, which ground to walk on, etc
 		//collect move state affecting objects from contacts (accelerator,water,ladder,ground)
+		let move_state=MoveState::Air;
 		for contact in &self.contacts{
 			//
 		}
