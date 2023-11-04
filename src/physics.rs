@@ -626,7 +626,6 @@ pub struct PhysicsState{
 	pub next_mouse:MouseState,//Where is the mouse headed next
 	controls:u32,
 	move_state:MoveState,
-	meshes:Vec<PhysicsMesh>,
 	models:PhysicsModels,
 	bvh:crate::bvh::BvhNode,
 	
@@ -865,7 +864,6 @@ impl Default for PhysicsState{
 			style:StyleModifiers::default(),
 			touching:TouchingState::default(),
 			models:PhysicsModels::default(),
-			meshes:Vec::new(),
 			bvh:crate::bvh::BvhNode::default(),
 			move_state: MoveState::Air,
 			camera:PhysicsCamera::default(),
@@ -908,7 +906,7 @@ impl PhysicsState {
 		let mut spawns=Vec::new();
 		let mut attr_hash=std::collections::HashMap::new();
 		for model in &indexed_models.models{
-			let mesh_id=self.meshes.len();
+			let mesh_id=self.models.meshes.len();
 			let mut make_mesh=false;
 			for model_instance in &model.instances{
 				if let Ok(physics_attributes)=PhysicsCollisionAttributes::try_from(&model_instance.attributes){
@@ -932,7 +930,7 @@ impl PhysicsState {
 				}
 			}
 			if make_mesh{
-				self.meshes.push(PhysicsMesh::from(model));
+				self.models.push_mesh(PhysicsMesh::from(model));
 			}
 		}
 		self.bvh=crate::bvh::generate_bvh(self.models.aabb_list());
