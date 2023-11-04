@@ -50,7 +50,7 @@ pub struct PhysicsMesh{
 struct VertRefGuy{
 	edges:std::collections::HashSet<EdgeId>,
 }
-#[derive(Hash,Eq,PartialEq)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 struct EdgeIdGuy([VertId;2]);
 impl EdgeIdGuy{
 	fn new(v0:VertId,v1:VertId)->Self{
@@ -82,7 +82,7 @@ impl EdgePool{
 			(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,EdgeId(edge_id),true)
 		}else{
 			let edge_id=self.edge_guys.len();
-			self.edge_guys.push((edge_id_guy,EdgeRefGuy::new()));
+			self.edge_guys.push((edge_id_guy.clone(),EdgeRefGuy::new()));
 			self.edge_id_from_guy.insert(edge_id_guy,edge_id);
 			(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,EdgeId(edge_id),false)
 		}
@@ -163,7 +163,7 @@ pub trait MeshQuery<FACE:Clone,EDGE:Clone,VERT:Clone>{
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<FACE,EDGE,VERT>;
 	fn edge_n(&self,edge_id:EDGE)->Planar64Vec3{
 		let verts=self.edge_verts(edge_id);
-		self.vert(verts[1])-self.vert(verts[0])
+		self.vert(verts[1].clone())-self.vert(verts[0].clone())
 	}
 	fn vert(&self,vert_id:VERT)->Planar64Vec3;
 	fn face_nd(&self,face_id:FACE)->(Planar64Vec3,Planar64);
