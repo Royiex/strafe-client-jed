@@ -180,12 +180,12 @@ impl PhysicsModels{
 	//TODO: "statically" verify the maps don't refer to any nonexistant data, if they do delete the references.
 	//then I can make these getter functions unchecked.
 	fn mesh(&self,model_id:usize)->TransformedMesh{
-		TransformedMesh{
-			mesh:&self.meshes[self.models[model_id].mesh_id],
-			transform:&self.models[model_id].transform,
-			normal_transform:&self.models[model_id].normal_transform,
-			normal_determinant:self.models[model_id].normal_determinant,
-		}
+		TransformedMesh::new(
+			&self.meshes[self.models[model_id].mesh_id],
+			&self.models[model_id].transform,
+			&self.models[model_id].normal_transform,
+			self.models[model_id].normal_determinant,
+		)
 	}
 	fn model(&self,model_id:usize)->&PhysicsModel{
 		&self.models[model_id]
