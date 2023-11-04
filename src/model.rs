@@ -176,7 +176,11 @@ pub enum StageElementBehaviour{
 	//Note that all stage elements act like this for the next stage.
 	Checkpoint,
 	//OrderedCheckpoint. You must pass through all of these in ascending order.
-	Ordered(u32),
+	//If you hit them out of order it acts like a trigger.
+	//Do not support backtracking at all for now.
+	Ordered{
+		checkpoint_id:u32,
+	},
 	//UnorderedCheckpoint. You must pass through all of these in any order.
 	Unordered,
 	//If you get reset by a jump limit
@@ -208,7 +212,6 @@ pub enum TeleportBehaviour{
 pub struct GameMechanicAttributes{
 	pub zone:Option<GameMechanicZone>,
 	pub booster:Option<GameMechanicBooster>,
-	pub checkpoint:Option<GameMechanicCheckpoint>,
 	pub trajectory:Option<GameMechanicSetTrajectory>,
 	pub teleport_behaviour:Option<TeleportBehaviour>,
 	pub accelerator:Option<GameMechanicAccelerator>,
@@ -217,7 +220,6 @@ impl GameMechanicAttributes{
 	pub fn any(&self)->bool{
 		self.zone.is_some()
 		||self.booster.is_some()
-		||self.checkpoint.is_some()
 		||self.trajectory.is_some()
 		||self.teleport_behaviour.is_some()
 		||self.accelerator.is_some()

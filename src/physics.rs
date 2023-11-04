@@ -1120,9 +1120,13 @@ fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModi
 }
 
 fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&PhysicsModels,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body,model_id:usize)->Option<MoveState>{
+	//TODO: jump count and checkpoints are always reset on teleport.
+	//Map makers are expected to use tools to prevent
+	//multi-boosting on JumpLimit boosters such as spawning into a SetVelocity
 	match teleport_behaviour{
 		Some(crate::model::TeleportBehaviour::StageElement(stage_element))=>{
 			if stage_element.force||game.stage_id<stage_element.stage_id{
+				//TODO: check if all checkpoints are complete up to destination stage id, otherwise set to checkpoint completion stage it
 				game.stage_id=stage_element.stage_id;
 			}
 			match &stage_element.behaviour{
@@ -1133,20 +1137,40 @@ fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehav
 					teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
 				},
 				crate::model::StageElementBehaviour::Platform=>None,
+				&crate::model::StageElementBehaviour::Checkpoint=>{
+					// let mode=modes.get_mode(stage_element.mode_id)?;
+					// if mode.ordered_checkpoint_id.map_or(true,|id|id<game.next_ordered_checkpoint_id)
+					// 	&&mode.unordered_checkpoint_count<=game.unordered_checkpoints.len() as u32{
+					// 	//pass
+					 	None
+					// }else{
+					// 	//fail
+					// 	teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
+					// }
+				},
+				&crate::model::StageElementBehaviour::Ordered{checkpoint_id}=>{
+					if checkpoint_id<game.next_ordered_checkpoint_id{
+						//if you hit a checkpoint you already hit, nothing happens
+						None
+					}else if game.next_ordered_checkpoint_id==checkpoint_id{
+						//if you hit the next number in a sequence of ordered checkpoints
+						//increment the current checkpoint id
+						game.next_ordered_checkpoint_id+=1;
+						None
+					}else{
+						//If you hit an ordered checkpoint after missing a previous one
+						teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
+					}
+				},
+				crate::model::StageElementBehaviour::Unordered=>{
+					//count model id in accumulated unordered checkpoints
+					game.unordered_checkpoints.insert(model_id);
+					None
+				},
 				&crate::model::StageElementBehaviour::JumpLimit(jump_limit)=>{
 					//let count=game.jump_counts.get(&model.id);
 					//TODO
 					None
-				},
-				&crate::model::StageElementBehaviour::Checkpoint{ordered_checkpoint_id,unordered_checkpoint_count}=>{
-					if ordered_checkpoint_id.map_or(true,|id|id<game.next_ordered_checkpoint_id)
-						&&unordered_checkpoint_count<=game.unordered_checkpoints.len() as u32{
-						//pass
-						None
-					}else{
-						//fail
-						teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
-					}
 				},
 			}
 		},
