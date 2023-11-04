@@ -145,7 +145,7 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 					}else if edge_faces[1]==face_id{
 						(edge_id,edge_faces[0])
 					}else{
-						panic!("edge does not contain face")
+						panic!("edge does not contain face edge_faces={:?} face={:?}",edge_faces,face_id)
 					}
 				}).collect()}
 			}).collect(),
