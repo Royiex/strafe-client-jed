@@ -91,7 +91,7 @@ impl EdgePool{
 impl From<&crate::model::IndexedModel> for PhysicsMesh{
 	fn from(indexed_model:&crate::model::IndexedModel)->Self{
 		let verts=indexed_model.unique_pos.iter().map(|v|Vert(v.clone())).collect();
-		let mut vert_edges=vec![VertRefGuy::default();indexed_model.unique_pos.len()];
+		let mut vert_edges=vec![VertRefGuy::default();indexed_model.unique_vertices.len()];
 		let mut edge_pool=EdgePool::default();
 		let (faces,face_ref_guys):(Vec<Face>,Vec<FaceRefGuy>)=indexed_model.groups[0].polys.iter().enumerate().map(|(i,poly)|{
 			let face_id=FaceId(i);
@@ -99,8 +99,8 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 			let mut normal=Planar64Vec3::ZERO;
 			let len=poly.vertices.len();
 			let face_edges=poly.vertices.iter().enumerate().map(|(i,&vert_id)|{
-				let vert0_id=vert_id as usize;
-				let vert1_id=poly.vertices[(i+1)%len] as usize;
+				let vert0_id=indexed_model.unique_vertices[vert_id as usize].pos as usize;
+				let vert1_id=indexed_model.unique_vertices[poly.vertices[(i+1)%len] as usize].pos as usize;
 				//https://www.khronos.org/opengl/wiki/Calculating_a_Surface_Normal (Newell's Method)
 				let v0=indexed_model.unique_pos[vert0_id];
 				let v1=indexed_model.unique_pos[vert1_id];
@@ -127,7 +127,7 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 			normal=normal/len as i64;
 			let mut dot=Planar64::ZERO;
 			for &v in poly.vertices.iter(){
-				dot+=normal.dot(indexed_model.unique_pos[v as usize]);
+				dot+=normal.dot(indexed_model.unique_pos[indexed_model.unique_vertices[v as usize].pos as usize]);
 			}
 			(Face{normal,dot:dot/len as i64},FaceRefGuy(face_edges))
 		}).unzip();
