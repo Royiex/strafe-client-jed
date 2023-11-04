@@ -139,7 +139,7 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 				let face_id=FaceId(i);
 				FaceRefs{edges:face_ref_guy.0.into_iter().map(|edge_id|{
 					//get the edge face that's not this face
-					let edge_faces=edge_pool.edge_guys[edge_id.0].1.0;
+					let edge_faces=&edge_pool.edge_guys[edge_id.0].1.0;
 					if edge_faces[0]==face_id{
 						(edge_id,edge_faces[1])
 					}else if edge_faces[1]==face_id{
