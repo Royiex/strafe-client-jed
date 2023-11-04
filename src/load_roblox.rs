@@ -52,7 +52,12 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 			force_can_collide=false;
 			general.accelerator=Some(crate::model::GameMechanicAccelerator{acceleration:velocity});
 		},
-		"UnorderedCheckpoint"=>general.checkpoint=Some(crate::model::GameMechanicCheckpoint::Unordered{mode_id:0}),
+		// "UnorderedCheckpoint"=>general.teleport_behaviour=Some(crate::model::TeleportBehaviour::StageElement(crate::model::GameMechanicStageElement{
+		// 	mode_id:0,
+		// 	stage_id:0,
+		// 	force:false,
+		// 	behaviour:crate::model::StageElementBehaviour::Unordered
+		// })),
 		"SetVelocity"=>general.trajectory=Some(crate::model::GameMechanicSetTrajectory::Velocity(velocity)),
 		"MapFinish"=>{force_can_collide=false;general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Finish})},
 		"MapAnticheat"=>{force_can_collide=false;general.zone=Some(crate::model::GameMechanicZone{mode_id:0,behaviour:crate::model::ZoneBehaviour::Anitcheat})},
@@ -111,13 +116,14 @@ fn get_attributes(name:&str,can_collide:bool,velocity:Planar64Vec3,force_interse
 					"WormholeIn"=>general.teleport_behaviour=Some(crate::model::TeleportBehaviour::Wormhole(crate::model::GameMechanicWormhole{destination_model_id:captures[2].parse::<u32>().unwrap()})),
 					_=>panic!("regex3[1] messed up bad"),
 				}
-			}else if let Some(captures)=lazy_regex::regex!(r"^(OrderedCheckpoint)(\d+)$")
-			.captures(other){
-				match &captures[1]{
-					"OrderedCheckpoint"=>general.checkpoint=Some(crate::model::GameMechanicCheckpoint::Ordered{mode_id:0,checkpoint_id:captures[2].parse::<u32>().unwrap()}),
-					_=>panic!("regex3[1] messed up bad"),
-				}
 			}
+			// else if let Some(captures)=lazy_regex::regex!(r"^(OrderedCheckpoint)(\d+)$")
+			// .captures(other){
+			// 	match &captures[1]{
+			// 		"OrderedCheckpoint"=>general.checkpoint=Some(crate::model::GameMechanicCheckpoint::Ordered{mode_id:0,checkpoint_id:captures[2].parse::<u32>().unwrap()}),
+			// 		_=>panic!("regex3[1] messed up bad"),
+			// 	}
+			// }
 		}
 	}
 	//need some way to skip this
