@@ -334,7 +334,7 @@ impl TransformedMesh<'_>{
 		//check each face
 		let mut best_time=time_limit;
 		let mut best_face=None;
-		for &(edge_id,face_id) in self.mesh.face_edges(face_id).iter(){
+		for &(_,face_id) in self.mesh.face_edges(face_id).iter(){
 			let (n,d)=self.face_nd(face_id);
 			for t in crate::zeroes::zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 				let t=body.time+crate::integer::Time::from(t);
