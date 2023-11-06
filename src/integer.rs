@@ -878,14 +878,14 @@ impl Planar64Mat3{
 	}
 	#[inline]
 	pub const fn inverse(&self)->Self{
-		let det=
+		let det=(
 			-self.x_axis.0.z as i128*self.y_axis.0.y as i128*self.z_axis.0.x as i128
 			+self.x_axis.0.y as i128*self.y_axis.0.z as i128*self.z_axis.0.x as i128
 			+self.x_axis.0.z as i128*self.y_axis.0.x as i128*self.z_axis.0.y as i128
 			-self.x_axis.0.x as i128*self.y_axis.0.z as i128*self.z_axis.0.y as i128
 			-self.x_axis.0.y as i128*self.y_axis.0.x as i128*self.z_axis.0.z as i128
 			+self.x_axis.0.x as i128*self.y_axis.0.y as i128*self.z_axis.0.z as i128
-			;
+			)>>32;
 		Self{
 			x_axis:Planar64Vec3::raw((((-(self.y_axis.0.z as i128*self.z_axis.0.y as i128)+self.y_axis.0.y as i128*self.z_axis.0.z as i128)<<32)/det) as i64,(((self.x_axis.0.z as i128*self.z_axis.0.y as i128-self.x_axis.0.y as i128*self.z_axis.0.z as i128)<<32)/det) as i64,(((-(self.x_axis.0.z as i128*self.y_axis.0.y as i128)+self.x_axis.0.y as i128*self.y_axis.0.z as i128)<<32)/det) as i64),
 			y_axis:Planar64Vec3::raw((((self.y_axis.0.z as i128*self.z_axis.0.x as i128-self.y_axis.0.x as i128*self.z_axis.0.z as i128)<<32)/det) as i64,(((-(self.x_axis.0.z as i128*self.z_axis.0.x as i128)+self.x_axis.0.x as i128*self.z_axis.0.z as i128)<<32)/det) as i64,(((self.x_axis.0.z as i128*self.y_axis.0.x as i128-self.x_axis.0.x as i128*self.y_axis.0.z as i128)<<32)/det) as i64),
