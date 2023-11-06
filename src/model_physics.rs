@@ -91,10 +91,13 @@ impl EdgePool{
 impl From<&crate::model::IndexedModel> for PhysicsMesh{
 	fn from(indexed_model:&crate::model::IndexedModel)->Self{
 		let verts=indexed_model.unique_pos.iter().map(|v|Vert(v.clone())).collect();
-		let mut vert_edges=vec![VertRefGuy::default();indexed_model.unique_vertices.len()];
+		let mut vert_edges=vec![VertRefGuy::default();indexed_model.unique_pos.len()];
 		let mut edge_pool=EdgePool::default();
-		let (faces,face_ref_guys):(Vec<Face>,Vec<FaceRefGuy>)=indexed_model.groups[0].polys.iter().enumerate().map(|(i,poly)|{
-			let face_id=FaceId(i);
+		let mut face_i=0;
+		let mut faces=Vec::new();
+		let mut face_ref_guys=Vec::new();
+		for group in indexed_model.groups.iter(){for poly in group.polys.iter(){
+			let face_id=FaceId(face_i);
 			//one face per poly
 			let mut normal=Planar64Vec3::ZERO;
 			let len=poly.vertices.len();
@@ -129,8 +132,10 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 			for &v in poly.vertices.iter(){
 				dot+=normal.dot(indexed_model.unique_pos[indexed_model.unique_vertices[v as usize].pos as usize]);
 			}
-			(Face{normal,dot:dot/len as i64},FaceRefGuy(face_edges))
-		}).unzip();
+			faces.push(Face{normal,dot:dot/len as i64});
+			face_ref_guys.push(FaceRefGuy(face_edges));
+			face_i+=1;
+		}}
 		//conceivably faces, edges, and vertices exist now
 		Self{
 			faces,
