@@ -194,7 +194,7 @@ fn test_worker() {
 	// sender.send("STOP".to_string()).unwrap();
 
 	// Sleep to allow the worker thread to finish processing
-	thread::sleep(std::time::Duration::from_secs(2));
+	thread::sleep(std::time::Duration::from_millis(10));
 
 	// Send a new task
 	let task = crate::instruction::TimedInstruction{
@@ -206,5 +206,5 @@ fn test_worker() {
 	println!("value={}",worker.grab_clone());
 
 	// wait long enough to see print from final task
-	thread::sleep(std::time::Duration::from_secs(1));
+	thread::sleep(std::time::Duration::from_millis(10));
 }
