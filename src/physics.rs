@@ -795,17 +795,45 @@ impl TouchingState{
 			}
 		}
 	}
-	fn get_move_state(&self,mut a:Planar64Vec3)->(MoveState,Planar64Vec3){
+	fn get_move_state(&self,body:&Body,models:&PhysicsModels,style:&StyleModifiers,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->(MoveState,Planar64Vec3){
 		//check current move conditions and use heuristics to determine
 		//which ladder to climb on, which ground to walk on, etc
 		//collect move state affecting objects from contacts (accelerator,water,ladder,ground)
-		let move_state=MoveState::Air;
+		let gravity=self.base_acceleration(models,style,camera,controls,next_mouse,time);
+		let mut move_state=MoveState::Air;
+		let mut a=gravity;
 		for contact in &self.contacts{
-			//
+			match models.attr(contact.model_id){
+				PhysicsCollisionAttributes::Contact{contacting,general}=>{
+					match &contacting.contact_behaviour{
+						Some(crate::model::ContactingBehaviour::Ladder(_))=>{
+							//ladder walkstate
+							let mut target_velocity=style.get_ladder_target_velocity(camera,controls,next_mouse,time);
+							self.constrain_velocity(models,&mut target_velocity);
+							let (walk_state,mut acceleration)=WalkState::ladder(body,style,gravity,target_velocity,&models.mesh(contact.model_id).face_nd(contact.face_id).0);
+							move_state=MoveState::Ladder(walk_state);
+							self.constrain_acceleration(models,&mut acceleration);
+							a=acceleration;
+						},
+						None=>if style.surf_slope.map_or(true,|s|models.mesh(contact.model_id).face_nd(contact.face_id).0.slope_cmp(s,Planar64Vec3::Y)){
+							//check ground
+							let mut target_velocity=style.get_walk_target_velocity(camera,controls,next_mouse,time);
+							self.constrain_velocity(models,&mut target_velocity);
+							let (walk_state,mut acceleration)=WalkState::ground(body,style,gravity,target_velocity);
+							move_state=MoveState::Walk(walk_state);
+							self.constrain_acceleration(models,&mut acceleration);
+							a=acceleration;
+						},
+						_=>(),
+					}
+				},
+				_=>panic!("impossible touching state"),
+			}
 		}
 		for intersect in &self.intersects{
 			//
 		}
+		self.constrain_acceleration(models,&mut a);
 		(move_state,a)
 	}
 	fn predict_collision_end(&self,collector:&mut crate::instruction::InstructionCollector<PhysicsInstruction>,models:&PhysicsModels,body:&Body,time:Time){
@@ -1336,8 +1364,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>{
 						self.touching.remove(&c);//remove contact before calling contact_constrain_acceleration
 						//check ground
-						let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
-						(self.move_state,self.body.acceleration)=self.touching.get_move_state(gravity);
+						(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 					},
 					PhysicsCollisionAttributes::Intersect{intersecting:_,general:_}=>{
 						self.touching.remove(&c);
