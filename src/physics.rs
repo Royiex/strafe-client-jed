@@ -748,7 +748,9 @@ impl TouchingState{
 		for contact in &self.contacts{
 			let (n,_)=models.mesh(contact.model_id).face_nd(contact.face_id);
 			let d=n.dot(*velocity);
-			*velocity-=n*(d/n.dot(n));
+			if d<Planar64::ZERO{
+				*velocity-=n*(d/n.dot(n));
+			}
 		}
 	}
 	fn constrain_acceleration(&self,models:&PhysicsModels,acceleration:&mut Planar64Vec3){
@@ -756,7 +758,9 @@ impl TouchingState{
 		for contact in &self.contacts{
 			let n=models.mesh(contact.model_id).face_nd(contact.face_id).0;
 			let d=n.dot(*acceleration);
-			*acceleration-=n*(d/n.dot(n));
+			if d<Planar64::ZERO{
+				*acceleration-=n*(d/n.dot(n));
+			}
 		}
 	}
 	fn get_move_state(&self,mut a:Planar64Vec3)->(MoveState,Planar64Vec3){
