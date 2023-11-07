@@ -1064,7 +1064,7 @@ impl PhysicsState {
 					JumpDirection::FromContactNormal=>self.models.mesh(walk_state.contact.model_id).face_nd(walk_state.contact.face_id).0,
 					&JumpDirection::Exactly(dir)=>dir,
 				};
-				let mut v=self.body.velocity+n*self.style.get_jump_deltav();
+				let mut v=self.body.velocity+n*(self.style.get_jump_deltav()/n.length());
 				self.touching.constrain_velocity(&self.models,&mut v);
 				self.body.velocity=v;
 				let moving_away=Planar64::ZERO<n.dot(v);
