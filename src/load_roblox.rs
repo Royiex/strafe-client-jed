@@ -422,7 +422,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 					indexed_models.push(match basepart_texture_description{
 						RobloxBasePartDescription::Sphere=>primitives::unit_sphere(),
 						RobloxBasePartDescription::Part(part_texture_description)=>{
-							let mut cube_face_description=primitives::CubeFaceDescription::new();
+							let mut cube_face_description=primitives::CubeFaceDescription::default();
 							for (face_id,roblox_face_description) in part_texture_description.iter().enumerate(){
 								cube_face_description.insert(
 								match face_id{
@@ -443,7 +443,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 						},
 						RobloxBasePartDescription::Cylinder=>primitives::unit_cylinder(),
 						RobloxBasePartDescription::Wedge(wedge_texture_description)=>{
-							let mut wedge_face_description=primitives::WedgeFaceDescription::new();
+							let mut wedge_face_description=primitives::WedgeFaceDescription::default();
 							for (face_id,roblox_face_description) in wedge_texture_description.iter().enumerate(){
 								wedge_face_description.insert(
 								match face_id{
@@ -462,7 +462,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 							primitives::generate_partial_unit_wedge(wedge_face_description)
 						},
 						RobloxBasePartDescription::CornerWedge(cornerwedge_texture_description)=>{
-							let mut cornerwedge_face_description=primitives::CornerWedgeFaceDescription::new();
+							let mut cornerwedge_face_description=primitives::CornerWedgeFaceDescription::default();
 							for (face_id,roblox_face_description) in cornerwedge_texture_description.iter().enumerate(){
 								cornerwedge_face_description.insert(
 								match face_id{

@@ -126,7 +126,6 @@ const CORNERWEDGE_DEFAULT_NORMALS:[Planar64Vec3;5]=[
 	Planar64Vec3::int( 0,-1, 0),//CornerWedge::Bottom
 	Planar64Vec3::int( 0, 0,-1),//CornerWedge::Front
 ];
-//HashMap fits this use case perfectly but feels like using a sledgehammer to drive a nail
 pub fn unit_sphere()->crate::model::IndexedModel{
 	let mut indexed_model=crate::model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap(),Color4::ONE).remove(0);
 	for pos in indexed_model.unique_pos.iter_mut(){
@@ -134,9 +133,18 @@ pub fn unit_sphere()->crate::model::IndexedModel{
 	}
 	indexed_model
 }
-pub type CubeFaceDescription=std::collections::HashMap::<CubeFace,FaceDescription>;
+#[derive(Default)]
+pub struct CubeFaceDescription([Option<FaceDescription>;6]);
+impl CubeFaceDescription{
+	pub fn insert(&mut self,index:CubeFace,value:FaceDescription){
+		self.0[index as usize]=Some(value);
+	}
+	pub fn pairs(self)->std::iter::FilterMap<std::iter::Enumerate<std::array::IntoIter<Option<FaceDescription>,6>>,impl FnMut((usize,Option<FaceDescription>))->Option<(usize,FaceDescription)>>{
+		self.0.into_iter().enumerate().filter_map(|v|v.1.map(|u|(v.0,u)))
+	}
+}
 pub fn unit_cube()->crate::model::IndexedModel{
-	let mut t=CubeFaceDescription::new();
+	let mut t=CubeFaceDescription::default();
 	t.insert(CubeFace::Right,FaceDescription::default());
 	t.insert(CubeFace::Top,FaceDescription::default());
 	t.insert(CubeFace::Back,FaceDescription::default());
@@ -153,9 +161,18 @@ pub fn unit_cylinder()->crate::model::IndexedModel{
 	}
 	indexed_model
 }
-pub type WedgeFaceDescription=std::collections::HashMap::<WedgeFace,FaceDescription>;
+#[derive(Default)]
+pub struct WedgeFaceDescription([Option<FaceDescription>;5]);
+impl WedgeFaceDescription{
+	pub fn insert(&mut self,index:WedgeFace,value:FaceDescription){
+		self.0[index as usize]=Some(value);
+	}
+	pub fn pairs(self)->std::iter::FilterMap<std::iter::Enumerate<std::array::IntoIter<Option<FaceDescription>,5>>,impl FnMut((usize,Option<FaceDescription>))->Option<(usize,FaceDescription)>>{
+		self.0.into_iter().enumerate().filter_map(|v|v.1.map(|u|(v.0,u)))
+	}
+}
 pub fn unit_wedge()->crate::model::IndexedModel{
-	let mut t=WedgeFaceDescription::new();
+	let mut t=WedgeFaceDescription::default();
 	t.insert(WedgeFace::Right,FaceDescription::default());
 	t.insert(WedgeFace::TopFront,FaceDescription::default());
 	t.insert(WedgeFace::Back,FaceDescription::default());
@@ -163,9 +180,18 @@ pub fn unit_wedge()->crate::model::IndexedModel{
 	t.insert(WedgeFace::Bottom,FaceDescription::default());
 	generate_partial_unit_wedge(t)
 }
-pub type CornerWedgeFaceDescription=std::collections::HashMap::<CornerWedgeFace,FaceDescription>;
+#[derive(Default)]
+pub struct CornerWedgeFaceDescription([Option<FaceDescription>;5]);
+impl CornerWedgeFaceDescription{
+	pub fn insert(&mut self,index:CornerWedgeFace,value:FaceDescription){
+		self.0[index as usize]=Some(value);
+	}
+	pub fn pairs(self)->std::iter::FilterMap<std::iter::Enumerate<std::array::IntoIter<Option<FaceDescription>,5>>,impl FnMut((usize,Option<FaceDescription>))->Option<(usize,FaceDescription)>>{
+		self.0.into_iter().enumerate().filter_map(|v|v.1.map(|u|(v.0,u)))
+	}
+}
 pub fn unit_cornerwedge()->crate::model::IndexedModel{
-	let mut t=CornerWedgeFaceDescription::new();
+	let mut t=CornerWedgeFaceDescription::default();
 	t.insert(CornerWedgeFace::Right,FaceDescription::default());
 	t.insert(CornerWedgeFace::TopBack,FaceDescription::default());
 	t.insert(CornerWedgeFace::TopLeft,FaceDescription::default());
@@ -200,7 +226,7 @@ pub fn generate_partial_unit_cube(face_descriptions:CubeFaceDescription)->crate:
 	let mut groups=Vec::new();
 	let mut transforms=Vec::new();
 	//note that on a cube every vertex is guaranteed to be unique, so there's no need to hash them against existing vertices.
-	for (face,face_description) in face_descriptions.into_iter(){
+	for (face_id,face_description) in face_descriptions.pairs(){
 		//assume that scanning short lists is faster than hashing.
 		let transform_index=if let Some(transform_index)=transforms.iter().position(|&transform|transform==face_description.transform){
 			transform_index
@@ -221,14 +247,6 @@ pub fn generate_partial_unit_cube(face_descriptions:CubeFaceDescription)->crate:
 			generated_color.push(face_description.color);
 			color_index
 		} as u32;
-		let face_id=match face{
-			CubeFace::Right => 0,
-			CubeFace::Top => 1,
-			CubeFace::Back => 2,
-			CubeFace::Left => 3,
-			CubeFace::Bottom => 4,
-			CubeFace::Front => 5,
-		};
 		//always push normal
 		let normal_index=generated_normal.len() as u32;
 		generated_normal.push(CUBE_DEFAULT_NORMALS[face_id]);
@@ -315,7 +333,7 @@ pub fn generate_partial_unit_wedge(face_descriptions:WedgeFaceDescription)->crat
 	let mut groups=Vec::new();
 	let mut transforms=Vec::new();
 	//note that on a cube every vertex is guaranteed to be unique, so there's no need to hash them against existing vertices.
-	for (face,face_description) in face_descriptions.into_iter(){
+	for (face_id,face_description) in face_descriptions.pairs(){
 		//assume that scanning short lists is faster than hashing.
 		let transform_index=if let Some(transform_index)=transforms.iter().position(|&transform|transform==face_description.transform){
 			transform_index
@@ -336,13 +354,6 @@ pub fn generate_partial_unit_wedge(face_descriptions:WedgeFaceDescription)->crat
 			generated_color.push(face_description.color);
 			color_index
 		} as u32;
-		let face_id=match face{
-			WedgeFace::Right => 0,
-			WedgeFace::TopFront => 1,
-			WedgeFace::Back => 2,
-			WedgeFace::Left => 3,
-			WedgeFace::Bottom => 4,
-		};
 		//always push normal
 		let normal_index=generated_normal.len() as u32;
 		generated_normal.push(WEDGE_DEFAULT_NORMALS[face_id]);
@@ -427,7 +438,7 @@ pub fn generate_partial_unit_cornerwedge(face_descriptions:CornerWedgeFaceDescri
 	let mut groups=Vec::new();
 	let mut transforms=Vec::new();
 	//note that on a cube every vertex is guaranteed to be unique, so there's no need to hash them against existing vertices.
-	for (face,face_description) in face_descriptions.into_iter(){
+	for (face_id,face_description) in face_descriptions.pairs(){
 		//assume that scanning short lists is faster than hashing.
 		let transform_index=if let Some(transform_index)=transforms.iter().position(|&transform|transform==face_description.transform){
 			transform_index
@@ -448,13 +459,6 @@ pub fn generate_partial_unit_cornerwedge(face_descriptions:CornerWedgeFaceDescri
 			generated_color.push(face_description.color);
 			color_index
 		} as u32;
-		let face_id=match face{
-			CornerWedgeFace::Right => 0,
-			CornerWedgeFace::TopBack => 1,
-			CornerWedgeFace::TopLeft => 2,
-			CornerWedgeFace::Bottom => 3,
-			CornerWedgeFace::Front => 4,
-		};
 		//always push normal
 		let normal_index=generated_normal.len() as u32;
 		generated_normal.push(CORNERWEDGE_DEFAULT_NORMALS[face_id]);
