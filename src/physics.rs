@@ -851,7 +851,7 @@ impl TouchingState{
 				TimedInstruction{
 					time,
 					instruction:PhysicsInstruction::CollisionEnd(
-						Collision::Contact(ContactCollision{model_id:contact.model_id,face_id:face})
+						Collision::Contact(ContactCollision{model_id:contact.model_id,face_id:contact.face_id})
 					),
 				}
 			}));
