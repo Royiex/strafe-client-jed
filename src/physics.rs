@@ -782,7 +782,7 @@ impl TouchingState{
 			collector.collect(models.mesh(contact.model_id).brute_out_face(body,collector.time(),contact.face_id).map(|(face,time)|{
 				TimedInstruction{
 					time,
-					instruction:PhysicsInstruction::CollisionStart(
+					instruction:PhysicsInstruction::CollisionEnd(
 						Collision::Contact(ContactCollision{model_id:contact.model_id,face_id:face})
 					),
 				}
@@ -794,7 +794,7 @@ impl TouchingState{
 			collector.collect(models.mesh(intersect.model_id).brute_out(&relative_body,collector.time()).map(|(face,time)|{
 				TimedInstruction{
 					time,
-					instruction:PhysicsInstruction::CollisionStart(
+					instruction:PhysicsInstruction::CollisionEnd(
 						Collision::Intersect(IntersectCollision{model_id:intersect.model_id})
 					),
 				}
