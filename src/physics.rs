@@ -1235,7 +1235,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 								self.touching.constrain_acceleration(&self.models,&mut a);
 								self.body.acceleration=a;
 							}
-							None=>if self.style.surf_slope.map_or(true,|s|s<self.models.mesh(model_id).face_nd(c.face_id().unwrap()).0.slope(Planar64Vec3::Y)){
+							None=>if self.style.surf_slope.map_or(true,|s|self.models.mesh(model_id).face_nd(c.face_id().unwrap()).0.slope_cmp(s,Planar64Vec3::Y)){
 								//ground
 								let mut target_velocity=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
 								self.touching.constrain_velocity(&self.models,&mut target_velocity);
