@@ -85,7 +85,7 @@ struct WalkState{
 impl WalkEnum{
 	//args going crazy
 	//(walk_enum,body.acceleration)=with_target_velocity();
-	fn with_target_velocity(body:&Body,style:&StyleModifiers,models:&PhysicsModels,velocity:Planar64Vec3,normal:&Planar64Vec3)->(WalkEnum,Planar64Vec3){
+	fn with_target_velocity(body:&Body,style:&StyleModifiers,gravity:Planar64Vec3,velocity:Planar64Vec3,normal:&Planar64Vec3)->(WalkEnum,Planar64Vec3){
 		let mut target_diff=velocity-body.velocity;
 		//remove normal component
 		target_diff-=normal.clone()*(normal.dot(target_diff)/normal.dot(normal.clone()));
@@ -99,23 +99,23 @@ impl WalkEnum{
 			}else{
 				style.kinetic_friction
 			};
-			let accel=style.walk_accel.min(style.gravity.dot(Planar64Vec3::NEG_Y)*friction);
+			let accel=style.walk_accel.min(gravity.dot(Planar64Vec3::NEG_Y)*friction);
 			let time_delta=diff_len/accel;
-			let mut a=target_diff.with_length(accel);
+			let a=target_diff.with_length(accel);
 			(WalkEnum::Transient(WalkTarget{velocity,time:body.time+Time::from(time_delta)}),a)
 		}
 	}
 }
 impl WalkState{
-	fn ground(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&PhysicsModels,velocity:Planar64Vec3)->(Self,Planar64Vec3){
-		let (walk_enum,a)=WalkEnum::with_target_velocity(body,style,models,velocity,&Planar64Vec3::Y);
+	fn ground(body:&Body,style:&StyleModifiers,gravity:Planar64Vec3,velocity:Planar64Vec3)->(Self,Planar64Vec3){
+		let (walk_enum,a)=WalkEnum::with_target_velocity(body,style,gravity,velocity,&Planar64Vec3::Y);
 		(Self{
 			state:walk_enum,
 			normal:Planar64Vec3::Y,
 		},a)
 	}
-	fn ladder(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&PhysicsModels,velocity:Planar64Vec3,normal:&Planar64Vec3)->(Self,Planar64Vec3){
-		let (walk_enum,a)=WalkEnum::with_target_velocity(body,style,models,velocity,normal);
+	fn ladder(body:&Body,style:&StyleModifiers,gravity:Planar64Vec3,velocity:Planar64Vec3,normal:&Planar64Vec3)->(Self,Planar64Vec3){
+		let (walk_enum,a)=WalkEnum::with_target_velocity(body,style,gravity,velocity,normal);
 		(Self{
 			state:walk_enum,
 			normal:normal.clone(),
@@ -743,6 +743,41 @@ impl TouchingState{
 			Collision::Intersect(collision)=>self.intersects.remove(collision),
 		}
 	}
+	fn base_acceleration(&self,models:&PhysicsModels,style:&StyleModifiers,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
+		let mut a=style.gravity;
+		if let Some(rocket_force)=style.rocket_force{
+			a+=style.get_propulsion_control_dir(camera,controls,next_mouse,time)*rocket_force;
+		}
+		//add accelerators
+		for contact in &self.contacts{
+			match models.attr(contact.model_id){
+				PhysicsCollisionAttributes::Contact{contacting,general}=>{
+					match &general.accelerator{
+						Some(accelerator)=>{
+							a+=accelerator.acceleration;
+						},
+						None=>(),
+					}
+				},
+				_=>panic!("impossible touching state"),
+			}
+		}
+		for intersect in &self.intersects{
+			match models.attr(intersect.model_id){
+				PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
+					match &general.accelerator{
+						Some(accelerator)=>{
+							a+=accelerator.acceleration;
+						},
+						None=>(),
+					}
+				},
+				_=>panic!("impossible touching state"),
+			}
+		}
+		//add water../?
+		a
+	}
 	fn constrain_velocity(&self,models:&PhysicsModels,velocity:&mut Planar64Vec3){
 		//TODO: trey push solve
 		for contact in &self.contacts{
@@ -989,13 +1024,6 @@ impl PhysicsState {
 	fn set_control(&mut self,control:u32,state:bool){
 		self.controls=if state{self.controls|control}else{self.controls&!control};
 	}
-	fn gravity(&self)->Planar64Vec3{
-		let mut a=self.style.gravity;
-		if let Some(rocket_force)=self.style.rocket_force{
-			a+=self.style.get_propulsion_control_dir(&self.camera,self.controls,&self.next_mouse,self.time)*rocket_force;
-		}
-		a
-	}
 	fn jump(&mut self){
 		match &self.move_state{
 			MoveState::Walk(walk_state)|MoveState::Ladder(walk_state)=>{
@@ -1053,14 +1081,22 @@ impl PhysicsState {
 			MoveState::Air|MoveState::Water=>None,
 			MoveState::Walk(WalkState{normal,state})=>{
 				let n=normal;
-				let a;
-				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,&self.models,self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
+				let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+				let mut a;
+				let mut v=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
+				self.touching.constrain_velocity(&self.models,&mut v);
+				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,gravity,v,&n);
+				self.touching.constrain_acceleration(&self.models,&mut a);
 				Some(a)
 			},
 			MoveState::Ladder(WalkState{normal,state})=>{
 				let n=normal;
-				let a;
-				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,&self.models,self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
+				let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+				let mut a;
+				let mut v=self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
+				self.touching.constrain_velocity(&self.models,&mut v);
+				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,gravity,v,&n);
+				self.touching.constrain_acceleration(&self.models,&mut a);
 				Some(a)
 			},
 		}
@@ -1232,18 +1268,20 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 									v=Planar64Vec3::ZERO;//model.velocity
 								}
 								//ladder walkstate
+								let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 								let mut target_velocity=self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
 								self.touching.constrain_velocity(&self.models,&mut target_velocity);
-								let (walk_state,mut a)=WalkState::ladder(&self.touching,&self.body,&self.style,&self.models,target_velocity,&self.models.mesh(model_id).face_nd(c.face_id().unwrap()).0);
+								let (walk_state,mut a)=WalkState::ladder(&self.body,&self.style,gravity,target_velocity,&self.models.mesh(model_id).face_nd(c.face_id().unwrap()).0);
 								self.move_state=MoveState::Ladder(walk_state);
 								self.touching.constrain_acceleration(&self.models,&mut a);
 								self.body.acceleration=a;
 							}
 							None=>if self.style.surf_slope.map_or(true,|s|self.models.mesh(model_id).face_nd(c.face_id().unwrap()).0.slope_cmp(s,Planar64Vec3::Y)){
 								//ground
+								let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 								let mut target_velocity=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
 								self.touching.constrain_velocity(&self.models,&mut target_velocity);
-								let (walk_state,mut a)=WalkState::ground(&self.touching,&self.body,&self.style,&self.models,target_velocity);
+								let (walk_state,mut a)=WalkState::ground(&self.body,&self.style,gravity,target_velocity);
 								self.move_state=MoveState::Walk(walk_state);
 								self.touching.constrain_acceleration(&self.models,&mut a);
 								self.body.acceleration=a;
@@ -1301,7 +1339,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>{
 						self.touching.remove(&c);//remove contact before calling contact_constrain_acceleration
 						//check ground
-						(self.move_state,self.body.acceleration)=self.touching.get_move_state(self.gravity());
+						let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+						(self.move_state,self.body.acceleration)=self.touching.get_move_state(gravity);
 					},
 					PhysicsCollisionAttributes::Intersect{intersecting:_,general:_}=>{
 						self.touching.remove(&c);
