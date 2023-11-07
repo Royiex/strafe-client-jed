@@ -184,7 +184,6 @@ impl PhysicsModels{
 			&self.meshes[self.models[model_id].mesh_id],
 			&self.models[model_id].transform,
 			&self.models[model_id].normal_transform,
-			self.models[model_id].normal_determinant,
 		)
 	}
 	fn model(&self,model_id:usize)->&PhysicsModel{
@@ -676,7 +675,6 @@ pub struct PhysicsModel{
 	attr_id:usize,
 	transform:crate::integer::Planar64Affine3,
 	normal_transform:crate::integer::Planar64Mat3,
-	normal_determinant:Planar64,
 }
 
 impl PhysicsModel{
@@ -687,7 +685,6 @@ impl PhysicsModel{
 			attr_id,
 			transform,
 			normal_transform,
-			normal_determinant:normal_transform.determinant(),
 		}
 	}
 }

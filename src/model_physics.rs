@@ -273,20 +273,17 @@ pub struct TransformedMesh<'a>{
 	mesh:&'a PhysicsMesh,
 	transform:&'a crate::integer::Planar64Affine3,
 	normal_transform:&'a crate::integer::Planar64Mat3,
-	normal_determinant:Planar64,
 }
 impl TransformedMesh<'_>{
 	pub fn new<'a>(
 		mesh:&'a PhysicsMesh,
 		transform:&'a crate::integer::Planar64Affine3,
 		normal_transform:&'a crate::integer::Planar64Mat3,
-		normal_determinant:Planar64
 		)->TransformedMesh<'a>{
 		TransformedMesh{
 			mesh,
 			transform,
 			normal_transform,
-			normal_determinant,
 		}
 	}
 	pub fn brute_in(&self,body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(FaceId,crate::integer::Time)>{
