@@ -126,6 +126,146 @@ const CORNERWEDGE_DEFAULT_NORMALS:[Planar64Vec3;5]=[
 	Planar64Vec3::int( 0,-1, 0),//CornerWedge::Bottom
 	Planar64Vec3::int( 0, 0,-1),//CornerWedge::Front
 ];
+const GON:u32=6;
+const SPHERE_STUFF:([[[[u32;3];4];((GON-1)*(GON-1)) as usize];6])={
+	const CUBE_EDGES:[[u32;2];12]=[[0,1],[0,3],[0,7],[1,2],[1,6],[2,3],[2,5],[3,4],[4,5],[4,7],[5,6],[6,7]];
+	const fn get_pos_id(p:[[u32;3];4],tex_id:u32)->u32{
+		if p[0][1]==tex_id{
+			return p[0][0];
+		}
+		if p[1][1]==tex_id{
+			return p[1][0];
+		}
+		if p[2][1]==tex_id{
+			return p[2][0];
+		}
+		if p[3][1]==tex_id{
+			return p[3][0];
+		}
+		panic!("tex missing")
+	}
+	const fn get_edge_id(v0:u32,v1:u32)->(u32,bool){
+		(match if v0<v1{[v0,v1]}else{[v1,v0]}{
+			[0,1]=>0,
+			[0,3]=>1,
+			[0,7]=>2,
+			[1,2]=>3,
+			[1,6]=>4,
+			[2,3]=>5,
+			[2,5]=>6,
+			[3,4]=>7,
+			[4,5]=>8,
+			[4,7]=>9,
+			[5,6]=>10,
+			[6,7]=>11,
+			_=>panic!(":)")
+		},v0<v1)
+	}
+	const fn get_idx(face_id:u32,v00:u32,v10:u32,v11:u32,v01:u32,x:u32,y:u32)->u32{
+		if x==0&&y==0{
+			return v00
+		}
+		if x==0&&y==GON-1{
+			return v01
+		}
+		if x==GON-1&&y==GON-1{
+			return v11
+		}
+		if x==GON-1&&y==0{
+			return v10
+		}
+		if x==0{
+			//left edge
+			let (edge_id,parity)=get_edge_id(v00,v01);
+			if parity{
+				return 8+edge_id*(GON-2)+(y-1)
+			}else{
+				return 8+edge_id*(GON-2)+(GON-(y-1))
+			}
+		}
+		if x==GON-1{
+			//right edge
+			let (edge_id,parity)=get_edge_id(v10,v11);
+			if parity{
+				return 8+edge_id*(GON-2)+(y-1)
+			}else{
+				return 8+edge_id*(GON-2)+(GON-(y-1))
+			}
+		}
+		if y==0{
+			//top edge
+			let (edge_id,parity)=get_edge_id(v00,v10);
+			if parity{
+				return 8+edge_id*(GON-2)+(x-1)
+			}else{
+				return 8+edge_id*(GON-2)+(GON-(x-1))
+			}
+		}
+		if y==GON-1{
+			//bottom edge
+			let (edge_id,parity)=get_edge_id(v01,v11);
+			if parity{
+				return 8+edge_id*(GON-2)+(x-1)
+			}else{
+				return 8+edge_id*(GON-2)+(GON-(x-1))
+			}
+		}
+		return 8+12*(GON-2)+face_id*(GON-2)*(GON-2)+(x-1)+(y-1)*(GON-2)
+	}
+	//topology (indexed polys)
+	let mut polys=[[[[0u32;3];4];((GON-1)*(GON-1)) as usize];6];
+	let mut face_id=0;
+	while face_id<6{
+		let p=CUBE_DEFAULT_POLYS[face_id];
+		//vertex ids
+		let v00=get_pos_id(p,0);//top left
+		let v10=get_pos_id(p,1);//top right
+		let v11=get_pos_id(p,2);//bottom right
+		let v01=get_pos_id(p,3);//bottom left
+		let mut i=0;
+		while i<(GON-1)*(GON-1){
+			let x=i as u32%GON;
+			let y=i as u32/GON;
+			let i00=get_idx(face_id as u32,v00,v10,v11,v01,x+0,y+0);
+			let i10=get_idx(face_id as u32,v00,v10,v11,v01,x+1,y+0);
+			let i11=get_idx(face_id as u32,v00,v10,v11,v01,x+1,y+1);
+			let i01=get_idx(face_id as u32,v00,v10,v11,v01,x+0,y+1);
+			//[pos,tex,norm]
+			polys[face_id][i as usize][0]=[i00,(x+0)+(y+0)*GON,i00];
+			polys[face_id][i as usize][1]=[i10,(x+1)+(y+0)*GON,i10];
+			polys[face_id][i as usize][2]=[i11,(x+1)+(y+1)*GON,i11];
+			polys[face_id][i as usize][3]=[i01,(x+0)+(y+1)*GON,i01];
+			i+=1;
+		}
+		face_id+=1;
+	}
+	//verts
+	const N_VERTS:usize=(8+12*(GON-2)+6*(GON-2)*(GON-2)) as usize;
+	let mut verts=[Planar64Vec3::ZERO;N_VERTS];
+	let mut i=0;
+	while i<8{
+		verts[i]=CUBE_DEFAULT_VERTICES[i].normalize();
+		i+=1;
+	}
+	i=0;
+	while i<12{
+		//
+	}
+	i=0;
+	while i<6{
+		//
+	}
+	//tex
+	let mut tex=[TextureCoordinate::new(0.0,0.0);(GON*GON) as usize];
+	let mut i=0;
+	while i<(GON*GON) as usize{
+		let x=i as u32%GON;
+		let y=i as u32/GON;
+		tex[i]=TextureCoordinate::new(x as f32/(GON-1) as f32,y as f32/(GON-1) as f32);
+		i+=1;
+	}
+	(verts,tex,polys)
+};
 pub fn unit_sphere()->crate::model::IndexedModel{
 	let mut indexed_model=crate::model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap(),Color4::ONE).remove(0);
 	for pos in indexed_model.unique_pos.iter_mut(){
