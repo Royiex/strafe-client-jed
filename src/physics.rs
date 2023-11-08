@@ -1108,7 +1108,7 @@ impl PhysicsState {
 				let mut a;
 				let mut v=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
 				self.touching.constrain_velocity(&self.models,&mut v);
-				let normal_accel=-n.dot(gravity);
+				let normal_accel=-n.dot(gravity)/n.length();
 				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,v,&n,self.style.walk_speed,normal_accel);
 				self.touching.constrain_acceleration(&self.models,&mut a);
 				Some(a)
