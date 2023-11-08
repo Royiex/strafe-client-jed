@@ -1326,10 +1326,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 							Some(crate::model::ContactingBehaviour::Surf)=>println!("I'm surfing!"),
 							Some(crate::model::ContactingBehaviour::Cling)=>println!("Unimplemented!"),
 							&Some(crate::model::ContactingBehaviour::Elastic(elasticity))=>{
-								// let n=c.normal(&self.models);
-								// let d=n.dot(v)*Planar64::raw(-1-elasticity as i64);
-								// v-=n*(d/n.dot(n));
-								todo!()
+								let n=self.models.mesh(contact.model_id).face_nd(contact.face_id).0;
+								let d=n.dot(v)*Planar64::raw(-1-elasticity as i64);
+								v-=n*(d/n.dot(n));
 							},
 							Some(crate::model::ContactingBehaviour::Ladder(contacting_ladder))=>{
 								if contacting_ladder.sticky{
