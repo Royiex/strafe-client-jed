@@ -298,6 +298,7 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 							panic!("Part has no Shape!");
 						}
 					},
+					"TrussPart"=>primitives::Primitives::Cube,
 					"WedgePart"=>primitives::Primitives::Wedge,
 					"CornerWedgePart"=>primitives::Primitives::CornerWedge,
 					_=>{
