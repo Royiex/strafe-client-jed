@@ -217,9 +217,9 @@ type RobloxWedgeDescription=[Option<RobloxFaceTextureDescription>;5];
 type RobloxCornerWedgeDescription=[Option<RobloxFaceTextureDescription>;5];
 #[derive(Clone,Eq,Hash,PartialEq)]
 enum RobloxBasePartDescription{
-	Sphere,
+	Sphere(RobloxPartDescription),
 	Part(RobloxPartDescription),
-	Cylinder,
+	Cylinder(RobloxPartDescription),
 	Wedge(RobloxWedgeDescription),
 	CornerWedge(RobloxCornerWedgeDescription),
 }
@@ -392,9 +392,9 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 					f5,//Cube::Front
 				]=part_texture_description;
 				let basepart_texture_description=match shape{
-					primitives::Primitives::Sphere=>RobloxBasePartDescription::Sphere,
+					primitives::Primitives::Sphere=>RobloxBasePartDescription::Sphere([f0,f1,f2,f3,f4,f5]),
 					primitives::Primitives::Cube=>RobloxBasePartDescription::Part([f0,f1,f2,f3,f4,f5]),
-					primitives::Primitives::Cylinder=>RobloxBasePartDescription::Cylinder,
+					primitives::Primitives::Cylinder=>RobloxBasePartDescription::Cylinder([f0,f1,f2,f3,f4,f5]),
 					//use front face texture first and use top face texture as a fallback
 					primitives::Primitives::Wedge=>RobloxBasePartDescription::Wedge([
 						f0,//Cube::Right->Wedge::Right
@@ -420,8 +420,9 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 					let model_id=indexed_models.len();
 					model_id_from_description.insert(basepart_texture_description.clone(),model_id);//borrow checker going crazy
 					indexed_models.push(match basepart_texture_description{
-						RobloxBasePartDescription::Sphere=>primitives::unit_sphere(),
-						RobloxBasePartDescription::Part(part_texture_description)=>{
+						RobloxBasePartDescription::Sphere(part_texture_description)
+						|RobloxBasePartDescription::Cylinder(part_texture_description)
+						|RobloxBasePartDescription::Part(part_texture_description)=>{
 							let mut cube_face_description=primitives::CubeFaceDescription::default();
 							for (face_id,roblox_face_description) in part_texture_description.iter().enumerate(){
 								cube_face_description.insert(
@@ -441,7 +442,6 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 							}
 							primitives::generate_partial_unit_cube(cube_face_description)
 						},
-						RobloxBasePartDescription::Cylinder=>primitives::unit_cylinder(),
 						RobloxBasePartDescription::Wedge(wedge_texture_description)=>{
 							let mut wedge_face_description=primitives::WedgeFaceDescription::default();
 							for (face_id,roblox_face_description) in wedge_texture_description.iter().enumerate(){
