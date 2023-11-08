@@ -127,11 +127,7 @@ const CORNERWEDGE_DEFAULT_NORMALS:[Planar64Vec3;5]=[
 	Planar64Vec3::int( 0, 0,-1),//CornerWedge::Front
 ];
 pub fn unit_sphere()->crate::model::IndexedModel{
-	let mut indexed_model=crate::model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/suzanne.obj")[..]).unwrap(),Color4::ONE).remove(0);
-	for pos in indexed_model.unique_pos.iter_mut(){
-		*pos=*pos/2;
-	}
-	indexed_model
+	unit_cube()
 }
 #[derive(Default)]
 pub struct CubeFaceDescription([Option<FaceDescription>;6]);
@@ -153,13 +149,8 @@ pub fn unit_cube()->crate::model::IndexedModel{
 	t.insert(CubeFace::Front,FaceDescription::default());
 	generate_partial_unit_cube(t)
 }
-const TEAPOT_TRANSFORM:crate::integer::Planar64Mat3=crate::integer::Planar64Mat3::int_from_cols_array([0,1,0, -1,0,0, 0,0,1]);
 pub fn unit_cylinder()->crate::model::IndexedModel{
-	let mut indexed_model=crate::model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teapot.obj")[..]).unwrap(),Color4::ONE).remove(0);
-	for pos in indexed_model.unique_pos.iter_mut(){
-		*pos=TEAPOT_TRANSFORM*(*pos)/10;
-	}
-	indexed_model
+	unit_cube()
 }
 #[derive(Default)]
 pub struct WedgeFaceDescription([Option<FaceDescription>;5]);
