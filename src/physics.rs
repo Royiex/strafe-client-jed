@@ -1523,7 +1523,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					if let Some(rocket_force)=self.style.rocket_force{
 						a+=self.style.get_propulsion_control_dir(&self.camera,self.controls,&self.next_mouse,self.time)*rocket_force;
 					}
-					set_acceleration_cull(&mut self.body,&mut self.touching,&self.models,a);
+					if set_acceleration_cull(&mut self.body,&mut self.touching,&self.models,a){
+						(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+					}
 				}
 			},
 		}
