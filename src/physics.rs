@@ -1107,9 +1107,9 @@ impl PhysicsState {
 	// 	});
 	// }
 
-	fn refresh_walk_target(&mut self)->Option<Planar64Vec3>{
+	fn refresh_walk_target(&mut self)->Planar64Vec3{
 		match &mut self.move_state{
-			MoveState::Air|MoveState::Water=>None,
+			MoveState::Air|MoveState::Water=>self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time),
 			MoveState::Walk(WalkState{state,contact,jump_direction:_})=>{
 				let n=self.models.mesh(contact.model_id).face_nd(contact.face_id).0;
 				let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
@@ -1118,8 +1118,7 @@ impl PhysicsState {
 				self.touching.constrain_velocity(&self.models,&mut v);
 				let normal_accel=-n.dot(gravity)/n.length();
 				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,v,&n,self.style.walk_speed,normal_accel);
-				self.touching.constrain_acceleration(&self.models,&mut a);
-				Some(a)
+				a
 			},
 			MoveState::Ladder(WalkState{state,contact,jump_direction:_})=>{
 				let n=self.models.mesh(contact.model_id).face_nd(contact.face_id).0;
@@ -1128,8 +1127,7 @@ impl PhysicsState {
 				let mut v=self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time,&n);
 				self.touching.constrain_velocity(&self.models,&mut v);
 				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,v,&n,self.style.ladder_speed,self.style.ladder_accel);
-				self.touching.constrain_acceleration(&self.models,&mut a);
-				Some(a)
+				a
 			},
 		}
 	}
@@ -1421,9 +1419,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						if calc_move||Planar64::ZERO<normal.dot(v){
 							(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 						}
-						if let Some(a)=self.refresh_walk_target(){
-							set_acceleration(&mut self.body,&self.touching,&self.models,a);
-						}
+						let a=self.refresh_walk_target();
+						set_acceleration(&mut self.body,&self.touching,&self.models,a);
 					},
 					(PhysicsCollisionAttributes::Intersect{intersecting: _,general},Collision::Intersect(intersect))=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
@@ -1522,13 +1519,11 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsInputInstruction::Idle => {refresh_walk_target=false;},//literally idle!
 				}
 				if refresh_walk_target{
-					if let Some(a)=self.refresh_walk_target(){
-						set_acceleration_cull(&mut self.body,&mut self.touching,&self.models,a);
-					}else if let Some(rocket_force)=self.style.rocket_force{
-						let mut a=self.style.gravity;
+					let mut a=self.refresh_walk_target();
+					if let Some(rocket_force)=self.style.rocket_force{
 						a+=self.style.get_propulsion_control_dir(&self.camera,self.controls,&self.next_mouse,self.time)*rocket_force;
-						set_acceleration_cull(&mut self.body,&mut self.touching,&self.models,a);
 					}
+					set_acceleration_cull(&mut self.body,&mut self.touching,&self.models,a);
 				}
 			},
 		}
