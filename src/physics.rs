@@ -1188,14 +1188,12 @@ fn get_walk_state(move_state:&MoveState)->Option<&WalkState>{
 	}
 }
 
-fn jumped_velocity(models:&PhysicsModels,style:&StyleModifiers,walk_state:&WalkState,v:&mut Planar64Vec3)->Planar64Vec3{
-	let normal=models.mesh(walk_state.contact.model_id).face_nd(walk_state.contact.face_id).0;
+fn jumped_velocity(models:&PhysicsModels,style:&StyleModifiers,walk_state:&WalkState,v:&mut Planar64Vec3){
 	let jump_dir=match &walk_state.jump_direction{
-		JumpDirection::FromContactNormal=>normal,
+		JumpDirection::FromContactNormal=>models.mesh(walk_state.contact.model_id).face_nd(walk_state.contact.face_id).0,
 		&JumpDirection::Exactly(dir)=>dir,
 	};
 	*v=*v+jump_dir*(style.get_jump_deltav()/jump_dir.length());
-	normal
 }
 
 fn set_position(body:&mut Body,touching:&mut TouchingState,point:Planar64Vec3)->Planar64Vec3{
@@ -1208,26 +1206,40 @@ fn set_position(body:&mut Body,touching:&mut TouchingState,point:Planar64Vec3)->
 	//touching.recalculate(body);
 	point
 }
-fn set_velocity_cull(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,v:Planar64Vec3)->Planar64Vec3{
+fn set_velocity_cull(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,v:Planar64Vec3)->bool{
 	//This is not correct but is better than what I have
+	let mut culled=false;
 	touching.contacts.retain(|contact|{
 		let n=models.mesh(contact.model_id).face_nd(contact.face_id).0;
-		n.dot(v)<=Planar64::ZERO
+		let r=n.dot(v)<=Planar64::ZERO;
+		if !r{
+			culled=true;
+			println!("set_velocity_cull contact={:?}",contact);
+		}
+		r
 	});
-	set_velocity(body,touching,models,v)
+	set_velocity(body,touching,models,v);
+	culled
 }
 fn set_velocity(body:&mut Body,touching:&TouchingState,models:&PhysicsModels,mut v:Planar64Vec3)->Planar64Vec3{
 	touching.constrain_velocity(&models,&mut v);
 	body.velocity=v;
 	v
 }
-fn set_acceleration_cull(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,a:Planar64Vec3)->Planar64Vec3{
+fn set_acceleration_cull(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,a:Planar64Vec3)->bool{
 	//This is not correct but is better than what I have
+	let mut culled=false;
 	touching.contacts.retain(|contact|{
 		let n=models.mesh(contact.model_id).face_nd(contact.face_id).0;
-		n.dot(a)<=Planar64::ZERO
+		let r=n.dot(a)<=Planar64::ZERO;
+		if !r{
+			culled=true;
+			println!("set_acceleration_cull contact={:?}",contact);
+		}
+		r
 	});
-	set_acceleration(body,touching,models,a)
+	set_acceleration(body,touching,models,a);
+	culled
 }
 fn set_acceleration(body:&mut Body,touching:&TouchingState,models:&PhysicsModels,mut a:Planar64Vec3)->Planar64Vec3{
 	touching.constrain_acceleration(&models,&mut a);
@@ -1386,9 +1398,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						}
 						let calc_move=if self.style.get_control(StyleModifiers::CONTROL_JUMP,self.controls){
 							if let Some(walk_state)=get_walk_state(&self.move_state){
-								let n=jumped_velocity(&self.models,&self.style,walk_state,&mut v);
-								set_velocity_cull(&mut self.body,&mut self.touching,&self.models,v);
-								Planar64::ZERO<n.dot(v)
+								jumped_velocity(&self.models,&self.style,walk_state,&mut v);
+								set_velocity_cull(&mut self.body,&mut self.touching,&self.models,v)
 							}else{false}
 						}else{false};
 						match &general.trajectory{
@@ -1436,12 +1447,15 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			PhysicsInstruction::StrafeTick => {
 				let camera_mat=self.camera.simulate_move_rotation_y(self.camera.mouse.lerp(&self.next_mouse,self.time).x);
 				let control_dir=camera_mat*self.style.get_control_dir(self.controls);
+				//normalize but careful for zero
 				let d=self.body.velocity.dot(control_dir);
 				if d<self.style.mv {
 					let v=self.body.velocity+control_dir*(self.style.mv-d);
 					//this is wrong but will work ig
 					//need to note which push planes activate in push solve and keep those
-					set_velocity_cull(&mut self.body,&mut self.touching,&self.models,v);
+					if set_velocity_cull(&mut self.body,&mut self.touching,&self.models,v){
+						(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+					}
 				}
 			}
 			PhysicsInstruction::ReachWalkTargetVelocity => {
@@ -1483,9 +1497,8 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						self.set_control(StyleModifiers::CONTROL_JUMP,s);
 						if let Some(walk_state)=get_walk_state(&self.move_state){
 							let mut v=self.body.velocity;
-							let n=jumped_velocity(&self.models,&self.style,walk_state,&mut v);
-							set_velocity_cull(&mut self.body,&mut self.touching,&self.models,v);
-							if Planar64::ZERO<n.dot(v){
+							jumped_velocity(&self.models,&self.style,walk_state,&mut v);
+							if set_velocity_cull(&mut self.body,&mut self.touching,&self.models,v){
 								(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 							}
 						}
