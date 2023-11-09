@@ -22,6 +22,7 @@ pub fn new<'a>(
 		device:wgpu::Device,
 		queue:wgpu::Queue,
 	)->crate::compat_worker::INWorker<'a,Instruction>{
+	let mut resize=None;
 	crate::compat_worker::INWorker::new(move |ins:Instruction|{
 		match ins{
 			Instruction::GenerateModels(indexed_model_instances)=>{
@@ -31,13 +32,20 @@ pub fn new<'a>(
 				graphics.clear();
 			},
 			Instruction::Resize(size,user_settings)=>{
-				println!("Resizing to {:?}",size);
-				config.width=size.width.max(1);
-				config.height=size.height.max(1);
-				surface.configure(&device,&config);
-				graphics.resize(&device,&config,&user_settings);
+				resize=Some((size,user_settings));
 			}
 			Instruction::Render(physics_output,predicted_time,mouse_pos)=>{
+				if let Some((size,user_settings))=&resize{
+					println!("Resizing to {:?}",size);
+					let t0=std::time::Instant::now();
+					config.width=size.width.max(1);
+					config.height=size.height.max(1);
+					surface.configure(&device,&config);
+					graphics.resize(&device,&config,user_settings);
+					println!("Resize took {:?}",t0.elapsed());
+				}
+				//clear every time w/e
+				resize=None;
 				//this has to go deeper somehow
 				let frame=match surface.get_current_texture(){
 					Ok(frame)=>frame,
