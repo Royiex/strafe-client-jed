@@ -1445,16 +1445,19 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 				}
 			},
 			PhysicsInstruction::StrafeTick => {
-				let camera_mat=self.camera.simulate_move_rotation_y(self.camera.mouse.lerp(&self.next_mouse,self.time).x);
-				let control_dir=camera_mat*self.style.get_control_dir(self.controls);
-				//normalize but careful for zero
-				let d=self.body.velocity.dot(control_dir);
-				if d<self.style.mv {
-					let v=self.body.velocity+control_dir*(self.style.mv-d);
-					//this is wrong but will work ig
-					//need to note which push planes activate in push solve and keep those
-					if set_velocity_cull(&mut self.body,&mut self.touching,&self.models,v){
-						(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+				let control_dir=self.style.get_control_dir(self.controls);
+				if control_dir!=Planar64Vec3::ZERO{
+					let camera_mat=self.camera.simulate_move_rotation_y(self.camera.mouse.lerp(&self.next_mouse,self.time).x);
+					let control_dir=camera_mat*control_dir;
+					//normalize but careful for zero
+					let d=self.body.velocity.dot(control_dir);
+					if d<self.style.mv {
+						let v=self.body.velocity+control_dir*(self.style.mv-d);
+						//this is wrong but will work ig
+						//need to note which push planes activate in push solve and keep those
+						if set_velocity_cull(&mut self.body,&mut self.touching,&self.models,v){
+							(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+						}
 					}
 				}
 			}
