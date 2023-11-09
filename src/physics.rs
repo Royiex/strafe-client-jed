@@ -794,9 +794,9 @@ impl TouchingState{
 		//TODO: trey push solve
 		for contact in &self.contacts{
 			let n=models.mesh(contact.model_id).face_nd(contact.face_id).0;
-			let d=n.dot(*velocity);
-			if d<Planar64::ZERO{
-				*velocity-=n*(d/n.dot(n));
+			let d=n.dot128(*velocity);
+			if d<0{
+				*velocity-=n*Planar64::raw(((d<<32)/n.dot128(n)) as i64);
 			}
 		}
 	}
@@ -804,9 +804,9 @@ impl TouchingState{
 		//TODO: trey push solve
 		for contact in &self.contacts{
 			let n=models.mesh(contact.model_id).face_nd(contact.face_id).0;
-			let d=n.dot(*acceleration);
-			if d<Planar64::ZERO{
-				*acceleration-=n*(d/n.dot(n));
+			let d=n.dot128(*acceleration);
+			if d<0{
+				*acceleration-=n*Planar64::raw(((d<<32)/n.dot128(n)) as i64);
 			}
 		}
 	}
