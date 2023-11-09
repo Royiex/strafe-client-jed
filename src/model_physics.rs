@@ -320,8 +320,8 @@ impl TransformedMesh<'_>{
 				let t=body.time+crate::integer::Time::from(t);
 				if body.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))>Planar64::ZERO{
 					let p=body.extrapolated_position(t);
-					if self.face_edges(face_id).iter().all(|&(_,face_id)|{
-						let (n,d)=self.face_nd(face_id);
+					if self.face_edges(face_id).iter().all(|&(_,test_face_id)|{
+						let (n,d)=self.face_nd(test_face_id);
 						n.dot(p)<=d
 					}){
 						best_time=t;
@@ -336,13 +336,13 @@ impl TransformedMesh<'_>{
 		//check each face
 		let mut best_time=time_limit;
 		let mut best_face=None;
-		for &(_,face_id) in self.mesh.face_edges(face_id).iter(){
-			let (n,d)=self.face_nd(face_id);
+		for &(_,test_face_id) in self.mesh.face_edges(face_id).iter(){
+			let (n,d)=self.face_nd(test_face_id);
 			for t in crate::zeroes::zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 				let t=body.time+crate::integer::Time::from(t);
 				if body.time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))>Planar64::ZERO{
 					best_time=t;
-					best_face=Some(face_id);
+					best_face=Some(test_face_id);
 				}
 			}
 		}
