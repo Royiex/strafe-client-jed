@@ -823,7 +823,7 @@ impl TouchingState{
 							self.constrain_acceleration(models,&mut acceleration);
 							a=acceleration;
 						},
-						None=>if style.surf_slope.map_or(true,|s|normal.slope_cmp(s,Planar64Vec3::Y)){
+						None=>if style.surf_slope.map_or(true,|s|normal.walkable(s,Planar64Vec3::Y)){
 							//check ground
 							let mut target_velocity=style.get_walk_target_velocity(camera,controls,next_mouse,time);
 							self.constrain_velocity(models,&mut target_velocity);
@@ -1343,7 +1343,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 								self.move_state=MoveState::Ladder(walk_state);
 								set_acceleration(&mut self.body,&mut self.touching,&self.models,a);
 							}
-							None=>if self.style.surf_slope.map_or(true,|s|self.models.mesh(model_id).face_nd(contact.face_id).0.slope_cmp(s,Planar64Vec3::Y)){
+							None=>if self.style.surf_slope.map_or(true,|s|self.models.mesh(model_id).face_nd(contact.face_id).0.walkable(s,Planar64Vec3::Y)){
 								//ground
 								let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 								let mut target_velocity=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);

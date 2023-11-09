@@ -653,10 +653,10 @@ impl Planar64Vec3{
 		))
 	}
 	#[inline]
-	pub fn slope_cmp(&self,slope:Planar64,up:Self)->bool{
+	pub fn walkable(&self,slope:Planar64,up:Self)->bool{
 		let y=self.dot(up);
 		let x=self.cross(up).length();
-		y<x*slope
+		x*slope<y
 	}
 	#[inline]
 	pub fn length(&self)->Planar64{
