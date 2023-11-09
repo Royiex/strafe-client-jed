@@ -1353,8 +1353,9 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 							Some(crate::model::ContactingBehaviour::Cling)=>println!("Unimplemented!"),
 							&Some(crate::model::ContactingBehaviour::Elastic(elasticity))=>{
 								let n=self.models.mesh(contact.model_id).face_nd(contact.face_id).0;
-								let d=n.dot(v)*Planar64::raw(-1-elasticity as i64);
-								v-=n*(d/n.dot(n));
+								//velocity and normal are facing opposite directions so this is inherently negative.
+								let d=n.dot(v)*(Planar64::ONE+Planar64::raw(elasticity as i64+1));
+								v+=n*(d/n.dot(n));
 							},
 							Some(crate::model::ContactingBehaviour::Ladder(contacting_ladder))=>{
 								if contacting_ladder.sticky{
