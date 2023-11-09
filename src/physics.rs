@@ -592,20 +592,28 @@ impl StyleModifiers{
 		let control_dir=camera_mat*self.get_control_dir(controls);
 		control_dir*self.walk_speed
 	}
-	fn get_ladder_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
+	fn get_ladder_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time,normal:&Planar64Vec3)->Planar64Vec3{
+		let mut control_dir=self.get_control_dir(controls);
+		if control_dir==Planar64Vec3::ZERO{
+			return control_dir;
+		}
 		let camera_mat=camera.simulate_move_rotation(camera.mouse.lerp(&next_mouse,time));
-		let control_dir=camera_mat*self.get_control_dir(controls);
-		// local m=sqrt(ControlDir.length_squared())
-		// local d=dot(Normal,ControlDir)/m
-		// if d<-LadderDot then
-		// 	ControlDir=Up*m
-		// 	d=dot(Normal,Up)
-		// elseif LadderDot<d then
-		// 	ControlDir=Up*-m
-		// 	d=-dot(Normal,Up)
-		// end
-		// return cross(cross(Normal,ControlDir),Normal)/sqrt(1-d*d)
-		control_dir*self.walk_speed
+		control_dir=camera_mat*control_dir;
+		let n=normal.length();
+		let m=control_dir.length();
+		let mut d=normal.dot(control_dir)/m;
+		if d< -self.ladder_dot*n{
+			control_dir=Planar64Vec3::Y*m;
+			d=normal.y();
+		}else if self.ladder_dot*n<d{
+			control_dir=Planar64Vec3::NEG_Y*m;
+			d=-normal.y();
+		}
+		//n=d if you are standing on top of a ladder and press E.
+		//two fixes:
+		//- ladder movement is not allowed on walkable surfaces
+		//- fix the underlying issue
+		normal.cross(control_dir).cross(*normal)*(self.ladder_speed/(n*(n*n-d*d).sqrt()))
 	}
 	fn get_propulsion_control_dir(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
 		let camera_mat=camera.simulate_move_rotation(camera.mouse.lerp(&next_mouse,time));
@@ -816,7 +824,7 @@ impl TouchingState{
 					match &contacting.contact_behaviour{
 						Some(crate::model::ContactingBehaviour::Ladder(_))=>{
 							//ladder walkstate
-							let mut target_velocity=style.get_ladder_target_velocity(camera,controls,next_mouse,time);
+							let mut target_velocity=style.get_ladder_target_velocity(camera,controls,next_mouse,time,&normal);
 							self.constrain_velocity(models,&mut target_velocity);
 							let (walk_state,mut acceleration)=WalkState::ladder(body,style,gravity,target_velocity,contact.clone(),&normal);
 							move_state=MoveState::Ladder(walk_state);
@@ -1117,7 +1125,7 @@ impl PhysicsState {
 				let n=self.models.mesh(contact.model_id).face_nd(contact.face_id).0;
 				let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 				let mut a;
-				let mut v=self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
+				let mut v=self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time,&n);
 				self.touching.constrain_velocity(&self.models,&mut v);
 				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,v,&n,self.style.ladder_speed,self.style.ladder_accel);
 				self.touching.constrain_acceleration(&self.models,&mut a);
@@ -1343,7 +1351,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 								}
 								//ladder walkstate
 								let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
-								let mut target_velocity=self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
+								let mut target_velocity=self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time,&normal);
 								self.touching.constrain_velocity(&self.models,&mut target_velocity);
 								let (walk_state,a)=WalkState::ladder(&self.body,&self.style,gravity,target_velocity,contact.clone(),&normal);
 								self.move_state=MoveState::Ladder(walk_state);
@@ -1444,7 +1452,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 							WalkEnum::Reached=>(),
 							WalkEnum::Transient(walk_target)=>{
 								//precisely set velocity
-								let a=self.style.gravity;
+								let a=Planar64Vec3::ZERO;//ignore gravity for now.
 								set_acceleration(&mut self.body,&self.touching,&self.models,a);
 								let v=walk_target.velocity;
 								set_velocity(&mut self.body,&self.touching,&self.models,v);
