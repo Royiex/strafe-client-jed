@@ -5,6 +5,22 @@ use std::borrow::Cow;
 pub struct VertId(usize);
 #[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
 pub struct EdgeId(usize);
+impl EdgeId{
+	fn as_directed_edge_id(&self,parity:bool)->DirectedEdgeId{
+		DirectedEdgeId(self.0|((parity as usize)<<(usize::BITS-1)))
+	}
+}
+/// DirectedEdgeId refers to an EdgeId when undirected.
+#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
+pub struct DirectedEdgeId(usize);
+impl DirectedEdgeId{
+	fn as_edge_id(&self)->EdgeId{
+		EdgeId(self.0&!(1<<(usize::BITS-1)))
+	}
+	fn signum(&self)->isize{
+		((self.0&(1<<(usize::BITS-1))!=0) as isize)*2-1
+	}
+}
 #[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
 pub struct FaceId(usize);
 
@@ -36,7 +52,7 @@ struct EdgeRefs{
 }
 struct VertRefs{
 	faces:Vec<FaceId>,
-	edges:Vec<EdgeId>,
+	edges:Vec<DirectedEdgeId>,
 }
 pub struct PhysicsMesh{
 	faces:Vec<Face>,
@@ -48,18 +64,18 @@ pub struct PhysicsMesh{
 
 #[derive(Default,Clone)]
 struct VertRefGuy{
-	edges:std::collections::HashSet<EdgeId>,
+	edges:std::collections::HashSet<DirectedEdgeId>,
 	faces:std::collections::HashSet<FaceId>,
 }
 #[derive(Clone,Hash,Eq,PartialEq)]
 struct EdgeIdGuy([VertId;2]);
 impl EdgeIdGuy{
-	fn new(v0:VertId,v1:VertId)->Self{
-		if v0.0<v1.0{
+	fn new(v0:VertId,v1:VertId)->(Self,bool){
+		(if v0.0<v1.0{
 			Self([v0,v1])
 		}else{
 			Self([v1,v0])
-		}
+		},v0.0<v1.0)
 	}
 }
 struct EdgeRefGuy([FaceId;2]);
@@ -92,7 +108,7 @@ impl EdgePool{
 impl From<&crate::model::IndexedModel> for PhysicsMesh{
 	fn from(indexed_model:&crate::model::IndexedModel)->Self{
 		let verts=indexed_model.unique_pos.iter().map(|v|Vert(v.clone())).collect();
-		let mut vert_edges=vec![VertRefGuy::default();indexed_model.unique_pos.len()];
+		let mut vert_ref_guys=vec![VertRefGuy::default();indexed_model.unique_pos.len()];
 		let mut edge_pool=EdgePool::default();
 		let mut face_i=0;
 		let mut faces=Vec::new();
@@ -114,7 +130,7 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 					(v0.x()-v1.x())*(v0.y()+v1.y()),
 				);
 				//get/create edge and push face into it
-				let edge_id_guy=EdgeIdGuy::new(VertId(vert0_id),VertId(vert1_id));
+				let (edge_id_guy,is_sorted)=EdgeIdGuy::new(VertId(vert0_id),VertId(vert1_id));
 				let (edge_ref_guy,edge_id,exists)=edge_pool.push(edge_id_guy);
 				if exists{
 					edge_ref_guy.push(1,face_id);
@@ -123,10 +139,10 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 				}
 				//index edges & face into vertices
 				{
-					let vert_ref_guy=unsafe{vert_edges.get_unchecked_mut(vert0_id)};
-					vert_ref_guy.edges.insert(edge_id);
+					let vert_ref_guy=unsafe{vert_ref_guys.get_unchecked_mut(vert0_id)};
+					vert_ref_guy.edges.insert(edge_id.as_directed_edge_id(!is_sorted));
 					vert_ref_guy.faces.insert(face_id);
-					unsafe{vert_edges.get_unchecked_mut(vert1_id)}.edges.insert(edge_id);
+					unsafe{vert_ref_guys.get_unchecked_mut(vert1_id)}.edges.insert(edge_id.as_directed_edge_id(is_sorted));
 				}
 				//return edge_id
 				edge_id
@@ -162,7 +178,7 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 			edge_topology:edge_pool.edge_guys.into_iter().map(|(edge_id_guy,edge_ref_guy)|
 				EdgeRefs{faces:edge_ref_guy.0,verts:edge_id_guy.0}
 			).collect(),
-			vert_topology:vert_edges.into_iter().map(|vert_ref_guy|
+			vert_topology:vert_ref_guys.into_iter().map(|vert_ref_guy|
 				VertRefs{
 					edges:vert_ref_guy.edges.into_iter().collect(),
 					faces:vert_ref_guy.faces.into_iter().collect(),
