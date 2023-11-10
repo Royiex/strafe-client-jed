@@ -35,7 +35,7 @@ struct EdgeRefs{
 	verts:[VertId;2],//bottom, top
 }
 struct VertRefs{
-	//faces:Vec<FaceId>,
+	faces:Vec<FaceId>,
 	edges:Vec<EdgeId>,
 }
 pub struct PhysicsMesh{
@@ -49,6 +49,7 @@ pub struct PhysicsMesh{
 #[derive(Default,Clone)]
 struct VertRefGuy{
 	edges:std::collections::HashSet<EdgeId>,
+	faces:std::collections::HashSet<FaceId>,
 }
 #[derive(Clone,Hash,Eq,PartialEq)]
 struct EdgeIdGuy([VertId;2]);
@@ -120,9 +121,13 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 				}else{
 					edge_ref_guy.push(0,face_id);
 				}
-				//index edge into vertices
-				unsafe{vert_edges.get_unchecked_mut(vert0_id)}.edges.insert(edge_id);
-				unsafe{vert_edges.get_unchecked_mut(vert1_id)}.edges.insert(edge_id);
+				//index edges & face into vertices
+				{
+					let vert_ref_guy=unsafe{vert_edges.get_unchecked_mut(vert0_id)};
+					vert_ref_guy.edges.insert(edge_id);
+					vert_ref_guy.faces.insert(face_id);
+					unsafe{vert_edges.get_unchecked_mut(vert1_id)}.edges.insert(edge_id);
+				}
 				//return edge_id
 				edge_id
 			}).collect();
@@ -158,7 +163,10 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 				EdgeRefs{faces:edge_ref_guy.0,verts:edge_id_guy.0}
 			).collect(),
 			vert_topology:vert_edges.into_iter().map(|vert_ref_guy|
-				VertRefs{edges:vert_ref_guy.edges.into_iter().collect()}
+				VertRefs{
+					edges:vert_ref_guy.edges.into_iter().collect(),
+					faces:vert_ref_guy.faces.into_iter().collect(),
+				}
 			).collect(),
 		}
 	}
@@ -176,6 +184,7 @@ pub trait MeshQuery<FACE:Clone,EDGE:Clone,VERT:Clone>{
 	fn edge_faces(&self,edge_id:EDGE)->Cow<[FACE;2]>;
 	fn edge_verts(&self,edge_id:EDGE)->Cow<[VERT;2]>;
 	fn vert_edges(&self,vert_id:VERT)->Cow<Vec<EDGE>>;
+	fn vert_faces(&self,vert_id:VERT)->Cow<Vec<FACE>>;
 }
 impl PhysicsMesh{
 	pub fn verts<'a>(&'a self)->impl Iterator<Item=Planar64Vec3>+'a{
@@ -266,6 +275,9 @@ impl MeshQuery<FaceId,EdgeId,VertId> for PhysicsMesh{
 	}
 	fn vert_edges(&self,vert_id:VertId)->Cow<Vec<EdgeId>>{
 		Cow::Borrowed(&self.vert_topology[vert_id.0].edges)
+	}
+	fn vert_faces(&self,vert_id:VertId)->Cow<Vec<FaceId>>{
+		Cow::Borrowed(&self.vert_topology[vert_id.0].faces)
 	}
 }
 
@@ -418,6 +430,10 @@ impl MeshQuery<FaceId,EdgeId,VertId> for TransformedMesh<'_>{
 	fn vert_edges(&self,vert_id:VertId)->Cow<Vec<EdgeId>>{
 		self.mesh.vert_edges(vert_id)
 	}
+	#[inline]
+	fn vert_faces(&self,vert_id:VertId)->Cow<Vec<FaceId>>{
+		self.mesh.vert_faces(vert_id)
+	}
 }
 
 //Note that a face on a minkowski mesh refers to a pair of fevs on the meshes it's summed from
@@ -565,6 +581,9 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 				todo!()
 			},
 		}
+	}
+	fn vert_faces(&self,vert_id:MinkowskiVert)->Cow<Vec<MinkowskiFace>>{
+		todo!()
 	}
 }
 
