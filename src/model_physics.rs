@@ -229,6 +229,13 @@ impl PhysicsMesh{
 		}
 		best_face.map(|f|(f,best_time))
 	}
+	fn vert_directed_edges(&self,vert_id:VertId)->Cow<Vec<DirectedEdgeId>>{
+		Cow::Borrowed(&self.vert_topology[vert_id.0].edges)
+	}
+	fn directed_edge_n(&self,directed_edge_id:DirectedEdgeId)->Planar64Vec3{
+		let verts=self.edge_verts(directed_edge_id.as_edge_id());
+		(self.vert(verts[1].clone())-self.vert(verts[0].clone()))*(directed_edge_id.signum() as i64)
+	}
 }
 impl MeshQuery<FaceId,EdgeId,VertId> for PhysicsMesh{
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<FaceId,EdgeId,VertId>{
@@ -290,7 +297,8 @@ impl MeshQuery<FaceId,EdgeId,VertId> for PhysicsMesh{
 		Cow::Borrowed(&self.edge_topology[edge_id.0].verts)
 	}
 	fn vert_edges(&self,vert_id:VertId)->Cow<Vec<EdgeId>>{
-		Cow::Borrowed(&self.vert_topology[vert_id.0].edges)
+		//not poggers
+		Cow::Owned(self.vert_topology[vert_id.0].edges.iter().map(|directed_edge_id|directed_edge_id.as_edge_id()).collect())
 	}
 	fn vert_faces(&self,vert_id:VertId)->Cow<Vec<FaceId>>{
 		Cow::Borrowed(&self.vert_topology[vert_id.0].faces)
@@ -375,6 +383,14 @@ impl TransformedMesh<'_>{
 			}
 		}
 		best_face.map(|f|(f,best_time))
+	}
+	#[inline]
+	fn vert_directed_edges(&self,vert_id:VertId)->Cow<Vec<DirectedEdgeId>>{
+		self.mesh.vert_directed_edges(vert_id)
+	}
+	#[inline]
+	fn directed_edge_n(&self,directed_edge_id:DirectedEdgeId)->Planar64Vec3{
+		self.mesh.directed_edge_n(directed_edge_id)
 	}
 }
 impl MeshQuery<FaceId,EdgeId,VertId> for TransformedMesh<'_>{
@@ -588,13 +604,24 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 	fn vert_edges(&self,vert_id:MinkowskiVert)->Cow<Vec<MinkowskiEdge>>{
 		match vert_id{
 			MinkowskiVert::VertVert(v0,v1)=>{
-				let v0e=self.mesh0.vert_edges(v0);
-				let v1e=self.mesh1.vert_edges(v1);
-				//uh oh dot product
-				//pass all dots?
-				//it's a convex hull of {v0e,-v1e}
-				//each edge needs to know which vert to use from the other mesh
-				todo!()
+				let mut edges=Vec::new();
+				let v0e=self.mesh0.vert_directed_edges(v0);
+				let v1f=self.mesh1.vert_faces(v1);
+				for &directed_edge_id in v0e.iter(){
+					let n=self.mesh0.directed_edge_n(directed_edge_id);
+					if v1f.iter().all(|&face_id|n.dot(self.mesh1.face_nd(face_id).0)<Planar64::ZERO){
+						edges.push(MinkowskiEdge::EdgeVert(directed_edge_id.as_edge_id(),v1));
+					}
+				}
+				let v1e=self.mesh1.vert_directed_edges(v1);
+				let v0f=self.mesh0.vert_faces(v0);
+				for &directed_edge_id in v1e.iter(){
+					let n=self.mesh1.directed_edge_n(directed_edge_id);
+					if v0f.iter().all(|&face_id|n.dot(self.mesh0.face_nd(face_id).0)<Planar64::ZERO){
+						edges.push(MinkowskiEdge::VertEdge(v0,directed_edge_id.as_edge_id()));
+					}
+				}
+				Cow::Owned(edges)
 			},
 		}
 	}
