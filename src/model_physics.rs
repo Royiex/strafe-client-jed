@@ -396,8 +396,7 @@ impl MeshQuery<FaceId,EdgeId,VertId> for TransformedMesh<'_>{
 	fn face_nd(&self,face_id:FaceId)->(Planar64Vec3,Planar64){
 		let (n,d)=self.mesh.face_nd(face_id);
 		let transformed_n=*self.normal_transform*n;
-		let p=n*(d/n.dot(n));
-		let transformed_d=transformed_n.dot(self.transform.transform_point3(p));
+		let transformed_d=Planar64::raw(((transformed_n.dot128(self.transform.matrix3*(n*d))<<32)/n.dot128(n)) as i64)+transformed_n.dot(self.transform.translation);
 		(transformed_n,transformed_d)
 	}
 	fn vert(&self,vert_id:VertId)->Planar64Vec3{
