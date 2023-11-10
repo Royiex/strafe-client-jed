@@ -64,49 +64,44 @@ fn load_file(path: std::path::PathBuf)->Option<model::IndexedModelInstances>{
 
 pub fn default_models()->model::IndexedModelInstances{
 	let mut indexed_models = Vec::new();
-	indexed_models.append(&mut model::generate_indexed_model_list_from_obj(obj::ObjData::load_buf(&include_bytes!("../models/teslacyberv3.0.obj")[..]).unwrap(),glam::Vec4::ONE));
 	indexed_models.push(primitives::unit_sphere());
 	indexed_models.push(primitives::unit_cylinder());
 	indexed_models.push(primitives::unit_cube());
 	println!("models.len = {:?}", indexed_models.len());
-	indexed_models[0].instances.push(model::ModelInstance{
-		transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(10.,0.,-10.))).unwrap(),
-		..Default::default()
-	});
 	//quad monkeys
-	indexed_models[1].instances.push(model::ModelInstance{
+	indexed_models[0].instances.push(model::ModelInstance{
 		transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(10.,5.,10.))).unwrap(),
 		..Default::default()
 	});
-	indexed_models[1].instances.push(model::ModelInstance{
+	indexed_models[0].instances.push(model::ModelInstance{
 		transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(20.,5.,10.))).unwrap(),
 		color:glam::vec4(1.0,0.0,0.0,1.0),
 		..Default::default()
 	});
-	indexed_models[1].instances.push(model::ModelInstance{
+	indexed_models[0].instances.push(model::ModelInstance{
 		transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(10.,5.,20.))).unwrap(),
 		color:glam::vec4(0.0,1.0,0.0,1.0),
 		..Default::default()
 	});
-	indexed_models[1].instances.push(model::ModelInstance{
+	indexed_models[0].instances.push(model::ModelInstance{
 		transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(20.,5.,20.))).unwrap(),
 		color:glam::vec4(0.0,0.0,1.0,1.0),
 		..Default::default()
 	});
 	//decorative monkey
-	indexed_models[1].instances.push(model::ModelInstance{
+	indexed_models[0].instances.push(model::ModelInstance{
 		transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(15.,10.,15.))).unwrap(),
 		color:glam::vec4(0.5,0.5,0.5,0.5),
 		attributes:model::CollisionAttributes::Decoration,
 		..Default::default()
 	});
 	//teapot
-	indexed_models[2].instances.push(model::ModelInstance{
+	indexed_models[1].instances.push(model::ModelInstance{
 		transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_scale_rotation_translation(glam::vec3(0.5, 1.0, 0.2),glam::quat(-0.22248298016985793,-0.839457167990537,-0.05603504040830783,-0.49261857546227916),glam::vec3(-10.,7.,10.))).unwrap(),
 		..Default::default()
 	});
 	//ground
-	indexed_models[3].instances.push(model::ModelInstance{
+	indexed_models[2].instances.push(model::ModelInstance{
 		transform:integer::Planar64Affine3::try_from(glam::Affine3A::from_translation(glam::vec3(0.,0.,0.))*glam::Affine3A::from_scale(glam::vec3(160.0, 1.0, 160.0))).unwrap(),
 		..Default::default()
 	});
