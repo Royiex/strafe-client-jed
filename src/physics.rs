@@ -113,7 +113,7 @@ impl WalkEnum{
 }
 impl WalkState{
 	fn ground(body:&Body,style:&StyleModifiers,gravity:Planar64Vec3,velocity:Planar64Vec3,contact:ContactCollision,normal:&Planar64Vec3)->(Self,Planar64Vec3){
-		let (walk_enum,a)=WalkEnum::with_target_velocity(body,style,velocity,&Planar64Vec3::Y,style.walk_speed,normal.dot(gravity));
+		let (walk_enum,a)=WalkEnum::with_target_velocity(body,style,velocity,&Planar64Vec3::Y,style.walk_speed,-normal.dot(gravity));
 		(Self{
 			state:walk_enum,
 			contact,
