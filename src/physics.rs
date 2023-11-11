@@ -587,10 +587,26 @@ impl StyleModifiers{
 		}
 	}
 
-	fn get_walk_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
+	fn get_walk_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time,normal:&Planar64Vec3)->Planar64Vec3{
+		let mut control_dir=self.get_control_dir(controls);
+		if control_dir==Planar64Vec3::ZERO{
+			return control_dir;
+		}
 		let camera_mat=camera.simulate_move_rotation_y(camera.mouse.lerp(&next_mouse,time).x);
-		let control_dir=camera_mat*self.get_control_dir(controls);
-		control_dir*self.walk_speed
+		control_dir=camera_mat*control_dir;
+		let n=normal.length();
+		let m=control_dir.length();
+		let d=normal.dot(control_dir)/m;
+		if d<n{
+			let cr=normal.cross(control_dir);
+			if cr==Planar64Vec3::ZERO{
+				Planar64Vec3::ZERO
+			}else{
+				cr.cross(*normal)*(self.walk_speed/(n*(n*n-d*d).sqrt()*m))
+			}
+		}else{
+			Planar64Vec3::ZERO
+		}
 	}
 	fn get_ladder_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time,normal:&Planar64Vec3)->Planar64Vec3{
 		let mut control_dir=self.get_control_dir(controls);
@@ -842,7 +858,7 @@ impl TouchingState{
 						},
 						None=>if style.surf_slope.map_or(true,|s|normal.walkable(s,Planar64Vec3::Y)){
 							//check ground
-							let mut target_velocity=style.get_walk_target_velocity(camera,controls,next_mouse,time);
+							let mut target_velocity=style.get_walk_target_velocity(camera,controls,next_mouse,time,&normal);
 							self.constrain_velocity(models,&mut target_velocity);
 							let (walk_state,mut acceleration)=WalkState::ground(body,style,gravity,target_velocity,contact.clone(),&normal);
 							move_state=MoveState::Walk(walk_state);
@@ -1123,7 +1139,7 @@ impl PhysicsState {
 				let n=self.models.mesh(contact.model_id).face_nd(contact.face_id).0;
 				let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 				let mut a;
-				let mut v=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
+				let mut v=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time,&n);
 				self.touching.constrain_velocity(&self.models,&mut v);
 				let normal_accel=-n.dot(gravity)/n.length();
 				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,v,&n,self.style.walk_speed,normal_accel);
@@ -1380,7 +1396,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 							None=>if self.style.surf_slope.map_or(true,|s|self.models.mesh(model_id).face_nd(contact.face_id).0.walkable(s,Planar64Vec3::Y)){
 								//ground
 								let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
-								let mut target_velocity=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time);
+								let mut target_velocity=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time,&normal);
 								self.touching.constrain_velocity(&self.models,&mut target_velocity);
 								let (walk_state,a)=WalkState::ground(&self.body,&self.style,gravity,target_velocity,contact.clone(),&normal);
 								self.move_state=MoveState::Walk(walk_state);
