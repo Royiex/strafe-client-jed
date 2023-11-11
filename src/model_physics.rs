@@ -535,8 +535,34 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 	fn face_edges(&self,face_id:MinkowskiFace)->Cow<Vec<(MinkowskiEdge,MinkowskiFace)>>{
 		match face_id{
 			MinkowskiFace::FaceVert(f0,v1)=>{
-				Cow::Owned(self.mesh0.face_edges(f0).iter().map(|&(edge_id0,face_id0)|{
-					(MinkowskiEdge::EdgeVert(edge_id0,v1),MinkowskiFace::FaceVert(face_id0,v1))
+				let face0_n=self.mesh0.face_nd(f0).0;
+				Cow::Owned(self.mesh0.face_edges(f0).iter().map(|&(edge_id0,edge_face_id0)|{
+					//compare v1 edges
+					//candidate edges have negative dot with edge_face_id0 normal
+					//choose the edge with the smallest edgedir dot with f0 normal
+					//MinkowskiFace::EdgeEdge(edge_id0,edge_id1)
+					//if there is no candidate edges
+					//MinkowskiFace::FaceVert(edge_face_id0,v1)
+					(MinkowskiEdge::EdgeVert(edge_id0,v1),{
+						let mut best_edge=None;
+						let mut best_d=Planar64::MAX;
+						let edge_face0_n=self.mesh0.face_nd(edge_face_id0).0;
+						let v1e=self.mesh1.vert_directed_edges(v1);
+						for &directed_edge_id1 in v1e.iter(){
+							let edge1_n=self.mesh1.directed_edge_n(directed_edge_id1);
+							if edge_face0_n.dot(edge1_n)<Planar64::ZERO{
+								let d=face0_n.dot(edge1_n);
+								if d<best_d{
+									best_d=d;
+									best_edge=Some(directed_edge_id1)
+								}
+							}
+						}
+						best_edge.map_or(
+							MinkowskiFace::FaceVert(edge_face_id0,v1),
+							|directed_edge_id1|MinkowskiFace::EdgeEdge(edge_id0,directed_edge_id1.as_edge_id())
+						)
+					})
 				}).collect())
 			},
 			MinkowskiFace::EdgeEdge(e0,e1)=>{
@@ -567,8 +593,29 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 				todo!()
 			},
 			MinkowskiFace::VertFace(v0,f1)=>{
-				Cow::Owned(self.mesh1.face_edges(f1).iter().map(|&(edge_id1,face_id1)|{
-					(MinkowskiEdge::VertEdge(v0,edge_id1),MinkowskiFace::VertFace(v0,face_id1))
+				let face1_n=self.mesh1.face_nd(f1).0;
+				Cow::Owned(self.mesh1.face_edges(f1).iter().map(|&(edge_id1,edge_face_id1)|{
+					//same as above
+					(MinkowskiEdge::VertEdge(v0,edge_id1),{
+						let mut best_edge=None;
+						let mut best_d=Planar64::MAX;
+						let edge_face1_n=self.mesh1.face_nd(edge_face_id1).0;
+						let v0e=self.mesh0.vert_directed_edges(v0);
+						for &directed_edge_id0 in v0e.iter(){
+							let edge0_n=self.mesh0.directed_edge_n(directed_edge_id0);
+							if edge_face1_n.dot(edge0_n)<Planar64::ZERO{
+								let d=face1_n.dot(edge0_n);
+								if d<best_d{
+									best_d=d;
+									best_edge=Some(directed_edge_id0)
+								}
+							}
+						}
+						best_edge.map_or(
+							MinkowskiFace::VertFace(v0,edge_face_id1),
+							|directed_edge_id0|MinkowskiFace::EdgeEdge(directed_edge_id0.as_edge_id(),edge_id1)
+						)
+					})
 				}).collect())
 			},
 		}
