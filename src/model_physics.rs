@@ -1,5 +1,5 @@
 use crate::integer::{Planar64,Planar64Vec3};
-use std::borrow::Cow;
+use std::borrow::{Borrow,Cow};
 
 #[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
 pub struct VertId(usize);
@@ -513,11 +513,15 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 				(n,d+n.dot(self.mesh1.vert(v1)))
 			},
 			MinkowskiFace::EdgeEdge(e0,e1)=>{
-				let [e0f0,e0f1]=self.mesh0.edge_faces(e0).into_owned();
-				let [e1f0,e1f1]=self.mesh1.edge_faces(e1).into_owned();
-				//cross edge faces
-				//cross crosses
-				todo!()
+				let edge0_n=self.mesh0.edge_n(e0);
+				let edge1_n=self.mesh1.edge_n(e1);
+				let &[e0v0,e0v1]=self.mesh0.edge_verts(e0).borrow();
+				let &[e1v0,e1v1]=self.mesh1.edge_verts(e1).borrow();
+				let n=edge0_n.cross(edge1_n);
+				let e0d=n.dot(self.mesh0.vert(e0v0)+self.mesh0.vert(e0v1));
+				let e1d=n.dot(self.mesh0.vert(e1v0)+self.mesh0.vert(e1v1));
+				let sign=e0d.signum_i64();
+				(n*(sign*2),(e0d-e1d)*sign)
 			},
 			MinkowskiFace::VertFace(v0,f1)=>{
 				let (n,d)=self.mesh1.face_nd(f1);

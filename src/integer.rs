@@ -427,8 +427,13 @@ impl Planar64{
 	pub const fn get(&self)->i64{
 		self.0
 	}
+	#[inline]
 	pub fn sqrt(&self)->Self{
 		Planar64(unsafe{(((self.0 as i128)<<32) as f64).sqrt().to_int_unchecked()})
+	}
+	#[inline]
+	pub const fn signum_i64(&self)->i64{
+		((self.0&(1<<63)!=0) as i64)*2-1
 	}
 }
 const PLANAR64_ONE_FLOAT32:f32=(1u64<<32) as f32;
