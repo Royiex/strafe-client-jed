@@ -625,8 +625,10 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 		}
 	}
 	fn edge_faces(&self,edge_id:MinkowskiEdge)->Cow<[MinkowskiFace;2]>{
+		//WRONG!!!!!!!!!!!! MORE CASES!!!!!!!!!!!!
 		match edge_id{
 			MinkowskiEdge::VertEdge(v0,e1)=>{
+				//also need to check v0 edges to see if they overtake the face
 				Cow::Owned(self.mesh1.edge_faces(e1).map(|face_id1|{
 					MinkowskiFace::VertFace(v0,face_id1)
 				}))
