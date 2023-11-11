@@ -613,7 +613,16 @@ impl StyleModifiers{
 		//two fixes:
 		//- ladder movement is not allowed on walkable surfaces
 		//- fix the underlying issue
-		normal.cross(control_dir).cross(*normal)*(self.ladder_speed/(n*(n*n-d*d).sqrt()))
+		if d.get().unsigned_abs()<n.get().unsigned_abs(){
+			let cr=normal.cross(control_dir);
+			if cr==Planar64Vec3::ZERO{
+				Planar64Vec3::ZERO
+			}else{
+				cr.cross(*normal)*(self.ladder_speed/(n*(n*n-d*d).sqrt()))
+			}
+		}else{
+			Planar64Vec3::ZERO
+		}
 	}
 	fn get_propulsion_control_dir(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
 		let camera_mat=camera.simulate_move_rotation(camera.mouse.lerp(&next_mouse,time));
