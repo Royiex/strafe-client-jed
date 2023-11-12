@@ -790,9 +790,7 @@ impl TouchingState{
 			match models.attr(contact.model_id){
 				PhysicsCollisionAttributes::Contact{contacting,general}=>{
 					match &general.accelerator{
-						Some(accelerator)=>{
-							a+=accelerator.acceleration;
-						},
+						Some(accelerator)=>a+=accelerator.acceleration,
 						None=>(),
 					}
 				},
@@ -803,9 +801,7 @@ impl TouchingState{
 			match models.attr(intersect.model_id){
 				PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
 					match &general.accelerator{
-						Some(accelerator)=>{
-							a+=accelerator.acceleration;
-						},
+						Some(accelerator)=>a+=accelerator.acceleration,
 						None=>(),
 					}
 				},
