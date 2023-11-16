@@ -344,10 +344,10 @@ impl MinkowskiMesh<'_>{
 		let fev=FEV::<MinkowskiFace,MinkowskiEdge,MinkowskiVert>::Vert(self.farthest_vert(point));
 		crate::face_crawler::crawl_fev_dot(fev,self,point)
 	}
-	pub fn predict_collision(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
+	pub fn predict_collision_in(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
 		crate::face_crawler::crawl_fev_body(self.closest_fev(relative_body.position),self,relative_body,time_limit)
 	}
-	pub fn predict_collision_end(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time,contact_face_id:MinkowskiFace)->Option<(MinkowskiEdge,crate::integer::Time)>{
+	pub fn predict_collision_face_out(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time,contact_face_id:MinkowskiFace)->Option<(MinkowskiEdge,crate::integer::Time)>{
 		//no algorithm needed, there is only one state and two cases (Edge,None)
 		//determine when it passes an edge ("sliding off" case)
 		let mut best_time=time_limit;

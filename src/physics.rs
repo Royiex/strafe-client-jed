@@ -731,8 +731,7 @@ impl PhysicsModel{
 
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
 struct ContactCollision{
-	//face_id:crate::model_physics::MinkowskiFace,
-	face_id:crate::model_physics::FaceId,
+	face_id:crate::model_physics::MinkowskiFace,
 	model_id:usize,//using id to avoid lifetimes
 }
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
@@ -751,7 +750,7 @@ impl Collision{
 			|&Collision::Intersect(IntersectCollision{model_id})=>model_id,
 		}
 	}
-	fn face_id(&self)->Option<crate::model_physics::FaceId>{
+	fn face_id(&self)->Option<crate::model_physics::MinkowskiFace>{
 		match self{
 			&Collision::Contact(ContactCollision{model_id:_,face_id})=>Some(face_id),
 			&Collision::Intersect(IntersectCollision{model_id:_})=>None,
@@ -873,10 +872,12 @@ impl TouchingState{
 		self.constrain_acceleration(models,&mut a);
 		(move_state,a)
 	}
-	fn predict_collision_end(&self,collector:&mut crate::instruction::InstructionCollector<PhysicsInstruction>,models:&PhysicsModels,body:&Body,time:Time){
+	fn predict_collision_end(&self,collector:&mut crate::instruction::InstructionCollector<PhysicsInstruction>,models:&PhysicsModels,style_mesh:&TransformedMesh,body:&Body,time:Time){
+		let relative_body=VirtualBody::relative(&Body::default(),body).body(time);
 		for contact in &self.contacts{
 			//detect face slide off
-			collector.collect(models.mesh(contact.model_id).brute_out_face(body,collector.time(),contact.face_id).map(|(face,time)|{
+			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&style_mesh,&models.mesh(contact.model_id));
+			collector.collect(minkowski.predict_collision_face_out(&relative_body,collector.time(),contact.face_id).map(|(face,time)|{
 				TimedInstruction{
 					time,
 					instruction:PhysicsInstruction::CollisionEnd(
@@ -885,10 +886,10 @@ impl TouchingState{
 				}
 			}));
 		}
-		let relative_body=VirtualBody::relative(&Body::default(),body).body(time);
 		for intersect in &self.intersects{
 			//detect model collision in reverse
-			collector.collect(models.mesh(intersect.model_id).brute_out(&relative_body,collector.time()).map(|(face,time)|{
+			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&style_mesh,&models.mesh(intersect.model_id));
+			collector.collect(minkowski.predict_collision_out(&relative_body,collector.time()).map(|(face,time)|{
 				TimedInstruction{
 					time,
 					instruction:PhysicsInstruction::CollisionEnd(
@@ -1176,8 +1177,9 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 
 		collector.collect(self.next_move_instruction());
 
+		let style_mesh=self.style.mesh();
 		//check for collision ends
-		self.touching.predict_collision_end(&mut collector,&self.models,&self.body,self.time);
+		self.touching.predict_collision_end(&mut collector,&self.models,&style_mesh,&self.body,self.time);
 		//check for collision starts
 		let mut aabb=crate::aabb::Aabb::default();
 		aabb.grow(self.body.extrapolated_position(self.time));
@@ -1187,9 +1189,8 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 		let relative_body=VirtualBody::relative(&Body::default(),&self.body).body(self.time);
 		self.bvh.the_tester(&aabb,&mut |id|{
 			//no checks are needed because of the time limits.
-			//let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(self.style.mesh,&self.models.mesh(id));
-			//collector.collect(crate::face_crawler::predict_collision(&minkowski,&relative_body,collector.time()).map(|(face,time)|{
-			collector.collect(self.models.mesh(id).brute_in(&relative_body,collector.time()).map(|(face,time)|{
+			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&style_mesh,&self.models.mesh(id));
+			collector.collect(minkowski.predict_collision_in(&relative_body,collector.time()).map(|(face,time)|{
 				TimedInstruction{time,instruction:PhysicsInstruction::CollisionStart(match self.models.attr(id){
 					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>Collision::Contact(ContactCollision{model_id:id,face_id:face}),
 					PhysicsCollisionAttributes::Intersect{intersecting:_,general:_}=>Collision::Intersect(IntersectCollision{model_id:id}),
