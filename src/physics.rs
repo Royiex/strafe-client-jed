@@ -899,7 +899,7 @@ impl TouchingState{
 			}
 		}
 		for intersect in &self.intersects{
-			//
+			//water
 		}
 		self.constrain_acceleration(models,&style_mesh,&mut a);
 		(move_state,a)
