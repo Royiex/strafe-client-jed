@@ -322,7 +322,10 @@ impl MinkowskiMesh<'_>{
 		}
 	}
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<MinkowskiFace,MinkowskiEdge,MinkowskiVert>{
-		//put some genius code right here
+		//put some genius code right here instead of this
+		//assume that point is outside the mesh and nonzero
+		//find vertex on mesh0 farthest in point direction
+		//let fev=FEV::<MinkowskiFace,MinkowskiEdge,MinkowskiVert>::Vert(self.farthest_vert(point));
 		todo!()
 	}
 	pub fn predict_collision(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
