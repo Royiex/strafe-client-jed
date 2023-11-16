@@ -325,6 +325,31 @@ impl MinkowskiMesh<'_>{
 		//put some genius code right here
 		todo!()
 	}
+	pub fn predict_collision(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
+		crate::face_crawler::crawl_fev_body(self.closest_fev(relative_body.position),self,relative_body,time_limit)
+	}
+	pub fn predict_collision_end(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time,contact_face_id:MinkowskiFace)->Option<(MinkowskiEdge,crate::integer::Time)>{
+		//no algorithm needed, there is only one state and two cases (Edge,None)
+		//determine when it passes an edge ("sliding off" case)
+		let mut best_time=time_limit;
+		let mut best_edge=None;
+		let face_n=self.face_nd(contact_face_id).0;
+		for &edge_id in self.face_edges(contact_face_id).iter(){
+			let edge_n=self.edge_n(edge_id);
+			let n=face_n.cross(edge_n);
+			//picking a vert randomly is terrible
+			let d=n.dot(self.vert(self.edge_verts(edge_id)[0]));
+			for t in crate::zeroes::zeroes2((n.dot(relative_body.position)-d)*2,n.dot(relative_body.velocity)*2,n.dot(relative_body.acceleration)){
+				let t=relative_body.time+crate::integer::Time::from(t);
+				if relative_body.time<t&&t<best_time&&n.dot(relative_body.extrapolated_velocity(t))<Planar64::ZERO{
+					best_time=t;
+					best_edge=Some(edge_id);
+					break;
+				}
+			}
+		}
+		best_edge.map(|e|(e,best_time))
+	}
 }
 impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 	fn face_nd(&self,face_id:MinkowskiFace)->(Planar64Vec3,Planar64){
