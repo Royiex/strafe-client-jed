@@ -624,17 +624,53 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 		}
 	}
 	fn edge_faces(&self,edge_id:MinkowskiEdge)->Cow<[MinkowskiFace;2]>{
-		//WRONG!!!!!!!!!!!! MORE CASES!!!!!!!!!!!!
 		match edge_id{
 			MinkowskiEdge::VertEdge(v0,e1)=>{
-				//also need to check v0 edges to see if they overtake the face
-				Cow::Owned(self.mesh1.edge_faces(e1).map(|face_id1|{
-					MinkowskiFace::VertFace(v0,face_id1)
+				let e1f=self.mesh1.edge_faces(e1);
+				Cow::Owned([(e1f[0],e1f[1]),(e1f[1],e1f[0])].map(|(edge_face_id1,other_edge_face_id1)|{
+					let mut best_edge=None;
+					let mut best_d=Planar64::MAX;
+					let edge_face1_n=self.mesh1.face_nd(edge_face_id1).0;
+					let other_edge_face1_n=self.mesh1.face_nd(other_edge_face_id1).0;
+					let v0e=self.mesh0.vert_directed_edges(v0);
+					for &directed_edge_id0 in v0e.iter(){
+						let edge0_n=self.mesh0.directed_edge_n(directed_edge_id0);
+						if edge_face1_n.dot(edge0_n)<Planar64::ZERO{
+							let d=other_edge_face1_n.dot(edge0_n);
+							if d<best_d{
+								best_d=d;
+								best_edge=Some(directed_edge_id0)
+							}
+						}
+					}
+					best_edge.map_or(
+						MinkowskiFace::VertFace(v0,edge_face_id1),
+						|directed_edge_id0|MinkowskiFace::EdgeEdge(directed_edge_id0.as_edge_id(),e1)
+					)
 				}))
 			},
 			MinkowskiEdge::EdgeVert(e0,v1)=>{
-				Cow::Owned(self.mesh0.edge_faces(e0).map(|face_id0|{
-					MinkowskiFace::FaceVert(face_id0,v1)
+				let e0f=self.mesh0.edge_faces(e0);
+				Cow::Owned([(e0f[0],e0f[1]),(e0f[1],e0f[0])].map(|(edge_face_id0,other_edge_face_id0)|{
+					let mut best_edge=None;
+					let mut best_d=Planar64::MAX;
+					let edge_face0_n=self.mesh0.face_nd(edge_face_id0).0;
+					let other_edge_face0_n=self.mesh0.face_nd(other_edge_face_id0).0;
+					let v1e=self.mesh1.vert_directed_edges(v1);
+					for &directed_edge_id1 in v1e.iter(){
+						let edge1_n=self.mesh1.directed_edge_n(directed_edge_id1);
+						if edge_face0_n.dot(edge1_n)<Planar64::ZERO{
+							let d=other_edge_face0_n.dot(edge1_n);
+							if d<best_d{
+								best_d=d;
+								best_edge=Some(directed_edge_id1)
+							}
+						}
+					}
+					best_edge.map_or(
+						MinkowskiFace::FaceVert(edge_face_id0,v1),
+						|directed_edge_id1|MinkowskiFace::EdgeEdge(e0,directed_edge_id1.as_edge_id())
+					)
 				}))
 			},
 		}
