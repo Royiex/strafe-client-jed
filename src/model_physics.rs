@@ -94,15 +94,16 @@ struct EdgePool{
 	edge_id_from_guy:std::collections::HashMap<EdgeIdGuy,usize>,
 }
 impl EdgePool{
-	fn push(&mut self,edge_id_guy:EdgeIdGuy)->(&mut EdgeRefGuy,EdgeId,bool){
-		if let Some(&edge_id)=self.edge_id_from_guy.get(&edge_id_guy){
-			(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,EdgeId(edge_id),true)
+	fn push(&mut self,edge_id_guy:EdgeIdGuy)->(&mut EdgeRefGuy,EdgeId){
+		let edge_id=if let Some(&edge_id)=self.edge_id_from_guy.get(&edge_id_guy){
+			edge_id
 		}else{
 			let edge_id=self.edge_guys.len();
 			self.edge_guys.push((edge_id_guy.clone(),EdgeRefGuy::new()));
 			self.edge_id_from_guy.insert(edge_id_guy,edge_id);
-			(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,EdgeId(edge_id),false)
-		}
+			edge_id
+		};
+		(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,EdgeId(edge_id))
 	}
 }
 impl From<&crate::model::IndexedModel> for PhysicsMesh{
@@ -131,12 +132,10 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 				);
 				//get/create edge and push face into it
 				let (edge_id_guy,is_sorted)=EdgeIdGuy::new(VertId(vert0_id),VertId(vert1_id));
-				let (edge_ref_guy,edge_id,exists)=edge_pool.push(edge_id_guy);
-				if exists{
-					edge_ref_guy.push(1,face_id);
-				}else{
-					edge_ref_guy.push(0,face_id);
-				}
+				let (edge_ref_guy,edge_id)=edge_pool.push(edge_id_guy);
+				//polygon vertices as assumed to be listed clockwise
+				//populate the edge face on the left or right depending on how the edge vertices got sorted
+				edge_ref_guy.push(is_sorted as usize,face_id);
 				//index edges & face into vertices
 				{
 					let vert_ref_guy=unsafe{vert_ref_guys.get_unchecked_mut(vert0_id)};
