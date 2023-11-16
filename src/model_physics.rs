@@ -552,7 +552,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 								let d=face1_n.dot(edge0_n);
 								if d<best_d{
 									best_d=d;
-									best_edge=Some(directed_edge_id0)
+									best_edge=Some(directed_edge_id0);
 								}
 							}
 						}
@@ -590,7 +590,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 								let d=edge_face1_n.dot(edge0_n);
 								if d<best_d{
 									best_d=d;
-									best_edge=Some(directed_edge_id0)
+									best_edge=Some(directed_edge_id0);
 								}
 							}
 						}
@@ -617,7 +617,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 								let d=edge_face0_n.dot(edge1_n);
 								if d<best_d{
 									best_d=d;
-									best_edge=Some(directed_edge_id1)
+									best_edge=Some(directed_edge_id1);
 								}
 							}
 						}
@@ -650,7 +650,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 								let d=face0_n.dot(edge1_n);
 								if d<best_d{
 									best_d=d;
-									best_edge=Some(directed_edge_id1)
+									best_edge=Some(directed_edge_id1);
 								}
 							}
 						}
@@ -679,7 +679,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 							let d=other_edge_face1_n.dot(edge0_n);
 							if d<best_d{
 								best_d=d;
-								best_edge=Some(directed_edge_id0)
+								best_edge=Some(directed_edge_id0);
 							}
 						}
 					}
@@ -703,7 +703,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 							let d=other_edge_face0_n.dot(edge1_n);
 							if d<best_d{
 								best_d=d;
-								best_edge=Some(directed_edge_id1)
+								best_edge=Some(directed_edge_id1);
 							}
 						}
 					}
