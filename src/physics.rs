@@ -348,6 +348,7 @@ impl Hitbox{
 	fn source()->Self{
 		Self::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cube()),Planar64Vec3::raw(33<<28,73<<28,33<<28)/2)
 	}
+	#[inline]
 	fn transformed_mesh(&self)->TransformedMesh{
 		TransformedMesh::new(&self.mesh,&self.transform,&self.normal_transform)
 	}
@@ -670,6 +671,7 @@ impl StyleModifiers{
 		let camera_mat=camera.simulate_move_rotation(camera.mouse.lerp(&next_mouse,time));
 		camera_mat*self.get_control_dir(controls)
 	}
+	#[inline]
 	fn mesh(&self)->TransformedMesh{
 		self.hitbox.transformed_mesh()
 	}
