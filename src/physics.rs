@@ -327,6 +327,32 @@ struct StrafeSettings{
 	tick_rate:Ratio64,
 }
 
+struct Hitbox{
+	halfsize:Planar64Vec3,
+	mesh:PhysicsMesh,
+	transform:crate::integer::Planar64Affine3,
+	normal_transform:Planar64Mat3,
+}
+impl Hitbox{
+	fn from_mesh_scale(mesh:PhysicsMesh,scale:Planar64Vec3)->Self{
+		Self{
+			halfsize:scale,
+			mesh,
+			transform:crate::integer::Planar64Affine3::new(Planar64Mat3::from_diagonal(scale),Planar64Vec3::ZERO),
+			normal_transform:Planar64Mat3::from_diagonal(scale).inverse().transpose(),
+		}
+	}
+	fn roblox()->Self{
+		Self::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cylinder()),Planar64Vec3::int(2,5,2)/2)
+	}
+	fn source()->Self{
+		Self::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cube()),Planar64Vec3::raw(33<<28,73<<28,33<<28)/2)
+	}
+	fn transformed_mesh(&self)->TransformedMesh{
+		TransformedMesh::new(&self.mesh,&self.transform,&self.normal_transform)
+	}
+}
+
 struct StyleModifiers{
 	controls_used:u32,//controls which are allowed to pass into gameplay
 	controls_mask:u32,//controls which are masked from control state (e.g. jump in scroll style)
@@ -346,7 +372,7 @@ struct StyleModifiers{
 	surf_slope:Option<Planar64>,
 	rocket_force:Option<Planar64>,
 	gravity:Planar64Vec3,
-	hitbox_halfsize:Planar64Vec3,
+	hitbox:Hitbox,
 	camera_offset:Planar64Vec3,
 }
 impl std::default::Default for StyleModifiers{
@@ -368,14 +394,14 @@ impl StyleModifiers{
 	const UP_DIR:Planar64Vec3=Planar64Vec3::Y;
 	const FORWARD_DIR:Planar64Vec3=Planar64Vec3::NEG_Z;
 
-	fn new()->Self{
+	fn neo()->Self{
 		Self{
 			controls_used:!0,
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			strafe:Some(StrafeSettings{
 				enable:EnableStrafe::Always,
 				air_accel_limit:None,
-				tick_rate:Ratio64::new(128,Time::ONE_SECOND.nanos() as u64).unwrap(),
+				tick_rate:Ratio64::new(64,Time::ONE_SECOND.nanos() as u64).unwrap(),
 			}),
 			jump_impulse:JumpImpulse::FromEnergy(Planar64::int(512)),
 			jump_calculation:JumpCalculation::Energy,
@@ -383,7 +409,7 @@ impl StyleModifiers{
 			static_friction:Planar64::int(2),
 			kinetic_friction:Planar64::int(3),//unrealistic: kinetic friction is typically lower than static
 			mass:Planar64::int(1),
-			mv:Planar64::int(2),
+			mv:Planar64::int(3),
 			rocket_force:None,
 			walk_speed:Planar64::int(16),
 			walk_accel:Planar64::int(80),
@@ -392,7 +418,7 @@ impl StyleModifiers{
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
 			surf_slope:Some(Planar64::raw(7)/8),
-			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+			hitbox:Hitbox::roblox(),
 			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
 	}
@@ -421,7 +447,7 @@ impl StyleModifiers{
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
 			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
-			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+			hitbox:Hitbox::roblox(),
 			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
 	}
@@ -449,7 +475,7 @@ impl StyleModifiers{
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
 			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
-			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+			hitbox:Hitbox::roblox(),
 			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
 	}
@@ -478,7 +504,7 @@ impl StyleModifiers{
 			ladder_dot:(Planar64::int(1)/2).sqrt(),//?
 			swim_speed:Planar64::int(12),//?
 			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
-			hitbox_halfsize:Planar64Vec3::raw(33<<28,73<<28,33<<28)/2,
+			hitbox:Hitbox::source(),
 			camera_offset:Planar64Vec3::raw(0,(64<<28)-(73<<27),0),
 		}
 	}
@@ -506,7 +532,7 @@ impl StyleModifiers{
 			ladder_dot:(Planar64::int(1)/2).sqrt(),//?
 			swim_speed:Planar64::int(12),//?
 			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
-			hitbox_halfsize:Planar64Vec3::raw(33<<28,73<<28,33<<28)/2,
+			hitbox:Hitbox::source(),
 			camera_offset:Planar64Vec3::raw(0,(64<<28)-(73<<27),0),
 		}
 	}
@@ -530,7 +556,7 @@ impl StyleModifiers{
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
 			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
-			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+			hitbox:Hitbox::roblox(),
 			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
 	}
