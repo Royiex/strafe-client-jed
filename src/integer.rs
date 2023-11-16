@@ -834,16 +834,6 @@ impl Default for Planar64Mat3{
 		}
 	}
 }
-impl std::ops::Mul<Planar64Vec3> for Planar64Mat3{
-	type Output=Planar64Vec3;
-	#[inline]
-	fn mul(self,rhs:Planar64Vec3) -> Self::Output {
-		self.x_axis*rhs.x()
-		+self.y_axis*rhs.y()
-		+self.z_axis*rhs.z()
-	}
-}
-
 impl Planar64Mat3{
 	#[inline]
 	pub fn from_cols(x_axis:Planar64Vec3,y_axis:Planar64Vec3,z_axis:Planar64Vec3)->Self{
@@ -954,6 +944,15 @@ impl std::fmt::Display for Planar64Mat3{
 			Into::<f32>::into(self.y_axis.x()),Into::<f32>::into(self.y_axis.y()),Into::<f32>::into(self.y_axis.z()),
 			Into::<f32>::into(self.z_axis.x()),Into::<f32>::into(self.z_axis.y()),Into::<f32>::into(self.z_axis.z()),
 		)
+	}
+}
+impl std::ops::Mul<Planar64Vec3> for Planar64Mat3{
+	type Output=Planar64Vec3;
+	#[inline]
+	fn mul(self,rhs:Planar64Vec3) -> Self::Output {
+		self.x_axis*rhs.x()
+		+self.y_axis*rhs.y()
+		+self.z_axis*rhs.z()
 	}
 }
 impl std::ops::Div<i64> for Planar64Mat3{
