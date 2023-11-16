@@ -851,6 +851,14 @@ impl Planar64Mat3{
 		}
 	}
 	#[inline]
+	pub const fn from_diagonal(diagonal:Planar64Vec3)->Self{
+		Self{
+			x_axis:Planar64Vec3::raw(diagonal.0.x,0,0),
+			y_axis:Planar64Vec3::raw(0,diagonal.0.y,0),
+			z_axis:Planar64Vec3::raw(0,0,diagonal.0.z),
+		}
+	}
+	#[inline]
 	pub fn from_rotation_yx(yaw:Angle32,pitch:Angle32)->Self{
 		let xtheta=yaw.0 as f64*ANGLE32_TO_FLOAT64_RADIANS;
 		let (xs,xc)=xtheta.sin_cos();
