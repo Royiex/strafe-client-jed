@@ -1,6 +1,6 @@
 use crate::physics::Body;
 use crate::model_physics::{FEV,MeshQuery};
-use crate::integer::{Time,Planar64,Planar64Vec3};
+use crate::integer::{Time,Planar64};
 use crate::zeroes::zeroes2;
 
 struct State<FEV>{
