@@ -415,6 +415,7 @@ impl Planar64{
 	pub const ZERO:Self=Self(0);
 	pub const ONE:Self=Self(1<<32);
 	pub const MAX:Self=Self(i64::MAX);
+	pub const MIN:Self=Self(i64::MIN);
 	#[inline]
 	pub const fn int(num:i32)->Self{
 		Self(Self::ONE.0*num as i64)

@@ -244,6 +244,19 @@ impl TransformedMesh<'_>{
 			normal_transform,
 		}
 	}
+	fn farthest_vert(&self,dir:Planar64Vec3)->VertId{
+		let best_dot=Planar64::MIN;
+		let best_vert;
+		for (i,vert) in self.mesh.verts.iter().enumerate(){
+			let p=self.transform.transform_point3(vert.0);
+			let d=dir.dot(p);
+			if best_dot<d{
+				best_dot=d;
+				best_vert=VertId(i);
+			}
+		}
+		best_vert
+	}
 	#[inline]
 	fn vert_directed_edges(&self,vert_id:VertId)->Cow<Vec<DirectedEdgeId>>{
 		self.mesh.vert_directed_edges(vert_id)
@@ -320,6 +333,9 @@ impl MinkowskiMesh<'_>{
 			mesh0,
 			mesh1,
 		}
+	}
+	fn farthest_vert(&self,dir:Planar64Vec3)->MinkowskiVert{
+		MinkowskiVert::VertVert(self.mesh0.farthest_vert(dir),self.mesh1.farthest_vert(-dir))
 	}
 	fn closest_fev(&self,point:Planar64Vec3)->FEV<MinkowskiFace,MinkowskiEdge,MinkowskiVert>{
 		//put some genius code right here instead of this
