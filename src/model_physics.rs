@@ -564,31 +564,71 @@ impl MeshQuery<MinkowskiFace,MinkowskiEdge,MinkowskiVert> for MinkowskiMesh<'_>{
 				}).collect())
 			},
 			MinkowskiFace::EdgeEdge(e0,e1)=>{
-				/*
 				let e0v=self.mesh0.edge_verts(e0);
+				let e0f=self.mesh0.edge_faces(e0);
+				let edge0_n=self.mesh0.edge_n(e0);
 				let e1v=self.mesh1.edge_verts(e1);
-				let [r0,r1]=e0v.map(|vert_id0|{
-					//sort e1 ends by e0 edge dir to get v1
-					//find face normal formulation without cross products
-					let v1=if 0<(e0.v1-e0.v0).dot(e1.v1-e1.v0){
-						e1.v0
-					}else{
-						e1.v1
-					};
-					(MinkowskiEdge::VertEdge(vert_id0,e1),MinkowskiFace::FaceVert(face_id0,v1))
+				let e1f=self.mesh1.edge_faces(e1);
+				let edge1_n=self.mesh1.edge_n(e1);
+				//populate algorithm variables based on known parity
+				//I don't like that this arbitrarily picks a face to test against!
+				let (e0v0_face_id1,e0v1_face_id1)=if edge0_n.dot(self.mesh1.face_nd(e1f[0]).0)<=Planar64::ZERO{
+					(e1f[1],e1f[0])
+				}else{
+					(e1f[0],e1f[1])
+				};
+				let [r0,r1]=[(e0v[0],e0v0_face_id1),(e0v[1],e0v1_face_id1)].map(|(vert_id0,edge_face_id1)|{
+					(MinkowskiEdge::VertEdge(vert_id0,e1),{
+						let mut best_edge=None;
+						let mut best_d=Planar64::MAX;
+						let edge_face1_n=self.mesh1.face_nd(edge_face_id1).0;
+						let v0e=self.mesh0.vert_directed_edges(vert_id0);
+						for &directed_edge_id0 in v0e.iter(){
+							let edge0_n=self.mesh0.directed_edge_n(directed_edge_id0);
+							if edge_face1_n.dot(edge0_n)<Planar64::ZERO{
+								//I think face_id1 == edge_face_id1 in this case
+								let d=edge_face1_n.dot(edge0_n);
+								if d<best_d{
+									best_d=d;
+									best_edge=Some(directed_edge_id0)
+								}
+							}
+						}
+						best_edge.map_or(
+							MinkowskiFace::VertFace(vert_id0,edge_face_id1),
+							|directed_edge_id0|MinkowskiFace::EdgeEdge(directed_edge_id0.as_edge_id(),e1)
+						)
+					})
 				});
-				let [r2,r3]=e1v.map(|vert_id1|{
-					//sort e0 ends by e1 edge dir to get v0
-					let v0=if 0<(e0.v1-e0.v0).dot(e1.v1-e1.v0){
-						e0.v0
-					}else{
-						e0.v1
-					};
-					(MinkowskiEdge::EdgeVert(e0,vert_id1),MinkowskiFace::VertFace(v0,face_id1))
+				let (e1v0_face_id0,e1v1_face_id0)=if edge1_n.dot(self.mesh0.face_nd(e0f[0]).0)<=Planar64::ZERO{
+					(e0f[1],e0f[0])
+				}else{
+					(e0f[0],e0f[1])
+				};
+				let [r2,r3]=[(e1v0_face_id0,e1v[0]),(e1v1_face_id0,e1v[1])].map(|(edge_face_id0,vert_id1)|{
+					(MinkowskiEdge::EdgeVert(e0,vert_id1),{
+						let mut best_edge=None;
+						let mut best_d=Planar64::MAX;
+						let edge_face0_n=self.mesh0.face_nd(edge_face_id0).0;
+						let v1e=self.mesh1.vert_directed_edges(vert_id1);
+						for &directed_edge_id1 in v1e.iter(){
+							let edge1_n=self.mesh1.directed_edge_n(directed_edge_id1);
+							if edge_face0_n.dot(edge1_n)<Planar64::ZERO{
+								let d=edge_face0_n.dot(edge1_n);
+								if d<best_d{
+									best_d=d;
+									best_edge=Some(directed_edge_id1)
+								}
+							}
+						}
+						best_edge.map_or(
+							MinkowskiFace::FaceVert(edge_face_id0,vert_id1),
+							|directed_edge_id1|MinkowskiFace::EdgeEdge(e0,directed_edge_id1.as_edge_id())
+						)
+					})
 				});
+				//could sort this if ordered edges are needed
 				Cow::Owned(vec![r0,r1,r2,r3])
-				*/
-				todo!()
 			},
 			MinkowskiFace::FaceVert(f0,v1)=>{
 				let face0_n=self.mesh0.face_nd(f0).0;
