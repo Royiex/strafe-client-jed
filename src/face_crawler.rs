@@ -34,7 +34,7 @@ impl<F:Copy,E:Copy,V:Copy> State<FEV<F,E,V>>{
 					}
 				}
 				//test each edge collision time, ignoring roots with zero or conflicting derivative
-				for &(edge_id,test_face_id) in mesh.face_edges(face_id).iter(){
+				for &edge_id in mesh.face_edges(face_id).iter(){
 					let edge_n=mesh.edge_n(edge_id);
 					let n=n.cross(edge_n);
 					//picking a vert randomly is terrible
