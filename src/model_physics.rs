@@ -297,12 +297,16 @@ enum MinkowskiVert{
 enum MinkowskiEdge{
 	VertEdge(VertId,EdgeId),
 	EdgeVert(EdgeId,VertId),
+	//EdgeEdge when edges are parallel
 }
 #[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
 pub enum MinkowskiFace{
 	VertFace(VertId,FaceId),
 	EdgeEdge(EdgeId,EdgeId),
 	FaceVert(FaceId,VertId),
+	//EdgeFace
+	//FaceEdge
+	//FaceFace
 }
 
 pub struct MinkowskiMesh<'a>{
