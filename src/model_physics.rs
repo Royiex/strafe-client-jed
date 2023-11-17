@@ -352,15 +352,23 @@ impl MinkowskiMesh<'_>{
 	fn farthest_vert(&self,dir:Planar64Vec3)->MinkowskiVert{
 		MinkowskiVert::VertVert(self.mesh0.farthest_vert(dir),self.mesh1.farthest_vert(-dir))
 	}
-	fn closest_fev(&self,point:Planar64Vec3)->FEV<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>{
-		//put some genius code right here instead of this
-		//assume that point is outside the mesh and nonzero
-		//find vertex on mesh0 farthest in point direction
-		let fev=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert(point));
-		crate::face_crawler::crawl_fev_dot(fev,self,point)
-	}
 	pub fn predict_collision_in(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
-		crate::face_crawler::crawl_fev_body(self.closest_fev(relative_body.position),self,relative_body,time_limit)
+		let start_vert=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert((-relative_body.clone()).infinity_dir()));
+		match crate::face_crawler::crawl_fev_from_negative_infinity(start_vert,self,relative_body){
+			crate::face_crawler::CrawlResult::Closest(fev)=>{
+				crate::face_crawler::crawl_fev(fev,self,relative_body,time_limit)
+			},
+			crate::face_crawler::CrawlResult::Hit(_,_)=>None,//already in or passed
+		}
+	}
+	pub fn predict_collision_out(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
+		let start_vert=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert(relative_body.infinity_dir()));
+		match crate::face_crawler::crawl_fev_from_negative_infinity(start_vert,self,&-relative_body.clone()){
+			crate::face_crawler::CrawlResult::Closest(fev)=>{
+				crate::face_crawler::crawl_fev(fev,self,&-relative_body.clone(),-time_limit).map(|t|(t.0,-t.1))
+			},
+			crate::face_crawler::CrawlResult::Hit(face,time)=>Some((face,-time)),
+		}
 	}
 	pub fn predict_collision_face_out(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time,contact_face_id:MinkowskiFace)->Option<(MinkowskiEdge,crate::integer::Time)>{
 		//no algorithm needed, there is only one state and two cases (Edge,None)

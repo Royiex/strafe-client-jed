@@ -43,6 +43,17 @@ pub struct Body{
 	pub acceleration:Planar64Vec3,//I64 where 2^32 = 1 u/s/s
 	pub time:Time,//nanoseconds x xxxxD!
 }
+impl std::ops::Neg for Body{
+	type Output=Self;
+	fn neg(self)->Self::Output{
+		Self{
+			position:self.position,
+			velocity:-self.velocity,
+			acceleration:self.acceleration,
+			time:-self.time,
+		}
+	}
+}
 
 //hey dumbass just use a delta
 #[derive(Clone,Debug)]
@@ -954,6 +965,13 @@ impl Body{
 		self.position=self.extrapolated_position(time);
 		self.velocity=self.extrapolated_velocity(time);
 		self.time=time;
+	}
+	pub fn infinity_dir(&self)->Planar64Vec3{
+		if self.acceleration==Planar64Vec3::ZERO{
+			self.velocity
+		}else{
+			self.acceleration
+		}
 	}
 }
 impl std::fmt::Display for Body{

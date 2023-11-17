@@ -9,7 +9,7 @@ enum Transition<F,E:DirectedEdge,V>{
 	Hit(F,Time),
 }
 
-	pub fn next_transition_body<F:Copy,E:Copy+DirectedEdge,V:Copy>(fev:&FEV<F,E,V>,time:Time,mesh:&impl MeshQuery<F,E,V>,body:&Body,time_limit:Time)->Transition<F,E,V>{
+	fn next_transition<F:Copy,E:Copy+DirectedEdge,V:Copy>(fev:&FEV<F,E,V>,time:Time,mesh:&impl MeshQuery<F,E,V>,body:&Body,time_limit:Time)->Transition<F,E,V>{
 		//conflicting derivative means it crosses in the wrong direction.
 		//if the transition time is equal to an already tested transition, do not replace the current best.
 		let mut best_time=time_limit;
@@ -101,13 +101,27 @@ enum Transition<F,E:DirectedEdge,V>{
 		}
 		best_transtition
 	}
-pub fn crawl_fev_body<F:Copy,E:Copy+DirectedEdge,V:Copy>(mut fev:FEV<F,E,V>,mesh:&impl MeshQuery<F,E,V>,relative_body:&Body,time_limit:Time)->Option<(F,Time)>{	
+pub fn crawl_fev<F:Copy,E:Copy+DirectedEdge,V:Copy>(mut fev:FEV<F,E,V>,mesh:&impl MeshQuery<F,E,V>,relative_body:&Body,time_limit:Time)->Option<(F,Time)>{	
 	let mut time=relative_body.time;
 	loop{
-		match next_transition_body(&fev,time,mesh,relative_body,time_limit){
+		match next_transition(&fev,time,mesh,relative_body,time_limit){
 			Transition::Miss=>return None,
 			Transition::Next(next_fev,next_time)=>(fev,time)=(next_fev,next_time),
 			Transition::Hit(face,time)=>return Some((face,time)),
+		}
+	}
+}
+pub enum CrawlResult<F,E:DirectedEdge,V>{
+	Closest(FEV<F,E,V>),
+	Hit(F,Time),
+}
+pub fn crawl_fev_from_negative_infinity<F:Copy,E:Copy+DirectedEdge,V:Copy>(mut fev:FEV<F,E,V>,mesh:&impl MeshQuery<F,E,V>,relative_body:&Body)->CrawlResult<F,E,V>{	
+	let mut time=Time::MIN;
+	loop{
+		match next_transition(&fev,time,mesh,relative_body,relative_body.time){
+			Transition::Miss=>return CrawlResult::Closest(fev),
+			Transition::Next(next_fev,next_time)=>(fev,time)=(next_fev,next_time),
+			Transition::Hit(face,time)=>return CrawlResult::Hit(face,time),//algorithm breaks down inside without full fat voronoi
 		}
 	}
 }

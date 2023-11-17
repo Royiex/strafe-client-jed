@@ -2,6 +2,8 @@
 #[derive(Clone,Copy,Hash,Eq,PartialEq,PartialOrd,Debug)]
 pub struct Time(i64);
 impl Time{
+	pub const MIN:Self=Self(i64::MIN);
+	pub const MAX:Self=Self(i64::MAX);
 	pub const ZERO:Self=Self(0);
 	pub const ONE_SECOND:Self=Self(1_000_000_000);
 	pub const ONE_MILLISECOND:Self=Self(1_000_000);
