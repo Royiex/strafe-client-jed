@@ -11,7 +11,7 @@ impl EdgeId{
 	}
 }
 pub trait DirectedEdge{
-	type UndirectedEdge;
+	type UndirectedEdge:Copy;
 	fn as_undirected(&self)->Self::UndirectedEdge;
 	fn parity(&self)->bool;
 }
@@ -298,7 +298,7 @@ impl MeshQuery<FaceId,DirectedEdgeId,VertId> for TransformedMesh<'_>{
 //(edge,edge)
 //(vertex,face)
 #[derive(Clone,Copy)]
-enum MinkowskiVert{
+pub enum MinkowskiVert{
 	VertVert(VertId,VertId),
 }
 #[derive(Clone,Copy)]
@@ -308,7 +308,7 @@ pub enum MinkowskiEdge{
 	//EdgeEdge when edges are parallel
 }
 #[derive(Clone,Copy)]
-enum MinkowskiDirectedEdge{
+pub enum MinkowskiDirectedEdge{
 	VertEdge(VertId,DirectedEdgeId),
 	EdgeVert(DirectedEdgeId,VertId),
 	//EdgeEdge when edges are parallel
