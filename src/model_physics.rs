@@ -355,18 +355,18 @@ impl MinkowskiMesh<'_>{
 	}
 	pub fn predict_collision_in(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
 		let start_vert=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert((-relative_body.clone()).infinity_dir()));
-		match crate::face_crawler::crawl_fev_from_negative_infinity(start_vert,self,relative_body){
+		match crate::face_crawler::crawl_fev_from_negative_infinity(start_vert,self,relative_body,relative_body.time){
 			crate::face_crawler::CrawlResult::Closest(fev)=>{
-				crate::face_crawler::crawl_fev(fev,self,relative_body,time_limit)
+				crate::face_crawler::crawl_fev(fev,self,relative_body,relative_body.time,time_limit)
 			},
 			crate::face_crawler::CrawlResult::Hit(_,_)=>None,//already in or passed
 		}
 	}
 	pub fn predict_collision_out(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
 		let start_vert=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert(relative_body.infinity_dir()));
-		match crate::face_crawler::crawl_fev_from_negative_infinity(start_vert,self,&-relative_body.clone()){
+		match crate::face_crawler::crawl_fev_from_negative_infinity(start_vert,self,&-relative_body.clone(),-time_limit){
 			crate::face_crawler::CrawlResult::Closest(fev)=>{
-				crate::face_crawler::crawl_fev(fev,self,&-relative_body.clone(),-time_limit).map(|t|(t.0,-t.1))
+				crate::face_crawler::crawl_fev(fev,self,&-relative_body.clone(),-time_limit,-relative_body.time).map(|t|(t.0,-t.1))
 			},
 			crate::face_crawler::CrawlResult::Hit(face,time)=>Some((face,-time)),
 		}
