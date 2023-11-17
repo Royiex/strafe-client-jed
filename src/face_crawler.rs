@@ -22,7 +22,7 @@ enum Transition<F,E:DirectedEdge,V>{
 				let (n,d)=mesh.face_nd(face_id);
 				for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 					let t=body.time+Time::from(t);
-					if time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
+					if time<=t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
 						best_time=t;
 						best_transtition=Transition::Hit(face_id,t);
 					}
@@ -36,7 +36,7 @@ enum Transition<F,E:DirectedEdge,V>{
 					//WARNING: d is moved out of the *2 block because of adding two vertices!
 					for t in zeroes2(n.dot(body.position)*2-d,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
-						if time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
+						if time<=t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
 							best_time=t;
 							best_transtition=Transition::Next(FEV::<F,E,V>::Edge(directed_edge_id.as_undirected()),t);
 							break;
@@ -57,7 +57,7 @@ enum Transition<F,E:DirectedEdge,V>{
 					//WARNING yada yada d *2
 					for t in zeroes2((n.dot(body.position))*2-d,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
-						if time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
+						if time<=t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
 							best_time=t;
 							best_transtition=Transition::Next(FEV::<F,E,V>::Face(edge_face_id),t);
 							break;
@@ -72,7 +72,7 @@ enum Transition<F,E:DirectedEdge,V>{
 					let d=n.dot(mesh.vert(vert_id));
 					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
-						if time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
+						if time<=t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
 							best_time=t;
 							best_transtition=Transition::Next(FEV::<F,E,V>::Vert(vert_id),t);
 							break;
@@ -89,7 +89,7 @@ enum Transition<F,E:DirectedEdge,V>{
 					let d=n.dot(mesh.vert(vert_id));
 					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
-						if time<t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
+						if time<=t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
 							best_time=t;
 							best_transtition=Transition::Next(FEV::<F,E,V>::Edge(directed_edge_id.as_undirected()),t);
 							break;
