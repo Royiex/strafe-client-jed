@@ -1616,3 +1616,21 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 		}
 	}
 }
+
+#[test]
+fn hit_the_ground(){
+	let h0=Hitbox::roblox();
+	let h1=Hitbox::roblox();
+	let mesh0=h0.transformed_mesh();
+	let mesh1=h1.transformed_mesh();
+	let relative_body=Body::new(
+		Planar64Vec3::Y*10,
+		Planar64Vec3::int(1,-160,2)/16,
+		Planar64Vec3::ZERO,
+		Time::ZERO
+	);
+	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&mesh0,&mesh1);
+	let collision=minkowski.predict_collision_in(&relative_body,Time::ONE_SECOND);
+	assert!(collision.is_some(),"No collision was generated");
+	assert_eq!(Time::ONE_SECOND/2,collision.unwrap().1,"Incorrect time of collision");
+}
