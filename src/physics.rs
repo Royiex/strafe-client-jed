@@ -1503,7 +1503,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 							(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 						}
 						let a=self.refresh_walk_target();
-						set_acceleration(&mut self.body,&self.touching,&self.models,&style_mesh,a);
+						set_acceleration(&mut self.body,&self.touching,&self.models,&self.style.mesh(),a);
 					},
 					(PhysicsCollisionAttributes::Intersect{intersecting: _,general},Collision::Intersect(intersect))=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
