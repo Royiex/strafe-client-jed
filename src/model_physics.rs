@@ -370,7 +370,8 @@ impl MinkowskiMesh<'_>{
 		let face_n=self.face_nd(contact_face_id).0;
 		for &directed_edge_id in self.face_edges(contact_face_id).iter(){
 			let edge_n=self.directed_edge_n(directed_edge_id);
-			let n=face_n.cross(edge_n);
+			//f x e points out
+			let n=-face_n.cross(edge_n);
 			let verts=self.edge_verts(directed_edge_id.as_undirected());
 			let d=n.dot(self.vert(verts[0]))+n.dot(self.vert(verts[1]));
 			//WARNING! d outside of *2
