@@ -40,6 +40,7 @@ impl DirectedEdge for DirectedEdgeId{
 pub struct FaceId(usize);
 
 //Vertex <-> Edge <-> Face -> Collide
+#[derive(Debug)]
 pub enum FEV<F,E:DirectedEdge,V>{
 	Face(F),
 	Edge(E::UndirectedEdge),
@@ -47,10 +48,12 @@ pub enum FEV<F,E:DirectedEdge,V>{
 }
 
 //use Unit32 #[repr(C)] for map files
+#[derive(Debug)]
 struct Face{
 	normal:Planar64Vec3,
 	dot:Planar64,
 }
+#[derive(Debug)]
 struct Vert(Planar64Vec3);
 pub trait MeshQuery<FACE:Clone,EDGE:Clone+DirectedEdge,VERT:Clone>{
 	fn edge_n(&self,edge_id:EDGE::UndirectedEdge)->Planar64Vec3{
@@ -69,18 +72,22 @@ pub trait MeshQuery<FACE:Clone,EDGE:Clone+DirectedEdge,VERT:Clone>{
 	fn vert_edges(&self,vert_id:VERT)->Cow<Vec<EDGE>>;
 	fn vert_faces(&self,vert_id:VERT)->Cow<Vec<FACE>>;
 }
+#[derive(Debug)]
 struct FaceRefs{
 	edges:Vec<DirectedEdgeId>,
 	//verts:Vec<VertId>,
 }
+#[derive(Debug)]
 struct EdgeRefs{
 	faces:[FaceId;2],//left, right
 	verts:[VertId;2],//bottom, top
 }
+#[derive(Debug)]
 struct VertRefs{
 	faces:Vec<FaceId>,
 	edges:Vec<DirectedEdgeId>,
 }
+#[derive(Debug)]
 pub struct PhysicsMesh{
 	faces:Vec<Face>,
 	verts:Vec<Vert>,
@@ -301,11 +308,11 @@ impl MeshQuery<FaceId,DirectedEdgeId,VertId> for TransformedMesh<'_>{
 //(face,vertex)
 //(edge,edge)
 //(vertex,face)
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Debug)]
 pub enum MinkowskiVert{
 	VertVert(VertId,VertId),
 }
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Debug)]
 pub enum MinkowskiEdge{
 	VertEdge(VertId,EdgeId),
 	EdgeVert(EdgeId,VertId),
@@ -320,7 +327,7 @@ impl UndirectedEdge for MinkowskiEdge{
 		}
 	}
 }
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Debug)]
 pub enum MinkowskiDirectedEdge{
 	VertEdge(VertId,DirectedEdgeId),
 	EdgeVert(DirectedEdgeId,VertId),
@@ -341,7 +348,7 @@ impl DirectedEdge for MinkowskiDirectedEdge{
 		}
 	}
 }
-#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
+#[derive(Clone,Copy,Debug,Hash,Eq,PartialEq)]
 pub enum MinkowskiFace{
 	VertFace(VertId,FaceId),
 	EdgeEdge(EdgeId,EdgeId,bool),
@@ -477,6 +484,7 @@ impl MinkowskiMesh<'_>{
 	}
 	pub fn predict_collision_in(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
 		self.closest_fev_not_inside(relative_body.clone()).map_or(None,|fev|{
+			println!("@@@BEGIN REAL CRAWL@@@");
 			//continue forwards along the body parabola
 			match crate::face_crawler::crawl_fev(fev,self,relative_body,relative_body.time,time_limit){
 				crate::face_crawler::CrawlResult::Miss(_)=>None,

@@ -411,7 +411,7 @@ impl TryFrom<[f32;3]> for Unit32Vec3{
 */
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy,Hash,Eq,Ord,PartialEq,PartialOrd)]
+#[derive(Clone,Copy,Debug,Hash,Eq,Ord,PartialEq,PartialOrd)]
 pub struct Planar64(i64);
 impl Planar64{
 	pub const ZERO:Self=Self(0);
@@ -583,7 +583,7 @@ impl std::ops::Div<Planar64> for Planar64{
 
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy,Default,Hash,Eq,PartialEq)]
+#[derive(Clone,Copy,Debug,Default,Hash,Eq,PartialEq)]
 pub struct Planar64Vec3(glam::I64Vec3);
 impl Planar64Vec3{
 	pub const ZERO:Self=Planar64Vec3(glam::I64Vec3::ZERO);
