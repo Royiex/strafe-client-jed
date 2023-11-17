@@ -522,7 +522,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 				let v1f=self.mesh1.vert_faces(v1);
 				for &directed_edge_id in v0e.iter(){
 					let n=self.mesh0.directed_edge_n(directed_edge_id);
-					if v1f.iter().all(|&face_id|n.dot(self.mesh1.face_nd(face_id).0)<Planar64::ZERO){
+					if v1f.iter().any(|&face_id|n.dot(self.mesh1.face_nd(face_id).0)<Planar64::ZERO){
 						edges.push(MinkowskiDirectedEdge::EdgeVert(directed_edge_id,v1));
 					}
 				}
@@ -530,7 +530,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 				let v0f=self.mesh0.vert_faces(v0);
 				for &directed_edge_id in v1e.iter(){
 					let n=self.mesh1.directed_edge_n(directed_edge_id);
-					if v0f.iter().all(|&face_id|n.dot(self.mesh0.face_nd(face_id).0)<Planar64::ZERO){
+					if v0f.iter().any(|&face_id|n.dot(self.mesh0.face_nd(face_id).0)<Planar64::ZERO){
 						edges.push(MinkowskiDirectedEdge::VertEdge(v0,directed_edge_id));
 					}
 				}
