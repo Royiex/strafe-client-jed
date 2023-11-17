@@ -919,7 +919,8 @@ impl TouchingState{
 		let relative_body=VirtualBody::relative(&Body::default(),body).body(time);
 		for contact in &self.contacts{
 			//detect face slide off
-			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&style_mesh,&models.mesh(contact.model_id));
+			let model_mesh=models.mesh(contact.model_id);
+			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&style_mesh,&model_mesh);
 			collector.collect(minkowski.predict_collision_face_out(&relative_body,collector.time(),contact.face_id).map(|(face,time)|{
 				TimedInstruction{
 					time,
@@ -931,7 +932,8 @@ impl TouchingState{
 		}
 		for intersect in &self.intersects{
 			//detect model collision in reverse
-			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&style_mesh,&models.mesh(intersect.model_id));
+			let model_mesh=models.mesh(intersect.model_id);
+			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&style_mesh,&model_mesh);
 			collector.collect(minkowski.predict_collision_out(&relative_body,collector.time()).map(|(face,time)|{
 				TimedInstruction{
 					time,
@@ -1241,7 +1243,8 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 		let relative_body=VirtualBody::relative(&Body::default(),&self.body).body(self.time);
 		self.bvh.the_tester(&aabb,&mut |id|{
 			//no checks are needed because of the time limits.
-			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&style_mesh,&self.models.mesh(id));
+			let model_mesh=self.models.mesh(id);
+			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&style_mesh,&model_mesh);
 			collector.collect(minkowski.predict_collision_in(&relative_body,collector.time()).map(|(face,time)|{
 				TimedInstruction{time,instruction:PhysicsInstruction::CollisionStart(match self.models.attr(id){
 					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>Collision::Contact(ContactCollision{model_id:id,face_id:face}),
@@ -1269,7 +1272,8 @@ fn jumped_velocity(models:&PhysicsModels,style:&StyleModifiers,walk_state:&WalkS
 }
 
 fn contact_normal(models:&PhysicsModels,style_mesh:&TransformedMesh,contact:&ContactCollision)->Planar64Vec3{
-	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(style_mesh,&models.mesh(contact.model_id));
+	let model_mesh=models.mesh(contact.model_id);
+	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(style_mesh,&model_mesh);
 	minkowski.face_nd(contact.face_id).0
 }
 
