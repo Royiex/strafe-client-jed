@@ -547,5 +547,5 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 fn build_me_a_cube(){
 	let unit_cube=crate::primitives::unit_cube();
 	let mesh=PhysicsMesh::from(&unit_cube);
-	println!("mesh={:?}",mesh);
+	//println!("mesh={:?}",mesh);
 }

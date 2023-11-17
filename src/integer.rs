@@ -1033,7 +1033,7 @@ impl std::fmt::Display for Planar64Affine3{
 #[test]
 fn test_sqrt(){
 	let r=Planar64::int(400);
-	println!("r{}",r.get());
+	assert_eq!(1717986918400,r.get());
 	let s=r.sqrt();
-	println!("s{}",s.get());
+	assert_eq!(85899345920,s.get());
 }
