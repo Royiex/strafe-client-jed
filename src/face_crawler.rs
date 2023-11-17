@@ -111,17 +111,3 @@ pub fn crawl_fev<F:Copy,E:Copy+DirectedEdge,V:Copy>(mut fev:FEV<F,E,V>,mesh:&imp
 		}
 	}
 }
-pub enum CrawlResult<F,E:DirectedEdge,V>{
-	Closest(FEV<F,E,V>),
-	Hit(F,Time),
-}
-pub fn crawl_fev_from_negative_infinity<F:Copy,E:Copy+DirectedEdge,V:Copy>(mut fev:FEV<F,E,V>,mesh:&impl MeshQuery<F,E,V>,relative_body:&Body,time_limit:Time)->CrawlResult<F,E,V>{	
-	let mut time=Time::MIN;
-	loop{
-		match next_transition(&fev,time,mesh,relative_body,time_limit){
-			Transition::Miss=>return CrawlResult::Closest(fev),
-			Transition::Next(next_fev,next_time)=>(fev,time)=(next_fev,next_time),
-			Transition::Hit(face,time)=>return CrawlResult::Hit(face,time),//algorithm breaks down inside without full fat voronoi
-		}
-	}
-}

@@ -356,23 +356,18 @@ impl MinkowskiMesh<'_>{
 	pub fn predict_collision_in(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
 		(-relative_body.clone()).infinity_dir().map_or(None,|dir|{
 			let start_vert=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert(dir));
-			match crate::face_crawler::crawl_fev_from_negative_infinity(start_vert,self,relative_body,relative_body.time){
-				crate::face_crawler::CrawlResult::Closest(fev)=>{
-					crate::face_crawler::crawl_fev(fev,self,relative_body,relative_body.time,time_limit)
-				},
-				crate::face_crawler::CrawlResult::Hit(_,_)=>None,//already in or passed
-			}
+			let start_time=crate::integer::Time::MIN;//relative_body.time
+			crate::face_crawler::crawl_fev(start_vert,self,relative_body,start_time,time_limit)
 		})
 	}
 	pub fn predict_collision_out(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
+		//This doesn't work if the out-path goes back in.  it must be the final exit.
 		relative_body.infinity_dir().map_or(None,|dir|{
 			let start_vert=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert(dir));
-			match crate::face_crawler::crawl_fev_from_negative_infinity(start_vert,self,&-relative_body.clone(),-time_limit){
-				crate::face_crawler::CrawlResult::Closest(fev)=>{
-					crate::face_crawler::crawl_fev(fev,self,&-relative_body.clone(),-time_limit,-relative_body.time).map(|t|(t.0,-t.1))
-				},
-				crate::face_crawler::CrawlResult::Hit(face,time)=>Some((face,-time)),
-			}
+			let start_time=crate::integer::Time::MIN;//-time_limit
+			crate::face_crawler::crawl_fev(start_vert,self,&-relative_body.clone(),start_time,-relative_body.time)
+			.filter(|t|-t.1<time_limit)
+			.map(|t|(t.0,-t.1))
 		})
 	}
 	pub fn predict_collision_face_out(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time,contact_face_id:MinkowskiFace)->Option<(MinkowskiEdge,crate::integer::Time)>{
