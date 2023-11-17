@@ -968,11 +968,15 @@ impl Body{
 		self.velocity=self.extrapolated_velocity(time);
 		self.time=time;
 	}
-	pub fn infinity_dir(&self)->Planar64Vec3{
+	pub fn infinity_dir(&self)->Option<Planar64Vec3>{
 		if self.acceleration==Planar64Vec3::ZERO{
-			self.velocity
+			if self.velocity==Planar64Vec3::ZERO{
+				None
+			}else{
+				Some(self.velocity)
+			}
 		}else{
-			self.acceleration
+			Some(self.acceleration)
 		}
 	}
 }
