@@ -354,20 +354,44 @@ impl MinkowskiMesh<'_>{
 		MinkowskiVert::VertVert(self.mesh0.farthest_vert(dir),self.mesh1.farthest_vert(-dir))
 	}
 	pub fn predict_collision_in(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
-		(-relative_body.clone()).infinity_dir().map_or(None,|dir|{
+		let mut infinity_body=-relative_body.clone();
+		infinity_body.acceleration=Planar64Vec3::ZERO;
+		infinity_body.infinity_dir().map_or(None,|dir|{
 			let start_vert=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert(dir));
-			let start_time=crate::integer::Time::MIN;//relative_body.time
-			crate::face_crawler::crawl_fev(start_vert,self,relative_body,start_time,time_limit)
+			//crawl in from negative infinity along a tangent line to get the closest fev
+			match crate::face_crawler::crawl_fev(start_vert,self,&infinity_body,crate::integer::Time::MIN,relative_body.time){
+				crate::face_crawler::CrawlResult::Miss(fev)=>{
+					//continue forwards along the body parabola
+					match crate::face_crawler::crawl_fev(fev,self,relative_body,relative_body.time,time_limit){
+						crate::face_crawler::CrawlResult::Miss(_)=>None,
+						crate::face_crawler::CrawlResult::Hit(face,time)=>Some((face,time)),
+					}
+				},
+				crate::face_crawler::CrawlResult::Hit(_,_)=>None,
+			}
 		})
 	}
 	pub fn predict_collision_out(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
-		//This doesn't work if the out-path goes back in.  it must be the final exit.
-		relative_body.infinity_dir().map_or(None,|dir|{
+		//create an extrapolated body at time_limit
+		let infinity_body=crate::physics::Body::new(
+			relative_body.extrapolated_position(time_limit),
+			-relative_body.extrapolated_velocity(time_limit),
+			Planar64Vec3::ZERO,
+			-time_limit,
+		);
+		infinity_body.infinity_dir().map_or(None,|dir|{
 			let start_vert=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert(dir));
-			let start_time=crate::integer::Time::MIN;//-time_limit
-			crate::face_crawler::crawl_fev(start_vert,self,&-relative_body.clone(),start_time,-relative_body.time)
-			.filter(|t|-t.1<time_limit)
-			.map(|t|(t.0,-t.1))
+			//crawl in from positive infinity along a tangent line to get the closest fev
+			match crate::face_crawler::crawl_fev(start_vert,self,&infinity_body,crate::integer::Time::MIN,-time_limit){
+				crate::face_crawler::CrawlResult::Miss(fev)=>{
+					//continue backwards along the body parabola
+					match crate::face_crawler::crawl_fev(fev,self,&-relative_body.clone(),-time_limit,-relative_body.time){
+						crate::face_crawler::CrawlResult::Miss(_)=>None,
+						crate::face_crawler::CrawlResult::Hit(face,time)=>Some((face,-time)),//no need to test -time<time_limit because of the first step
+					}
+				},
+				crate::face_crawler::CrawlResult::Hit(_,_)=>None,
+			}
 		})
 	}
 	pub fn predict_collision_face_out(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time,contact_face_id:MinkowskiFace)->Option<(MinkowskiEdge,crate::integer::Time)>{
