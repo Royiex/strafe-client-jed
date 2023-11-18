@@ -354,12 +354,12 @@ impl MinkowskiMesh<'_>{
 		MinkowskiVert::VertVert(self.mesh0.farthest_vert(dir),self.mesh1.farthest_vert(-dir))
 	}
 	pub fn predict_collision_in(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
-		let mut infinity_body=-relative_body.clone();
+		let mut infinity_body=relative_body.clone();
 		infinity_body.acceleration=Planar64Vec3::ZERO;
 		infinity_body.infinity_dir().map_or(None,|dir|{
-			let start_vert=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert(dir));
+			let start_vert=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert(-dir));
 			//crawl in from negative infinity along a tangent line to get the closest fev
-			match crate::face_crawler::crawl_fev(start_vert,self,&infinity_body,crate::integer::Time::MIN,relative_body.time){
+			match crate::face_crawler::crawl_fev(start_vert,self,&infinity_body,crate::integer::Time::MIN,infinity_body.time){
 				crate::face_crawler::CrawlResult::Miss(fev)=>{
 					//continue forwards along the body parabola
 					match crate::face_crawler::crawl_fev(fev,self,relative_body,relative_body.time,time_limit){
