@@ -42,11 +42,6 @@ struct Face{
 	normal:Planar64Vec3,
 	dot:Planar64,
 }
-impl Face{
-	fn nd(&self)->(Planar64Vec3,Planar64){
-		(self.normal,self.dot)
-	}
-}
 struct Vert(Planar64Vec3);
 pub trait MeshQuery<FACE:Clone,EDGE:Clone+DirectedEdge,VERT:Clone>{
 	fn edge_n(&self,edge_id:EDGE::UndirectedEdge)->Planar64Vec3{
