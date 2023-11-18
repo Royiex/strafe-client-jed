@@ -433,7 +433,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 			},
 			MinkowskiFace::FaceVert(f0,v1)=>{
 				let (n,d)=self.mesh0.face_nd(f0);
-				(n,d+n.dot(self.mesh1.vert(v1)))
+				(n,d-n.dot(self.mesh1.vert(v1)))
 			},
 		}
 	}
