@@ -478,11 +478,11 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 		match edge_id{
 			MinkowskiEdge::VertEdge(v0,e1)=>{
 				let e1f=self.mesh1.edge_faces(e1);
-				Cow::Owned([(e1f[0],e1f[1],true),(e1f[1],e1f[0],false)].map(|(edge_face_id1,other_edge_face_id1,face_parity)|{
+				let e1f0_n=self.mesh1.face_nd(e1f[0]).0;
+				let e1f1_n=self.mesh1.face_nd(e1f[1]).0;
+				Cow::Owned([(e1f[0],e1f0_n,e1f1_n,true),(e1f[1],e1f1_n,e1f0_n,false)].map(|(edge_face_id1,edge_face1_n,other_edge_face1_n,face_parity)|{
 					let mut best_edge=None;
 					let mut best_d=Planar64::MAX;
-					let edge_face1_n=self.mesh1.face_nd(edge_face_id1).0;
-					let other_edge_face1_n=self.mesh1.face_nd(other_edge_face_id1).0;
 					for &directed_edge_id0 in self.mesh0.vert_edges(v0).iter(){
 						let edge0_n=self.mesh0.directed_edge_n(directed_edge_id0);
 						if edge_face1_n.dot(edge0_n)<Planar64::ZERO{
@@ -501,11 +501,11 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 			},
 			MinkowskiEdge::EdgeVert(e0,v1)=>{
 				let e0f=self.mesh0.edge_faces(e0);
-				Cow::Owned([(e0f[0],e0f[1],true),(e0f[1],e0f[0],false)].map(|(edge_face_id0,other_edge_face_id0,face_parity)|{
+				let e0f0_n=self.mesh0.face_nd(e0f[0]).0;
+				let e0f1_n=self.mesh0.face_nd(e0f[1]).0;
+				Cow::Owned([(e0f[0],e0f0_n,e0f1_n,true),(e0f[1],e0f1_n,e0f0_n,false)].map(|(edge_face_id0,edge_face0_n,other_edge_face0_n,face_parity)|{
 					let mut best_edge=None;
 					let mut best_d=Planar64::MAX;
-					let edge_face0_n=self.mesh0.face_nd(edge_face_id0).0;
-					let other_edge_face0_n=self.mesh0.face_nd(other_edge_face_id0).0;
 					for &directed_edge_id1 in self.mesh1.vert_edges(v1).iter(){
 						let edge1_n=self.mesh1.directed_edge_n(directed_edge_id1);
 						if edge_face0_n.dot(edge1_n)<Planar64::ZERO{
