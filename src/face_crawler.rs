@@ -31,7 +31,7 @@ enum Transition<F,E:DirectedEdge,V>{
 				//test each edge collision time, ignoring roots with zero or conflicting derivative
 				for &directed_edge_id in mesh.face_edges(face_id).iter(){
 					let edge_n=mesh.directed_edge_n(directed_edge_id);
-					let n=edge_n.cross(n);
+					let n=n.cross(edge_n);
 					let verts=mesh.edge_verts(directed_edge_id.as_undirected());
 					let d=n.dot(mesh.vert(verts[0]))+n.dot(mesh.vert(verts[1]));
 					//WARNING: d is moved out of the *2 block because of adding two vertices!
