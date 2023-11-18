@@ -25,6 +25,7 @@ enum Transition<F,E:DirectedEdge,V>{
 					if time<=t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
 						best_time=t;
 						best_transtition=Transition::Hit(face_id,t);
+						break;
 					}
 				}
 				//test each edge collision time, ignoring roots with zero or conflicting derivative
