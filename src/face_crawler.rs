@@ -10,7 +10,7 @@ enum Transition<F,E:DirectedEdge,V>{
 	Hit(F,Time),
 }
 
-	fn next_transition<F:Copy,E:Copy+DirectedEdge,V:Copy>(fev:&FEV<F,E,V>,time:Time,mesh:&impl MeshQuery<F,E,V>,body:&Body,time_limit:Time)->Transition<F,E,V>{
+	fn next_transition<F:Copy+std::fmt::Debug,E:Copy+DirectedEdge+std::fmt::Debug,V:Copy+std::fmt::Debug>(fev:&FEV<F,E,V>,time:Time,mesh:&impl MeshQuery<F,E,V>,body:&Body,time_limit:Time)->Transition<F,E,V>{
 		//conflicting derivative means it crosses in the wrong direction.
 		//if the transition time is equal to an already tested transition, do not replace the current best.
 		let mut best_time=time_limit;
@@ -61,7 +61,7 @@ enum Transition<F,E:DirectedEdge,V>{
 					//edge_n gets parity from the order of edge_faces
 					let n=face_n.cross(edge_n)*((i as i64)*2-1);
 					let d=n.dot(vert_sum);
-					println!("Edge Face n={} d={}",n,d/2);
+					println!("Edge Face={:?} n={} d={}",edge_face_id,n,d/2);
 					//WARNING yada yada d *2
 					for t in zeroes2((n.dot(body.position))*2-d,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
@@ -97,7 +97,7 @@ enum Transition<F,E:DirectedEdge,V>{
 					//edge is directed away from vertex, but we want the dot product to turn out negative
 					let n=-mesh.directed_edge_n(directed_edge_id);
 					let d=n.dot(mesh.vert(vert_id));
-					println!("Vert Edge n={} d={}",n,d);
+					println!("Vert Edge={:?} n={} d={}",directed_edge_id,n,d);
 					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
 						println!("dt={} low={} upp={} into={}",t-body.time,time<=t,t<best_time,n.dot(body.extrapolated_velocity(t))<Planar64::ZERO);
