@@ -158,9 +158,9 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 				//index edges & face into vertices
 				{
 					let vert_ref_guy=unsafe{vert_ref_guys.get_unchecked_mut(vert0_id)};
-					vert_ref_guy.edges.insert(edge_id.as_directed(!is_sorted));
+					vert_ref_guy.edges.insert(edge_id.as_directed(is_sorted));
 					vert_ref_guy.faces.insert(face_id);
-					unsafe{vert_ref_guys.get_unchecked_mut(vert1_id)}.edges.insert(edge_id.as_directed(is_sorted));
+					unsafe{vert_ref_guys.get_unchecked_mut(vert1_id)}.edges.insert(edge_id.as_directed(!is_sorted));
 				}
 				//return directed_edge_id
 				edge_id.as_directed(is_sorted)
