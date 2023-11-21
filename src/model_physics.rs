@@ -5,13 +5,18 @@ use std::borrow::{Borrow,Cow};
 pub struct VertId(usize);
 #[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
 pub struct EdgeId(usize);
-impl EdgeId{
+pub trait UndirectedEdge{
+	type DirectedEdge:Copy+DirectedEdge;
+	fn as_directed(&self,parity:bool)->Self::DirectedEdge;
+}
+impl UndirectedEdge for EdgeId{
+	type DirectedEdge=DirectedEdgeId;
 	fn as_directed(&self,parity:bool)->DirectedEdgeId{
 		DirectedEdgeId(self.0|((parity as usize)<<(usize::BITS-1)))
 	}
 }
 pub trait DirectedEdge{
-	type UndirectedEdge:Copy;
+	type UndirectedEdge:Copy+UndirectedEdge;
 	fn as_undirected(&self)->Self::UndirectedEdge;
 	fn parity(&self)->bool;
 }
@@ -301,6 +306,15 @@ pub enum MinkowskiEdge{
 	VertEdge(VertId,EdgeId),
 	EdgeVert(EdgeId,VertId),
 	//EdgeEdge when edges are parallel
+}
+impl UndirectedEdge for MinkowskiEdge{
+	type DirectedEdge=MinkowskiDirectedEdge;
+	fn as_directed(&self,parity:bool)->Self::DirectedEdge{
+		match self{
+			MinkowskiEdge::VertEdge(v0,e1)=>MinkowskiDirectedEdge::VertEdge(*v0,e1.as_directed(parity)),
+			MinkowskiEdge::EdgeVert(e0,v1)=>MinkowskiDirectedEdge::EdgeVert(e0.as_directed(parity),*v1),
+		}
+	}
 }
 #[derive(Clone,Copy)]
 pub enum MinkowskiDirectedEdge{
