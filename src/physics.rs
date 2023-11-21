@@ -979,6 +979,31 @@ impl Body{
 			Some(self.acceleration)
 		}
 	}
+	pub fn grow_aabb(&self,aabb:&mut crate::aabb::Aabb,t0:Time,t1:Time){
+		aabb.grow(self.extrapolated_position(t0));
+		aabb.grow(self.extrapolated_position(t1));
+		//v+a*t==0
+		//goober code
+		if self.acceleration.x()!=Planar64::ZERO{
+			let t=Time::from(-self.velocity.x()/self.acceleration.x());
+			if t0<t&&t<t1{
+				aabb.grow(self.extrapolated_position(t));
+			}
+		}
+		if self.acceleration.y()!=Planar64::ZERO{
+			let t=Time::from(-self.velocity.y()/self.acceleration.y());
+			if t0<t&&t<t1{
+				aabb.grow(self.extrapolated_position(t));
+			}
+		}
+		if self.acceleration.z()!=Planar64::ZERO{
+			let t=Time::from(-self.velocity.z()/self.acceleration.z());
+			if t0<t&&t<t1{
+				aabb.grow(self.extrapolated_position(t));
+			}
+		}
+	}
+
 }
 impl std::fmt::Display for Body{
 	fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{
@@ -1240,8 +1265,7 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 		self.touching.predict_collision_end(&mut collector,&self.models,&style_mesh,&self.body,self.time);
 		//check for collision starts
 		let mut aabb=crate::aabb::Aabb::default();
-		aabb.grow(self.body.extrapolated_position(self.time));
-		aabb.grow(self.body.extrapolated_position(collector.time()));
+		self.body.grow_aabb(&mut aabb,self.time,collector.time());
 		aabb.inflate(self.style.hitbox.halfsize);
 		//common body
 		let relative_body=VirtualBody::relative(&Body::default(),&self.body).body(self.time);
