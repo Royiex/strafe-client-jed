@@ -4,13 +4,15 @@ use crate::integer::{Time,Planar64};
 use crate::zeroes::zeroes2;
 
 #[derive(Debug)]
-enum Transition<F,E:DirectedEdge,V>{
+enum Transition<F,E:DirectedEdge,V>
+where <E as DirectedEdge>::UndirectedEdge:std::fmt::Debug{
 	Miss,
 	Next(FEV<F,E,V>,Time),
 	Hit(F,Time),
 }
 
-	fn next_transition<F:Copy+std::fmt::Debug,E:Copy+DirectedEdge+std::fmt::Debug,V:Copy+std::fmt::Debug>(fev:&FEV<F,E,V>,time:Time,mesh:&impl MeshQuery<F,E,V>,body:&Body,time_limit:Time)->Transition<F,E,V>{
+	fn next_transition<F:Copy+std::fmt::Debug,E:Copy+DirectedEdge+std::fmt::Debug,V:Copy+std::fmt::Debug>(fev:&FEV<F,E,V>,time:Time,mesh:&impl MeshQuery<F,E,V>,body:&Body,time_limit:Time)->Transition<F,E,V>
+	where <E as DirectedEdge>::UndirectedEdge:std::fmt::Debug{
 		//conflicting derivative means it crosses in the wrong direction.
 		//if the transition time is equal to an already tested transition, do not replace the current best.
 		let mut best_time=time_limit;
@@ -117,7 +119,8 @@ pub enum CrawlResult<F,E:DirectedEdge,V>{
 	Miss(FEV<F,E,V>),
 	Hit(F,Time),
 }
-pub fn crawl_fev<F:Copy+std::fmt::Debug,E:Copy+std::fmt::Debug+DirectedEdge,V:Copy+std::fmt::Debug>(mut fev:FEV<F,E,V>,mesh:&impl MeshQuery<F,E,V>,relative_body:&Body,start_time:Time,time_limit:Time)->CrawlResult<F,E,V>{	
+pub fn crawl_fev<F:Copy+std::fmt::Debug,E:Copy+std::fmt::Debug+DirectedEdge,V:Copy+std::fmt::Debug>(mut fev:FEV<F,E,V>,mesh:&impl MeshQuery<F,E,V>,relative_body:&Body,start_time:Time,time_limit:Time)->CrawlResult<F,E,V>
+where <E as DirectedEdge>::UndirectedEdge:std::fmt::Debug{	
 	let mut time=start_time;
 	for _ in 0..20{
 		println!("@ fev={:?} time={}",fev,time);
