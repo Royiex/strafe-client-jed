@@ -353,6 +353,14 @@ impl Hitbox{
 			normal_transform:Planar64Mat3::from_diagonal(scale).inverse().transpose(),
 		}
 	}
+	fn from_mesh_scale_offset(mesh:PhysicsMesh,scale:Planar64Vec3,offset:Planar64Vec3)->Self{
+		Self{
+			halfsize:scale,
+			mesh,
+			transform:crate::integer::Planar64Affine3::new(Planar64Mat3::from_diagonal(scale),offset),
+			normal_transform:Planar64Mat3::from_diagonal(scale).inverse().transpose(),
+		}
+	}
 	fn roblox()->Self{
 		Self::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cylinder()),Planar64Vec3::int(2,5,2)/2)
 	}
@@ -1644,11 +1652,11 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 #[test]
 fn hit_the_ground(){
 	let h0=Hitbox::roblox();
-	let h1=Hitbox::roblox();
+	let h1=Hitbox::from_mesh_scale_offset(PhysicsMesh::from(&crate::primitives::unit_cylinder()),Planar64Vec3::int(2,5,2)/2,Planar64Vec3::int(10,0,10));
 	let mesh0=h0.transformed_mesh();
 	let mesh1=h1.transformed_mesh();
 	let relative_body=Body::new(
-		Planar64Vec3::Y*10,
+		Planar64Vec3::ONE*10,
 		Planar64Vec3::int(1,-160,2)/16,
 		Planar64Vec3::ZERO,
 		Time::ZERO
