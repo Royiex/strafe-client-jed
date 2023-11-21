@@ -446,7 +446,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 				let &[e1v0,e1v1]=self.mesh1.edge_verts(e1).borrow();
 				let n=edge0_n.cross(edge1_n);
 				let e0d=n.dot(self.mesh0.vert(e0v0)+self.mesh0.vert(e0v1));
-				let e1d=n.dot(self.mesh0.vert(e1v0)+self.mesh0.vert(e1v1));
+				let e1d=n.dot(self.mesh1.vert(e1v0)+self.mesh1.vert(e1v1));
 				(n*(parity as i64*4-2),(e0d-e1d)*(parity as i64*2-1))
 			},
 			MinkowskiFace::FaceVert(f0,v1)=>{
