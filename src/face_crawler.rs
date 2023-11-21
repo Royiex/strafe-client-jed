@@ -121,6 +121,14 @@ pub fn crawl_fev<F:Copy+std::fmt::Debug,E:Copy+std::fmt::Debug+DirectedEdge,V:Co
 	let mut time=start_time;
 	for _ in 0..20{
 		println!("@ fev={:?} time={}",fev,time);
+		match &fev{
+			&FEV::Face(face_id)=>{
+				let a=mesh.face_nd(face_id);
+				println!("face_n={}",a.0);
+			},
+			&FEV::Edge(edge_id)=>println!("edge_n={} verts={:?}",mesh.edge_n(edge_id),mesh.edge_verts(edge_id)),
+			&FEV::Vert(vert_id)=>println!("vert={}",mesh.vert(vert_id)),
+		}
 		match next_transition(&fev,time,mesh,relative_body,time_limit){
 			Transition::Miss=>return CrawlResult::Miss(fev),
 			Transition::Next(next_fev,next_time)=>(fev,time)=(next_fev,next_time),
