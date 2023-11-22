@@ -20,7 +20,7 @@ pub trait DirectedEdge{
 	fn as_undirected(&self)->Self::UndirectedEdge;
 	fn parity(&self)->bool;
 	//this is stupid but may work fine
-	fn neg(&self)-><<Self as DirectedEdge>::UndirectedEdge as UndirectedEdge>::DirectedEdge{
+	fn reverse(&self)-><<Self as DirectedEdge>::UndirectedEdge as UndirectedEdge>::DirectedEdge{
 		self.as_undirected().as_directed(!self.parity())
 	}
 }
@@ -466,7 +466,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 		match face_id{
 			MinkowskiFace::VertFace(v0,f1)=>{
 				Cow::Owned(self.mesh1.face_edges(f1).iter().map(|&edge_id1|{
-					MinkowskiDirectedEdge::VertEdge(v0,edge_id1.neg())
+					MinkowskiDirectedEdge::VertEdge(v0,edge_id1.reverse())
 				}).collect())
 			},
 			MinkowskiFace::EdgeEdge(e0,e1,parity)=>{
