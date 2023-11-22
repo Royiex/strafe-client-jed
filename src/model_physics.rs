@@ -492,11 +492,12 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 			MinkowskiEdge::VertEdge(v0,e1)=>{
 				//faces are listed backwards from the minkowski mesh
 				let e1f=self.mesh1.edge_faces(e1);
+				let v0e=self.mesh0.vert_edges(v0);
 				Cow::Owned([(e1f[1],true),(e1f[0],false)].map(|(edge_face_id1,face_parity)|{
 					let mut best_edge=None;
 					let mut best_d=Planar64::ZERO;
 					let edge_face1_n=self.mesh1.face_nd(edge_face_id1).0;
-					for &directed_edge_id0 in self.mesh0.vert_edges(v0).iter(){
+					for &directed_edge_id0 in v0e.iter(){
 						let edge0_n=self.mesh0.directed_edge_n(directed_edge_id0);
 						let d=edge_face1_n.dot(edge0_n);
 						if d<best_d{
@@ -513,13 +514,14 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 			MinkowskiEdge::EdgeVert(e0,v1)=>{
 				//tracking index with an external variable because .enumerate() is not available
 				let mut i=0;
+				let v1e=self.mesh1.vert_edges(v1);
 				Cow::Owned(self.mesh0.edge_faces(e0).map(|edge_face_id0|{
 					let face_parity=i==0;
 					i+=1;
 					let mut best_edge=None;
 					let mut best_d=Planar64::ZERO;
 					let edge_face0_n=self.mesh0.face_nd(edge_face_id0).0;
-					for &directed_edge_id1 in self.mesh1.vert_edges(v1).iter(){
+					for &directed_edge_id1 in v1e.iter(){
 						let edge1_n=self.mesh1.directed_edge_n(directed_edge_id1);
 						let d=edge_face0_n.dot(edge1_n);
 						if d<best_d{
