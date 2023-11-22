@@ -956,6 +956,7 @@ impl TouchingState{
 			//detect model collision in reverse
 			let model_mesh=models.mesh(intersect.model_id);
 			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
+			println!("### predict_collision_out id={} body={} time_limit={}",intersect.model_id,relative_body,collector.time());
 			collector.collect(minkowski.predict_collision_out(&relative_body,collector.time()).map(|(face,time)|{
 				TimedInstruction{
 					time,
@@ -1295,6 +1296,7 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 			//no checks are needed because of the time limits.
 			let model_mesh=self.models.mesh(id);
 			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
+			println!("### predict_collision_in id={} body={} time_limit={}",id,relative_body,collector.time());
 			collector.collect(minkowski.predict_collision_in(&relative_body,collector.time())
 				//temp (?) code to avoid collision loops
 				.map_or(None,|(face,time)|if time==self.time{None}else{Some((face,time))})
