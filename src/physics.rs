@@ -1650,15 +1650,14 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 }
 
 #[allow(dead_code)]
-fn hit_the_ground(relative_body:Body){
+fn hit_the_ground(relative_body:Body,expected_collision_time:Option<Time>){
 	let h0=Hitbox::from_mesh_scale_offset(PhysicsMesh::from(&crate::primitives::unit_cylinder()),Planar64Vec3::int(2,5,2)/2,Planar64Vec3::int(10,0,10));
 	let h1=Hitbox::roblox();
 	let hitbox_mesh=h1.transformed_mesh();
 	let platform_mesh=h0.transformed_mesh();
 	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
 	let collision=minkowski.predict_collision_in(&relative_body,Time::ONE_SECOND);
-	assert!(collision.is_some(),"No collision was generated");
-	assert_eq!(Time::ONE_SECOND/2,collision.unwrap().1,"Incorrect time of collision");
+	assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
 }
 #[test]
 fn hit_the_ground_degenerate(){
@@ -1667,7 +1666,7 @@ fn hit_the_ground_degenerate(){
 		Planar64Vec3::int(0,-10,0),
 		Planar64Vec3::ZERO,
 		Time::ZERO
-	));
+	),Some(Time::ONE_SECOND/2));
 }
 #[test]
 fn hit_the_ground_oblique(){
@@ -1676,5 +1675,5 @@ fn hit_the_ground_oblique(){
 		Planar64Vec3::int(1,-160,2)/16,
 		Planar64Vec3::ZERO,
 		Time::ZERO
-	));
+	),Some(Time::ONE_SECOND/2));
 }
