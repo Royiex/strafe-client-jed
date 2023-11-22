@@ -1686,3 +1686,12 @@ fn zoom_hit_nothing(){
 		Time::ZERO
 	),None);
 }
+#[test]
+fn already_inside_hit_nothing(){
+	hit_the_ground(Body::new(
+		Planar64Vec3::int(10,5,10),
+		Planar64Vec3::int(10,0,0),
+		Planar64Vec3::int(0,100,0),
+		Time::ZERO
+	),None);
+}
