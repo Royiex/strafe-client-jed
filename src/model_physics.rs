@@ -560,7 +560,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 					}
 					best_edge.map_or(
 						MinkowskiFace::VertFace(v0,edge_face_id1),
-						|directed_edge_id0|MinkowskiFace::EdgeEdge(directed_edge_id0.as_undirected(),e1,directed_edge_id0.parity()^face_parity)
+						|directed_edge_id0|MinkowskiFace::EdgeEdge(directed_edge_id0.as_undirected(),e1,face_parity)
 					)
 				}))
 			},
@@ -569,7 +569,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 				let mut i=0;
 				let v1e=self.mesh1.vert_edges(v1);
 				Cow::Owned(self.mesh0.edge_faces(e0).map(|edge_face_id0|{
-					let face_parity=i==0;
+					let face_parity=i==0;//always two edge faces
 					i+=1;
 					let mut best_edge=None;
 					let mut best_d=Planar64::ZERO;
@@ -584,7 +584,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 					}
 					best_edge.map_or(
 						MinkowskiFace::FaceVert(edge_face_id0,v1),
-						|directed_edge_id1|MinkowskiFace::EdgeEdge(e0,directed_edge_id1.as_undirected(),directed_edge_id1.parity()^face_parity)
+						|directed_edge_id1|MinkowskiFace::EdgeEdge(e0,directed_edge_id1.as_undirected(),face_parity)
 					)
 				}))
 			},
