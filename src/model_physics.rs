@@ -573,8 +573,8 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 			},
 		}
 	}
-	fn vert_faces(&self,vert_id:MinkowskiVert)->Cow<Vec<MinkowskiFace>>{
-		todo!()
+	fn vert_faces(&self,_vert_id:MinkowskiVert)->Cow<Vec<MinkowskiFace>>{
+		unimplemented!()
 	}
 }
 
