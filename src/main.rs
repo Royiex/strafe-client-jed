@@ -2,6 +2,7 @@ mod bvh;
 mod aabb;
 mod model;
 mod setup;
+mod world;
 mod window;
 mod worker;
 mod zeroes;
