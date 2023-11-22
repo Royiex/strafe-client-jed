@@ -1649,20 +1649,32 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 	}
 }
 
+#[allow(dead_code)]
+fn hit_the_ground(relative_body:Body){
+	let h0=Hitbox::from_mesh_scale_offset(PhysicsMesh::from(&crate::primitives::unit_cylinder()),Planar64Vec3::int(2,5,2)/2,Planar64Vec3::int(10,0,10));
+	let h1=Hitbox::roblox();
+	let hitbox_mesh=h1.transformed_mesh();
+	let platform_mesh=h0.transformed_mesh();
+	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
+	let collision=minkowski.predict_collision_in(&relative_body,Time::ONE_SECOND);
+	assert!(collision.is_some(),"No collision was generated");
+	assert_eq!(Time::ONE_SECOND/2,collision.unwrap().1,"Incorrect time of collision");
+}
 #[test]
-fn hit_the_ground(){
-	let h0=Hitbox::roblox();
-	let h1=Hitbox::from_mesh_scale_offset(PhysicsMesh::from(&crate::primitives::unit_cylinder()),Planar64Vec3::int(2,5,2)/2,Planar64Vec3::int(10,0,10));
-	let mesh0=h0.transformed_mesh();
-	let mesh1=h1.transformed_mesh();
-	let relative_body=Body::new(
+fn hit_the_ground_degenerate(){
+	hit_the_ground(Body::new(
+		Planar64Vec3::ONE*10,
+		Planar64Vec3::int(0,-10,0),
+		Planar64Vec3::ZERO,
+		Time::ZERO
+	));
+}
+#[test]
+fn hit_the_ground_oblique(){
+	hit_the_ground(Body::new(
 		Planar64Vec3::ONE*10,
 		Planar64Vec3::int(1,-160,2)/16,
 		Planar64Vec3::ZERO,
 		Time::ZERO
-	);
-	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&mesh1,&mesh0);
-	let collision=minkowski.predict_collision_in(&relative_body,Time::ONE_SECOND);
-	assert!(collision.is_some(),"No collision was generated");
-	assert_eq!(Time::ONE_SECOND/2,collision.unwrap().1,"Incorrect time of collision");
+	));
 }
