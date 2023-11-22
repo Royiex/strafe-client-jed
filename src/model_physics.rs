@@ -456,6 +456,7 @@ impl MinkowskiMesh<'_>{
 				};
 				for (i,&face_id) in self.edge_faces(edge_id).iter().enumerate(){
 					let face_n=self.face_nd(face_id).0;
+					println!("face_id={:?} face_n={}",face_id,face_n);
 					//edge-face boundary nd, n facing out of the face towards the edge
 					let boundary_n=face_n.cross(edge_n)*(i as i64*2-1);
 					let boundary_d=boundary_n.dot(vert_sum);
