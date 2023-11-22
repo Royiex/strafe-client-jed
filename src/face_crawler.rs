@@ -49,12 +49,12 @@ enum Transition<F,E:DirectedEdge,V>{
 			&FEV::<F,E,V>::Edge(edge_id)=>{
 				//test each face collision time, ignoring roots with zero or conflicting derivative
 				let edge_n=mesh.edge_n(edge_id);
+				let edge_verts=mesh.edge_verts(edge_id);
 				for (i,&edge_face_id) in mesh.edge_faces(edge_id).iter().enumerate(){
 					let face_n=mesh.face_nd(edge_face_id).0;
 					//edge_n gets parity from the order of edge_faces
 					let n=edge_n.cross(face_n)*((i as i64)*2-1);
-					let verts=mesh.edge_verts(edge_id);
-					let d=n.dot(mesh.vert(verts[0]))+n.dot(mesh.vert(verts[1]));
+					let d=n.dot(mesh.vert(edge_verts[0]))+n.dot(mesh.vert(edge_verts[1]));
 					//WARNING yada yada d *2
 					for t in zeroes2((n.dot(body.position))*2-d,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
