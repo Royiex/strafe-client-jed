@@ -66,10 +66,9 @@ enum Transition<F,E:DirectedEdge,V>{
 					}
 				}
 				//test each vertex collision time, ignoring roots with zero or conflicting derivative
-				let n=mesh.edge_n(edge_id);
-				for (i,&vert_id) in mesh.edge_verts(edge_id).iter().enumerate(){
+				for (i,&vert_id) in edge_verts.iter().enumerate(){
 					//vertex normal gets parity from vert index
-					let n=n*(1-2*(i as i64));
+					let n=edge_n*(1-2*(i as i64));
 					let d=n.dot(mesh.vert(vert_id));
 					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
