@@ -1677,3 +1677,12 @@ fn hit_the_ground_oblique(){
 		Time::ZERO
 	),Some(Time::ONE_SECOND/2));
 }
+#[test]
+fn zoom_hit_nothing(){
+	hit_the_ground(Body::new(
+		Planar64Vec3::ONE*10,
+		Planar64Vec3::int(10,0,0),
+		Planar64Vec3::int(0,100,0),
+		Time::ZERO
+	),None);
+}
