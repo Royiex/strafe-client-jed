@@ -391,13 +391,13 @@ impl MinkowskiMesh<'_>{
 		let edge_n=self.edge_n(edge_id);
 		let edge_verts=self.edge_verts(edge_id);
 		for (i,&face_id) in self.edge_faces(edge_id).iter().enumerate(){
-			let face_n=self.face_nd(face_id).0;
+			let (face_n,face_d)=self.face_nd(face_id);
 			//edge-face boundary nd, n facing out of the face towards the edge
 			let boundary_n=edge_n.cross(face_n)*((i as i64)*4-2);
 			let boundary_d=boundary_n.dot(self.vert(edge_verts[0]))+boundary_n.dot(self.vert(edge_verts[1]));
 			if point.dot(boundary_n)<=boundary_d{
 				//must be normalized to compare distances
-				let d=point.dot(face_n);
+				let d=point.dot(face_n)-face_d;
 				let dd=d*d/face_n.dot(face_n);
 				if dd<best_d{
 					best_d=dd;
