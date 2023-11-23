@@ -977,14 +977,14 @@ impl Body{
 		self.time=time;
 	}
 	pub fn infinity_dir(&self)->Option<Planar64Vec3>{
-		if self.acceleration==Planar64Vec3::ZERO{
-			if self.velocity==Planar64Vec3::ZERO{
+		if self.velocity==Planar64Vec3::ZERO{
+			if self.acceleration==Planar64Vec3::ZERO{
 				None
 			}else{
-				Some(self.velocity)
+				Some(self.acceleration)
 			}
 		}else{
-			Some(self.acceleration)
+			Some(self.velocity)
 		}
 	}
 	pub fn grow_aabb(&self,aabb:&mut crate::aabb::Aabb,t0:Time,t1:Time){

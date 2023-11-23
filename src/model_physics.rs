@@ -356,6 +356,17 @@ pub struct MinkowskiMesh<'a>{
 	mesh1:&'a TransformedMesh<'a>,
 }
 
+//infinity fev algorithm state transition
+enum Transition{
+	Done,//found closest vert, no edges are better
+	Vert(MinkowskiVert),//transition to vert
+	Edge(MinkowskiEdge),//transition to edge, algorithm finished
+}
+enum EV{
+	Vert(MinkowskiVert),
+	Edge(MinkowskiEdge),
+}
+
 impl MinkowskiMesh<'_>{
 	pub fn minkowski_sum<'a>(mesh0:&'a TransformedMesh,mesh1:&'a TransformedMesh)->MinkowskiMesh<'a>{
 		MinkowskiMesh{
@@ -366,74 +377,99 @@ impl MinkowskiMesh<'_>{
 	fn farthest_vert(&self,dir:Planar64Vec3)->MinkowskiVert{
 		MinkowskiVert::VertVert(self.mesh0.farthest_vert(dir),self.mesh1.farthest_vert(-dir))
 	}
-	fn handle_vert_degenerate_case(&self,vert_id:MinkowskiVert,point:Planar64Vec3)->FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>{
-		let mut best_edge=None;
-		let mut best_d=Planar64::ZERO;
-		//find edge with highest non-negative dot with point
-		let p=point-self.vert(vert_id);
+	fn next_transition(&self,vert_id:MinkowskiVert,best_distance_squared:&mut Planar64,infinity_dir:Planar64Vec3,point:Planar64Vec3)->Transition{
+		let mut best_transition=Transition::Done;
 		for &directed_edge_id in self.vert_edges(vert_id).iter(){
 			let edge_n=self.directed_edge_n(directed_edge_id);
-			let d=p.dot(edge_n);
-			if best_d<d{
-				best_d=d;
-				best_edge=Some(directed_edge_id.as_undirected());
-			}
-		}
-		best_edge.map_or(
-			FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(vert_id),
-			|edge_id|self.handle_edge_degenerate_case(edge_id,point)
-		)
-	}
-	fn handle_edge_degenerate_case(&self,edge_id:MinkowskiEdge,point:Planar64Vec3)->FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>{
-		//test all faces with point beyond edge-face boundary
-		let mut best_face=None;
-		let mut best_d=Planar64::MAX;
-		let edge_n=self.edge_n(edge_id);
-		let edge_verts=self.edge_verts(edge_id);
-		for (i,&face_id) in self.edge_faces(edge_id).iter().enumerate(){
-			let (face_n,face_d)=self.face_nd(face_id);
-			//edge-face boundary nd, n facing out of the face towards the edge
-			let boundary_n=edge_n.cross(face_n)*((i as i64)*4-2);
-			let boundary_d=boundary_n.dot(self.vert(edge_verts[0]))+boundary_n.dot(self.vert(edge_verts[1]));
-			if point.dot(boundary_n)<=boundary_d{
-				//must be normalized to compare distances
-				let d=point.dot(face_n)-face_d;
-				let dd=d*d/face_n.dot(face_n);
-				if dd<best_d{
-					best_d=dd;
-					best_face=Some(face_id);
+			//is boundary uncrossable by a crawl from infinity
+			if infinity_dir.dot(edge_n)==Planar64::ZERO{
+				let edge_verts=self.edge_verts(directed_edge_id.as_undirected());
+				//select opposite vertex
+				let test_vert_id=edge_verts[directed_edge_id.parity() as usize];
+				//test if it's closer
+				let diff=point-self.vert(test_vert_id);
+				let distance_squared=diff.dot(diff);
+				if distance_squared<*best_distance_squared{
+					best_transition=Transition::Vert(test_vert_id);
+					*best_distance_squared=distance_squared;
+				}
+				//test the edge
+				let d=diff.dot(edge_n);
+				if Planar64::ZERO<d&&d<edge_n.dot(edge_n){
+					let distance_squared={
+						let c=diff.cross(edge_n);
+						c.dot(c)/edge_n.dot(edge_n)
+					};
+					if distance_squared<*best_distance_squared{
+						best_transition=Transition::Edge(directed_edge_id.as_undirected());
+						*best_distance_squared=distance_squared;
+					}
 				}
 			}
 		}
-		best_face.map_or(
-			FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Edge(edge_id),
-			|face_id|FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Face(face_id)
-		)
+		best_transition
 	}
-	/// This function drops a vertex down to an edge or a face if the path from infinity did not cross any vertex-edge boundaries but the point is supposed to have already crossed a boundary down from a vertex
-	fn handle_degenerate_cases(&self,fev:FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>,point:Planar64Vec3)->FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>{
-		match &fev{
-			FEV::Face(_)=>fev,//face has no edge cases
-			&FEV::Edge(edge_id)=>self.handle_edge_degenerate_case(edge_id,point),
-			&FEV::Vert(vert_id)=>self.handle_vert_degenerate_case(vert_id,point),
+	fn crawl_boundaries(&self,mut vert_id:MinkowskiVert,infinity_dir:Planar64Vec3,point:Planar64Vec3)->EV{
+		let mut best_distance_squared={
+			let diff=point-self.vert(vert_id);
+			diff.dot(diff)
+		};
+		loop{
+			match self.next_transition(vert_id,&mut best_distance_squared,infinity_dir,point){
+				Transition::Done=>return EV::Vert(vert_id),
+				Transition::Vert(new_vert_id)=>vert_id=new_vert_id,
+				Transition::Edge(edge_id)=>return EV::Edge(edge_id),
+			}
 		}
 	}
-	pub fn predict_collision_in(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
-		let mut infinity_body=relative_body.clone();
-		infinity_body.acceleration=Planar64Vec3::ZERO;
-		infinity_body.infinity_dir().map_or(None,|dir|{
-			let start_vert=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert(-dir));
-			//crawl in from negative infinity along a tangent line to get the closest fev
-			match crate::face_crawler::crawl_fev(start_vert,self,&infinity_body,crate::integer::Time::MIN,infinity_body.time){
-				crate::face_crawler::CrawlResult::Miss(fev)=>{
-					let closest_fev=self.handle_degenerate_cases(fev,infinity_body.position);
-					//continue forwards along the body parabola
-					match crate::face_crawler::crawl_fev(closest_fev,self,relative_body,relative_body.time,time_limit){
-						crate::face_crawler::CrawlResult::Miss(_)=>None,
-						crate::face_crawler::CrawlResult::Hit(face,time)=>Some((face,time)),
+	/// This function drops a vertex down to an edge or a face if the path from infinity did not cross any vertex-edge boundaries but the point is supposed to have already crossed a boundary down from a vertex
+	fn infinity_fev(&self,infinity_dir:Planar64Vec3,point:Planar64Vec3)->FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>{
+		//start on any vertex
+		//cross uncrossable vertex-edge boundaries until you find the closest vertex or edge
+		//cross edge-face boundary if it's uncrossable
+		match self.crawl_boundaries(self.farthest_vert(infinity_dir),infinity_dir,point){
+			//if a vert is returned, it is the closest point to the infinity point
+			EV::Vert(vert_id)=>FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(vert_id),
+			EV::Edge(edge_id)=>{
+				//cross to face if the boundary is not crossable and we are on the wrong side
+				let edge_n=self.edge_n(edge_id);
+				let vert_sum={
+					let &[v0,v1]=self.edge_verts(edge_id).borrow();
+					self.vert(v0)+self.vert(v1)
+				};
+				for (i,&face_id) in self.edge_faces(edge_id).iter().enumerate(){
+					let face_n=self.face_nd(face_id).0;
+					//edge-face boundary nd, n facing out of the face towards the edge
+					let boundary_n=edge_n.cross(face_n)*(i as i64*4-2);
+					let boundary_d=boundary_n.dot(vert_sum);
+					if infinity_dir.dot(boundary_n)==Planar64::ZERO&&point.dot(boundary_n)<=boundary_d{
+						//both faces cannot pass this condition, return early if one does.
+						return FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Face(face_id);
 					}
-				},
+				}
+				FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Edge(edge_id)
+			},
+		}
+	}
+	fn closest_fev_not_inside(&self,mut infinity_body:crate::physics::Body)->Option<FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>>{
+		infinity_body.infinity_dir().map_or(None,|dir|{
+			let infinity_fev=self.infinity_fev(-dir,infinity_body.position);
+			//a line is simpler to solve than a parabola
+			infinity_body.velocity=dir;
+			infinity_body.acceleration=Planar64Vec3::ZERO;
+			//crawl in from negative infinity along a tangent line to get the closest fev
+			match crate::face_crawler::crawl_fev(infinity_fev,self,&infinity_body,crate::integer::Time::MIN,infinity_body.time){
+				crate::face_crawler::CrawlResult::Miss(fev)=>Some(fev),
 				crate::face_crawler::CrawlResult::Hit(_,_)=>None,
+			}
+		})
+	}
+	pub fn predict_collision_in(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
+		self.closest_fev_not_inside(relative_body.clone()).map_or(None,|fev|{
+			//continue forwards along the body parabola
+			match crate::face_crawler::crawl_fev(fev,self,relative_body,relative_body.time,time_limit){
+				crate::face_crawler::CrawlResult::Miss(_)=>None,
+				crate::face_crawler::CrawlResult::Hit(face,time)=>Some((face,time)),
 			}
 		})
 	}
@@ -442,22 +478,14 @@ impl MinkowskiMesh<'_>{
 		let infinity_body=crate::physics::Body::new(
 			relative_body.extrapolated_position(time_limit),
 			-relative_body.extrapolated_velocity(time_limit),
-			Planar64Vec3::ZERO,
+			relative_body.acceleration,
 			-time_limit,
 		);
-		infinity_body.infinity_dir().map_or(None,|dir|{
-			let start_vert=FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(self.farthest_vert(dir));
-			//crawl in from positive infinity along a tangent line to get the closest fev
-			match crate::face_crawler::crawl_fev(start_vert,self,&infinity_body,crate::integer::Time::MIN,-time_limit){
-				crate::face_crawler::CrawlResult::Miss(fev)=>{
-					let closest_fev=self.handle_degenerate_cases(fev,infinity_body.position);
-					//continue backwards along the body parabola
-					match crate::face_crawler::crawl_fev(closest_fev,self,&-relative_body.clone(),-time_limit,-relative_body.time){
-						crate::face_crawler::CrawlResult::Miss(_)=>None,
-						crate::face_crawler::CrawlResult::Hit(face,time)=>Some((face,-time)),//no need to test -time<time_limit because of the first step
-					}
-				},
-				crate::face_crawler::CrawlResult::Hit(_,_)=>None,
+		self.closest_fev_not_inside(infinity_body).map_or(None,|fev|{
+			//continue backwards along the body parabola
+			match crate::face_crawler::crawl_fev(fev,self,&-relative_body.clone(),-time_limit,-relative_body.time){
+				crate::face_crawler::CrawlResult::Miss(_)=>None,
+				crate::face_crawler::CrawlResult::Hit(face,time)=>Some((face,-time)),//no need to test -time<time_limit because of the first step
 			}
 		})
 	}
