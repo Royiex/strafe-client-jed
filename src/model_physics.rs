@@ -393,14 +393,14 @@ impl MinkowskiMesh<'_>{
 					best_transition=Transition::Vert(test_vert_id);
 					*best_distance_squared=distance_squared;
 				}
-				//test the edge
-				let d=diff.dot(edge_n);
-				if Planar64::ZERO<d&&d<edge_n.dot(edge_n){
+				//test the edge. negative because this is from the opposite vert's perspective.
+				let d=-diff.dot(edge_n);
+				if Planar64::ZERO<=d&&d<=edge_n.dot(edge_n){
 					let distance_squared={
 						let c=diff.cross(edge_n);
 						c.dot(c)/edge_n.dot(edge_n)
 					};
-					if distance_squared<*best_distance_squared{
+					if distance_squared<=*best_distance_squared{
 						best_transition=Transition::Edge(directed_edge_id.as_undirected());
 						*best_distance_squared=distance_squared;
 					}
