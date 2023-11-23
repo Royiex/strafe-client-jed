@@ -440,9 +440,10 @@ impl MinkowskiMesh<'_>{
 				for (i,&face_id) in self.edge_faces(edge_id).iter().enumerate(){
 					let face_n=self.face_nd(face_id).0;
 					//edge-face boundary nd, n facing out of the face towards the edge
-					let boundary_n=edge_n.cross(face_n)*(i as i64*4-2);
+					let boundary_n=edge_n.cross(face_n)*(i as i64*2-1);
 					let boundary_d=boundary_n.dot(vert_sum);
-					if infinity_dir.dot(boundary_n)==Planar64::ZERO&&point.dot(boundary_n)<=boundary_d{
+					// point.dot(boundary_n) is multiplied by two because vert_sum sums two vertices.
+					if infinity_dir.dot(boundary_n)==Planar64::ZERO&&point.dot(boundary_n)*2<=boundary_d{
 						//both faces cannot pass this condition, return early if one does.
 						return FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Face(face_id);
 					}
