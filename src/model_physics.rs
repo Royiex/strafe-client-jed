@@ -576,7 +576,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 				//faces are listed backwards from the minkowski mesh
 				let e1f=self.mesh1.edge_faces(e1);
 				let v0e=self.mesh0.vert_edges(v0);
-				Cow::Owned([(e1f[1],true),(e1f[0],false)].map(|(edge_face_id1,face_parity)|{
+				Cow::Owned([(e1f[1],false),(e1f[0],true)].map(|(edge_face_id1,face_parity)|{
 					let mut best_edge=None;
 					let mut best_d=Planar64::ZERO;
 					let edge_face1_n=self.mesh1.face_nd(edge_face_id1).0;
