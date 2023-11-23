@@ -370,9 +370,10 @@ impl MinkowskiMesh<'_>{
 		let mut best_edge=None;
 		let mut best_d=Planar64::ZERO;
 		//find edge with highest non-negative dot with point
+		let p=point-self.vert(vert_id);
 		for &directed_edge_id in self.vert_edges(vert_id).iter(){
 			let edge_n=self.directed_edge_n(directed_edge_id);
-			let d=point.dot(edge_n);
+			let d=p.dot(edge_n);
 			if best_d<d{
 				best_d=d;
 				best_edge=Some(directed_edge_id.as_undirected());
