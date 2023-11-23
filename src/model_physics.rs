@@ -472,7 +472,7 @@ impl MinkowskiMesh<'_>{
 			//f x e points out
 			let n=-face_n.cross(edge_n);
 			let verts=self.edge_verts(directed_edge_id.as_undirected());
-			let d=n.dot(self.vert(verts[0]))+n.dot(self.vert(verts[1]));
+			let d=n.dot(self.vert(verts[0])+self.vert(verts[1]));
 			//WARNING! d outside of *2
 			for t in crate::zeroes::zeroes2((n.dot(relative_body.position))*2-d,n.dot(relative_body.velocity)*2,n.dot(relative_body.acceleration)){
 				let t=relative_body.time+crate::integer::Time::from(t);
