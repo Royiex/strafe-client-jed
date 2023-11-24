@@ -381,6 +381,7 @@ impl MinkowskiMesh<'_>{
 		let mut best_transition=Transition::Done;
 		for &directed_edge_id in self.vert_edges(vert_id).iter(){
 			let edge_n=self.directed_edge_n(directed_edge_id);
+			let edge_nn=edge_n.dot(edge_n);
 			//is boundary uncrossable by a crawl from infinity
 			if infinity_dir.dot(edge_n)==Planar64::ZERO{
 				let edge_verts=self.edge_verts(directed_edge_id.as_undirected());
@@ -395,10 +396,10 @@ impl MinkowskiMesh<'_>{
 				}
 				//test the edge. negative because this is from the opposite vert's perspective.
 				let d=-diff.dot(edge_n);
-				if Planar64::ZERO<=d&&d<=edge_n.dot(edge_n){
+				if Planar64::ZERO<=d&&d<=edge_nn{
 					let distance_squared={
 						let c=diff.cross(edge_n);
-						c.dot(c)/edge_n.dot(edge_n)
+						c.dot(c)/edge_nn
 					};
 					if distance_squared<=*best_distance_squared{
 						best_transition=Transition::Edge(directed_edge_id.as_undirected());
