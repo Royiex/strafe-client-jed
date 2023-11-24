@@ -580,17 +580,20 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 					let mut best_edge=None;
 					let mut best_d=Planar64::ZERO;
 					let edge_face1_n=self.mesh1.face_nd(edge_face_id1).0;
+					let edge_face1_nn=edge_face1_n.dot(edge_face1_n);
 					for &directed_edge_id0 in v0e.iter(){
 						let edge0_n=self.mesh0.directed_edge_n(directed_edge_id0);
+						let edge0_nn=edge0_n.dot(edge0_n);
 						let d=edge_face1_n.dot(edge0_n);
-						if d<best_d{
-							best_d=d;
+						let dd=d*d/(edge_face1_nn*edge0_nn);
+						if dd<best_d{
+							best_d=dd;
 							best_edge=Some(directed_edge_id0);
 						}
 					}
 					best_edge.map_or(
 						MinkowskiFace::VertFace(v0,edge_face_id1),
-						|directed_edge_id0|MinkowskiFace::EdgeEdge(directed_edge_id0.as_undirected(),e1,face_parity)
+						|directed_edge_id0|MinkowskiFace::EdgeEdge(directed_edge_id0.as_undirected(),e1,directed_edge_id0.parity()^face_parity)
 					)
 				}))
 			},
@@ -604,17 +607,20 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 					let mut best_edge=None;
 					let mut best_d=Planar64::ZERO;
 					let edge_face0_n=self.mesh0.face_nd(edge_face_id0).0;
+					let edge_face0_nn=edge_face0_n.dot(edge_face0_n);
 					for &directed_edge_id1 in v1e.iter(){
 						let edge1_n=self.mesh1.directed_edge_n(directed_edge_id1);
+						let edge1_nn=edge1_n.dot(edge1_n);
 						let d=edge_face0_n.dot(edge1_n);
-						if d<best_d{
-							best_d=d;
+						let dd=d*d/(edge_face0_nn*edge1_nn);
+						if dd<best_d{
+							best_d=dd;
 							best_edge=Some(directed_edge_id1);
 						}
 					}
 					best_edge.map_or(
 						MinkowskiFace::FaceVert(edge_face_id0,v1),
-						|directed_edge_id1|MinkowskiFace::EdgeEdge(e0,directed_edge_id1.as_undirected(),face_parity)
+						|directed_edge_id1|MinkowskiFace::EdgeEdge(e0,directed_edge_id1.as_undirected(),directed_edge_id1.parity()^face_parity)
 					)
 				}))
 			},
