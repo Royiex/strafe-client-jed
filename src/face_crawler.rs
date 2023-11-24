@@ -33,7 +33,7 @@ enum Transition<F,E:DirectedEdge,V>{
 					let edge_n=mesh.directed_edge_n(directed_edge_id);
 					let n=n.cross(edge_n);
 					let verts=mesh.edge_verts(directed_edge_id.as_undirected());
-					let d=n.dot(mesh.vert(verts[0]))+n.dot(mesh.vert(verts[1]));
+					let d=n.dot(mesh.vert(verts[0])+mesh.vert(verts[1]));
 					//WARNING: d is moved out of the *2 block because of adding two vertices!
 					for t in zeroes2(n.dot(body.position)*2-d,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
@@ -50,11 +50,12 @@ enum Transition<F,E:DirectedEdge,V>{
 				//test each face collision time, ignoring roots with zero or conflicting derivative
 				let edge_n=mesh.edge_n(edge_id);
 				let edge_verts=mesh.edge_verts(edge_id);
+				let vert_sum=mesh.vert(edge_verts[0])+mesh.vert(edge_verts[1]);
 				for (i,&edge_face_id) in mesh.edge_faces(edge_id).iter().enumerate(){
 					let face_n=mesh.face_nd(edge_face_id).0;
 					//edge_n gets parity from the order of edge_faces
 					let n=edge_n.cross(face_n)*((i as i64)*2-1);
-					let d=n.dot(mesh.vert(edge_verts[0]))+n.dot(mesh.vert(edge_verts[1]));
+					let d=n.dot(vert_sum);
 					//WARNING yada yada d *2
 					for t in zeroes2((n.dot(body.position))*2-d,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
