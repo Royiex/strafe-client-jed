@@ -460,6 +460,7 @@ impl MinkowskiMesh<'_>{
 					//edge-face boundary nd, n facing out of the face towards the edge
 					let boundary_n=face_n.cross(edge_n)*(i as i64*2-1);
 					let boundary_d=boundary_n.dot(vert_sum);
+					println!("dot={} boundary_n={} boundary_d={} point_d={}",infinity_dir.dot(boundary_n),boundary_n,boundary_d,point.dot(boundary_n)*2);
 					// point.dot(boundary_n) is multiplied by two because vert_sum sums two vertices.
 					if infinity_dir.dot(boundary_n)==Planar64::ZERO&&point.dot(boundary_n)*2<=boundary_d{
 						//both faces cannot pass this condition, return early if one does.
