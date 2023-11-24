@@ -1669,6 +1669,78 @@ fn test_collision_degenerate(){
 	),Some(Time::from_secs(2)));
 }
 #[test]
+fn test_collision_degenerate_east(){
+	test_collision(Body::new(
+		Planar64Vec3::int(3,5,0),
+		Planar64Vec3::int(0,-1,0),
+		Planar64Vec3::ZERO,
+		Time::ZERO
+	),Some(Time::from_secs(2)));
+}
+#[test]
+fn test_collision_degenerate_south(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,5,3),
+		Planar64Vec3::int(0,-1,0),
+		Planar64Vec3::ZERO,
+		Time::ZERO
+	),Some(Time::from_secs(2)));
+}
+#[test]
+fn test_collision_degenerate_west(){
+	test_collision(Body::new(
+		Planar64Vec3::int(-3,5,0),
+		Planar64Vec3::int(0,-1,0),
+		Planar64Vec3::ZERO,
+		Time::ZERO
+	),Some(Time::from_secs(2)));
+}
+#[test]
+fn test_collision_degenerate_north(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,5,-3),
+		Planar64Vec3::int(0,-1,0),
+		Planar64Vec3::ZERO,
+		Time::ZERO
+	),Some(Time::from_secs(2)));
+}
+#[test]
+fn test_collision_parabola_east(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(3,3,0),
+		Planar64Vec3::int(100,-1,0),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(2)));
+}
+#[test]
+fn test_collision_parabola_south(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(0,3,3),
+		Planar64Vec3::int(0,-1,100),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(2)));
+}
+#[test]
+fn test_collision_parabola_west(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(-3,3,0),
+		Planar64Vec3::int(-100,-1,0),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(2)));
+}
+#[test]
+fn test_collision_parabola_north(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(0,3,-3),
+		Planar64Vec3::int(0,-1,-100),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(2)));
+}
+#[test]
 fn test_collision_oblique(){
 	test_collision(Body::new(
 		Planar64Vec3::int(0,5,0),
@@ -1681,8 +1753,8 @@ fn test_collision_oblique(){
 fn zoom_hit_nothing(){
 	test_collision(Body::new(
 		Planar64Vec3::int(0,10,0),
-		Planar64Vec3::int(10,0,0),
-		Planar64Vec3::int(0,100,0),
+		Planar64Vec3::int(1,0,0),
+		Planar64Vec3::int(0,1,0),
 		Time::ZERO
 	),None);
 }
@@ -1690,8 +1762,8 @@ fn zoom_hit_nothing(){
 fn already_inside_hit_nothing(){
 	test_collision(Body::new(
 		Planar64Vec3::ZERO,
-		Planar64Vec3::int(10,0,0),
-		Planar64Vec3::int(0,100,0),
+		Planar64Vec3::int(1,0,0),
+		Planar64Vec3::int(0,1,0),
 		Time::ZERO
 	),None);
 }
