@@ -1650,37 +1650,37 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 }
 
 #[allow(dead_code)]
-fn hit_the_ground(relative_body:Body,expected_collision_time:Option<Time>){
-	let h0=Hitbox::from_mesh_scale_offset(PhysicsMesh::from(&crate::primitives::unit_cylinder()),Planar64Vec3::int(2,5,2)/2,Planar64Vec3::int(10,0,10));
+fn test_collision(relative_body:Body,expected_collision_time:Option<Time>){
+	let h0=Hitbox::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cylinder()),Planar64Vec3::int(5,1,5)/2);
 	let h1=Hitbox::roblox();
 	let hitbox_mesh=h1.transformed_mesh();
 	let platform_mesh=h0.transformed_mesh();
 	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
-	let collision=minkowski.predict_collision_in(&relative_body,Time::ONE_SECOND);
+	let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
 	assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
 }
 #[test]
-fn hit_the_ground_degenerate(){
-	hit_the_ground(Body::new(
-		Planar64Vec3::ONE*10,
-		Planar64Vec3::int(0,-10,0),
+fn test_collision_degenerate(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,5,0),
+		Planar64Vec3::int(0,-1,0),
 		Planar64Vec3::ZERO,
 		Time::ZERO
-	),Some(Time::ONE_SECOND/2));
+	),Some(Time::from_secs(2)));
 }
 #[test]
-fn hit_the_ground_oblique(){
-	hit_the_ground(Body::new(
-		Planar64Vec3::ONE*10,
-		Planar64Vec3::int(1,-160,2)/16,
+fn test_collision_oblique(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,5,0),
+		Planar64Vec3::int(1,-64,2)/64,
 		Planar64Vec3::ZERO,
 		Time::ZERO
-	),Some(Time::ONE_SECOND/2));
+	),Some(Time::from_secs(2)));
 }
 #[test]
 fn zoom_hit_nothing(){
-	hit_the_ground(Body::new(
-		Planar64Vec3::ONE*10,
+	test_collision(Body::new(
+		Planar64Vec3::int(0,10,0),
 		Planar64Vec3::int(10,0,0),
 		Planar64Vec3::int(0,100,0),
 		Time::ZERO
@@ -1688,8 +1688,8 @@ fn zoom_hit_nothing(){
 }
 #[test]
 fn already_inside_hit_nothing(){
-	hit_the_ground(Body::new(
-		Planar64Vec3::int(10,5,10),
+	test_collision(Body::new(
+		Planar64Vec3::ZERO,
 		Planar64Vec3::int(10,0,0),
 		Planar64Vec3::int(0,100,0),
 		Time::ZERO
