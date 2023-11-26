@@ -1477,6 +1477,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 							Some(crate::model::ContactingBehaviour::Ladder(contacting_ladder))=>{
 								if contacting_ladder.sticky{
 									//kill v
+									//actually you could do this with a booster attribute :thinking:
 									v=Planar64Vec3::ZERO;//model.velocity
 								}
 								//ladder walkstate
