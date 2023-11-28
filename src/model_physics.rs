@@ -645,17 +645,36 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 		match vert_id{
 			MinkowskiVert::VertVert(v0,v1)=>{
 				let mut edges=Vec::new();
+				//detect shared volume when the other mesh is mirrored along a test edge dir
+				let v0f=self.mesh0.vert_faces(v0);
 				let v1f=self.mesh1.vert_faces(v1);
+				let v0f_n:Vec<Planar64Vec3>=v0f.iter().map(|&face_id|self.mesh0.face_nd(face_id).0).collect();
+				let v1f_n:Vec<Planar64Vec3>=v1f.iter().map(|&face_id|self.mesh1.face_nd(face_id).0).collect();
+				let the_len=v0f.len()+v1f.len();
 				for &directed_edge_id in self.mesh0.vert_edges(v0).iter(){
 					let n=self.mesh0.directed_edge_n(directed_edge_id);
-					if v1f.iter().any(|&face_id|n.dot(self.mesh1.face_nd(face_id).0)<=Planar64::ZERO){
+					let nn=n.dot(n);
+					//make a set of faces
+					let mut face_normals=Vec::with_capacity(the_len);
+					//add mesh0 faces as-is
+					face_normals.clone_from(&v0f_n);
+					for face_n in &v1f_n{
+						//add reflected mesh1 faces
+						face_normals.push(*face_n-n*(face_n.dot(n)*2/nn));
+					}
+					if is_empty_volume(face_normals){
 						edges.push(MinkowskiDirectedEdge::EdgeVert(directed_edge_id,v1));
 					}
 				}
-				let v0f=self.mesh0.vert_faces(v0);
 				for &directed_edge_id in self.mesh1.vert_edges(v1).iter(){
 					let n=self.mesh1.directed_edge_n(directed_edge_id);
-					if v0f.iter().any(|&face_id|n.dot(self.mesh0.face_nd(face_id).0)<=Planar64::ZERO){
+					let nn=n.dot(n);
+					let mut face_normals=Vec::with_capacity(the_len);
+					face_normals.clone_from(&v1f_n);
+					for face_n in &v0f_n{
+						face_normals.push(*face_n-n*(face_n.dot(n)*2/nn));
+					}
+					if is_empty_volume(face_normals){
 						edges.push(MinkowskiDirectedEdge::VertEdge(v0,directed_edge_id));
 					}
 				}
@@ -666,6 +685,35 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 	fn vert_faces(&self,_vert_id:MinkowskiVert)->Cow<Vec<MinkowskiFace>>{
 		unimplemented!()
 	}
+}
+
+fn is_empty_volume(normals:Vec<Planar64Vec3>)->bool{
+	let len=normals.len();
+	for i in 0..len-1{
+		for j in i+1..len{
+			let n=normals[i].cross(normals[j]);
+			let mut d_comp=None;
+			for k in 0..len{
+				if k!=i&&k!=j{
+					let d=n.dot(normals[k]);
+					if let Some(comp)=&d_comp{
+						if *comp*d<Planar64::ZERO{
+							return true;
+						}
+					}else{
+						d_comp=Some(d);
+					}
+				}
+			}
+		}
+	}
+	return false;
+}
+
+#[test]
+fn test_is_empty_volume(){
+	assert!(!is_empty_volume([Planar64Vec3::X,Planar64Vec3::Y,Planar64Vec3::Z].to_vec()));
+	assert!(is_empty_volume([Planar64Vec3::X,Planar64Vec3::Y,Planar64Vec3::Z,Planar64Vec3::NEG_X].to_vec()));
 }
 
 #[test]
