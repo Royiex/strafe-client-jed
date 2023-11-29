@@ -559,9 +559,9 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 				//could sort this if ordered edges are needed
 				Cow::Owned(vec![
 					MinkowskiDirectedEdge::VertEdge(e0v[0],e1.as_directed(parity)),
-					MinkowskiDirectedEdge::EdgeVert(e0.as_directed(parity),e1v[0]),
+					MinkowskiDirectedEdge::EdgeVert(e0.as_directed(!parity),e1v[0]),
 					MinkowskiDirectedEdge::VertEdge(e0v[1],e1.as_directed(!parity)),
-					MinkowskiDirectedEdge::EdgeVert(e0.as_directed(!parity),e1v[1]),
+					MinkowskiDirectedEdge::EdgeVert(e0.as_directed(parity),e1v[1]),
 				])
 			},
 			MinkowskiFace::FaceVert(f0,v1)=>{
