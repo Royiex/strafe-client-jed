@@ -54,7 +54,7 @@ enum Transition<F,E:DirectedEdge,V>{
 				for (i,&edge_face_id) in mesh.edge_faces(edge_id).iter().enumerate(){
 					let face_n=mesh.face_nd(edge_face_id).0;
 					//edge_n gets parity from the order of edge_faces
-					let n=edge_n.cross(face_n)*((i as i64)*2-1);
+					let n=face_n.cross(edge_n)*((i as i64)*2-1);
 					let d=n.dot(vert_sum);
 					//WARNING yada yada d *2
 					for t in zeroes2((n.dot(body.position))*2-d,n.dot(body.velocity)*2,n.dot(body.acceleration)){
