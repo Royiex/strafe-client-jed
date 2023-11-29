@@ -95,8 +95,8 @@ struct VertRefGuy{
 	faces:std::collections::HashSet<FaceId>,
 }
 #[derive(Clone,Hash,Eq,PartialEq)]
-struct EdgeIdGuy([VertId;2]);
-impl EdgeIdGuy{
+struct EdgeRefVerts([VertId;2]);
+impl EdgeRefVerts{
 	fn new(v0:VertId,v1:VertId)->(Self,bool){
 		(if v0.0<v1.0{
 			Self([v0,v1])
@@ -105,8 +105,8 @@ impl EdgeIdGuy{
 		},v0.0<v1.0)
 	}
 }
-struct EdgeRefGuy([FaceId;2]);
-impl EdgeRefGuy{
+struct EdgeRefFaces([FaceId;2]);
+impl EdgeRefFaces{
 	fn new()->Self{
 		Self([FaceId(0);2])
 	}
@@ -114,20 +114,20 @@ impl EdgeRefGuy{
 		self.0[i]=face_id;
 	}
 }
-struct FaceRefGuy(Vec<DirectedEdgeId>);
+struct FaceRefEdges(Vec<DirectedEdgeId>);
 #[derive(Default)]
 struct EdgePool{
-	edge_guys:Vec<(EdgeIdGuy,EdgeRefGuy)>,
-	edge_id_from_guy:std::collections::HashMap<EdgeIdGuy,usize>,
+	edge_guys:Vec<(EdgeRefVerts,EdgeRefFaces)>,
+	edge_id_from_guy:std::collections::HashMap<EdgeRefVerts,usize>,
 }
 impl EdgePool{
-	fn push(&mut self,edge_id_guy:EdgeIdGuy)->(&mut EdgeRefGuy,EdgeId){
-		let edge_id=if let Some(&edge_id)=self.edge_id_from_guy.get(&edge_id_guy){
+	fn push(&mut self,edge_ref_verts:EdgeRefVerts)->(&mut EdgeRefFaces,EdgeId){
+		let edge_id=if let Some(&edge_id)=self.edge_id_from_guy.get(&edge_ref_verts){
 			edge_id
 		}else{
 			let edge_id=self.edge_guys.len();
-			self.edge_guys.push((edge_id_guy.clone(),EdgeRefGuy::new()));
-			self.edge_id_from_guy.insert(edge_id_guy,edge_id);
+			self.edge_guys.push((edge_ref_verts.clone(),EdgeRefFaces::new()));
+			self.edge_id_from_guy.insert(edge_ref_verts,edge_id);
 			edge_id
 		};
 		(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,EdgeId(edge_id))
@@ -159,11 +159,11 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 					(v0.x()-v1.x())*(v0.y()+v1.y()),
 				);
 				//get/create edge and push face into it
-				let (edge_id_guy,is_sorted)=EdgeIdGuy::new(VertId(vert0_id),VertId(vert1_id));
-				let (edge_ref_guy,edge_id)=edge_pool.push(edge_id_guy);
+				let (edge_ref_verts,is_sorted)=EdgeRefVerts::new(VertId(vert0_id),VertId(vert1_id));
+				let (edge_ref_faces,edge_id)=edge_pool.push(edge_ref_verts);
 				//polygon vertices as assumed to be listed clockwise
 				//populate the edge face on the left or right depending on how the edge vertices got sorted
-				edge_ref_guy.push(is_sorted as usize,face_id);
+				edge_ref_faces.push(is_sorted as usize,face_id);
 				//index edges & face into vertices
 				{
 					let vert_ref_guy=unsafe{vert_ref_guys.get_unchecked_mut(vert0_id)};
@@ -181,7 +181,7 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 				dot+=normal.dot(indexed_model.unique_pos[indexed_model.unique_vertices[v as usize].pos as usize]);
 			}
 			faces.push(Face{normal,dot:dot/len as i64});
-			face_ref_guys.push(FaceRefGuy(face_edges));
+			face_ref_guys.push(FaceRefEdges(face_edges));
 			face_i+=1;
 		}}
 		//conceivably faces, edges, and vertices exist now
@@ -191,8 +191,8 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 			face_topology:face_ref_guys.into_iter().map(|face_ref_guy|{
 				FaceRefs{edges:face_ref_guy.0}
 			}).collect(),
-			edge_topology:edge_pool.edge_guys.into_iter().map(|(edge_id_guy,edge_ref_guy)|
-				EdgeRefs{faces:edge_ref_guy.0,verts:edge_id_guy.0}
+			edge_topology:edge_pool.edge_guys.into_iter().map(|(edge_ref_verts,edge_ref_faces)|
+				EdgeRefs{faces:edge_ref_faces.0,verts:edge_ref_verts.0}
 			).collect(),
 			vert_topology:vert_ref_guys.into_iter().map(|vert_ref_guy|
 				VertRefs{
