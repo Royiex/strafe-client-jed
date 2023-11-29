@@ -163,7 +163,7 @@ impl From<&crate::model::IndexedModel> for PhysicsMesh{
 				let (edge_ref_faces,edge_id)=edge_pool.push(edge_ref_verts);
 				//polygon vertices as assumed to be listed clockwise
 				//populate the edge face on the left or right depending on how the edge vertices got sorted
-				edge_ref_faces.push(is_sorted as usize,face_id);
+				edge_ref_faces.push(!is_sorted as usize,face_id);
 				//index edges & face into vertices
 				{
 					let vert_ref_guy=unsafe{vert_ref_guys.get_unchecked_mut(vert0_id)};
@@ -579,7 +579,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 				let &[e1f0,e1f1]=self.mesh1.edge_faces(e1).borrow();
 				let e1f0_n=self.mesh0.face_nd(e1f0).0;
 				let e1f1_n=self.mesh0.face_nd(e1f1).0;
-				Cow::Owned([(e1f1,e1f1_n,e1f0_n,false),(e1f0,e1f0_n,e1f1_n,true)].map(|(edge_face_id1,edge_face1_n,edge_other_face1_n,face_parity)|{
+				Cow::Owned([(e1f1,e1f1_n,e1f0_n,true),(e1f0,e1f0_n,e1f1_n,false)].map(|(edge_face_id1,edge_face1_n,edge_other_face1_n,face_parity)|{
 					let mut best_edge=None;
 					let mut best_d=Planar64::MAX;
 					let edge_face1_nn=edge_face1_n.dot(edge_face1_n);
@@ -608,7 +608,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 				let &[e0f0,e0f1]=self.mesh0.edge_faces(e0).borrow();
 				let e0f0_n=self.mesh0.face_nd(e0f0).0;
 				let e0f1_n=self.mesh0.face_nd(e0f1).0;
-				Cow::Owned([(e0f0,e0f0_n,e0f1_n,false),(e0f1,e0f1_n,e0f0_n,true)].map(|(edge_face_id0,edge_face0_n,edge_other_face0_n,face_parity)|{
+				Cow::Owned([(e0f0,e0f0_n,e0f1_n,true),(e0f1,e0f1_n,e0f0_n,false)].map(|(edge_face_id0,edge_face0_n,edge_other_face0_n,face_parity)|{
 					let mut best_edge=None;
 					let mut best_d=Planar64::MAX;
 					let edge_face0_nn=edge_face0_n.dot(edge_face0_n);
