@@ -1281,7 +1281,10 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 			//no checks are needed because of the time limits.
 			let model_mesh=self.models.mesh(id);
 			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
-			collector.collect(minkowski.predict_collision_in(&relative_body,collector.time()).map(|(face,time)|{
+			collector.collect(minkowski.predict_collision_in(&relative_body,collector.time())
+				//temp (?) code to avoid collision loops
+				.map_or(None,|(face,time)|if time==self.time{None}else{Some((face,time))})
+				.map(|(face,time)|{
 				TimedInstruction{time,instruction:PhysicsInstruction::CollisionStart(match self.models.attr(id){
 					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>Collision::Contact(ContactCollision{model_id:id,face_id:face}),
 					PhysicsCollisionAttributes::Intersect{intersecting:_,general:_}=>Collision::Intersect(IntersectCollision{model_id:id}),
