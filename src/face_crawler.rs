@@ -108,12 +108,14 @@ pub enum CrawlResult<F,E:DirectedEdge,V>{
 }
 pub fn crawl_fev<F:Copy,E:Copy+DirectedEdge,V:Copy>(mut fev:FEV<F,E,V>,mesh:&impl MeshQuery<F,E,V>,relative_body:&Body,start_time:Time,time_limit:Time)->CrawlResult<F,E,V>{	
 	let mut time=start_time;
-	for _ in 0..10{
+	for _ in 0..20{
 		match next_transition(&fev,time,mesh,relative_body,time_limit){
 			Transition::Miss=>return CrawlResult::Miss(fev),
 			Transition::Next(next_fev,next_time)=>(fev,time)=(next_fev,next_time),
 			Transition::Hit(face,time)=>return CrawlResult::Hit(face,time),
 		}
 	}
-	panic!("Too many iterations!");
+	//TODO: fix all bugs
+	println!("Too many iterations!  Using default behaviour instead of crashing...");
+	CrawlResult::Miss(fev)
 }
