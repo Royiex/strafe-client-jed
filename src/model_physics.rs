@@ -557,6 +557,7 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 				let e0v=self.mesh0.edge_verts(e0);
 				let e1v=self.mesh1.edge_verts(e1);
 				//could sort this if ordered edges are needed
+				//probably just need to reverse this list according to parity
 				Cow::Owned(vec![
 					MinkowskiDirectedEdge::VertEdge(e0v[0],e1.as_directed(parity)),
 					MinkowskiDirectedEdge::EdgeVert(e0.as_directed(!parity),e1v[0]),
