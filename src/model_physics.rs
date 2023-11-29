@@ -360,7 +360,6 @@ pub struct MinkowskiMesh<'a>{
 enum Transition{
 	Done,//found closest vert, no edges are better
 	Vert(MinkowskiVert),//transition to vert
-	Edge(MinkowskiEdge),//transition to edge, algorithm finished
 }
 enum EV{
 	Vert(MinkowskiVert),
@@ -377,7 +376,7 @@ impl MinkowskiMesh<'_>{
 	fn farthest_vert(&self,dir:Planar64Vec3)->MinkowskiVert{
 		MinkowskiVert::VertVert(self.mesh0.farthest_vert(dir),self.mesh1.farthest_vert(-dir))
 	}
-	fn next_transition(&self,vert_id:MinkowskiVert,best_distance_squared:&mut Planar64,infinity_dir:Planar64Vec3,point:Planar64Vec3)->Transition{
+	fn next_transition_vert(&self,vert_id:MinkowskiVert,best_distance_squared:&mut Planar64,infinity_dir:Planar64Vec3,point:Planar64Vec3)->Transition{
 		let mut best_transition=Transition::Done;
 		for &directed_edge_id in self.vert_edges(vert_id).iter(){
 			let edge_n=self.directed_edge_n(directed_edge_id);
@@ -388,15 +387,24 @@ impl MinkowskiMesh<'_>{
 				let test_vert_id=edge_verts[directed_edge_id.parity() as usize];
 				//test if it's closer
 				let diff=point-self.vert(test_vert_id);
-				{
-					let distance_squared=diff.dot(diff);
-					if distance_squared<*best_distance_squared{
-						best_transition=Transition::Vert(test_vert_id);
-						*best_distance_squared=distance_squared;
-					}
+				let distance_squared=diff.dot(diff);
+				if distance_squared<*best_distance_squared{
+					best_transition=Transition::Vert(test_vert_id);
+					*best_distance_squared=distance_squared;
 				}
-				//test the edge. negative because this is from the opposite vert's perspective.
-				let d=-diff.dot(edge_n);
+			}
+		}
+		best_transition
+	}
+	fn final_ev(&self,vert_id:MinkowskiVert,best_distance_squared:&mut Planar64,infinity_dir:Planar64Vec3,point:Planar64Vec3)->EV{
+		let mut best_transition=EV::Vert(vert_id);
+		let diff=point-self.vert(vert_id);
+		for &directed_edge_id in self.vert_edges(vert_id).iter(){
+			let edge_n=self.directed_edge_n(directed_edge_id);
+			//is boundary uncrossable by a crawl from infinity
+			if infinity_dir.dot(edge_n)==Planar64::ZERO{
+				//test the edge
+				let d=diff.dot(edge_n);
 				let edge_nn=edge_n.dot(edge_n);
 				if Planar64::ZERO<=d&&d<=edge_nn{
 					let distance_squared={
@@ -404,7 +412,7 @@ impl MinkowskiMesh<'_>{
 						c.dot(c)/edge_nn
 					};
 					if distance_squared<=*best_distance_squared{
-						best_transition=Transition::Edge(directed_edge_id.as_undirected());
+						best_transition=EV::Edge(directed_edge_id.as_undirected());
 						*best_distance_squared=distance_squared;
 					}
 				}
@@ -418,10 +426,9 @@ impl MinkowskiMesh<'_>{
 			diff.dot(diff)
 		};
 		loop{
-			match self.next_transition(vert_id,&mut best_distance_squared,infinity_dir,point){
-				Transition::Done=>return EV::Vert(vert_id),
+			match self.next_transition_vert(vert_id,&mut best_distance_squared,infinity_dir,point){
+				Transition::Done=>return self.final_ev(vert_id,&mut best_distance_squared,infinity_dir,point),
 				Transition::Vert(new_vert_id)=>vert_id=new_vert_id,
-				Transition::Edge(edge_id)=>return EV::Edge(edge_id),
 			}
 		}
 	}
