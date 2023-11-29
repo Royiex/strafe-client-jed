@@ -450,6 +450,20 @@ impl MinkowskiMesh<'_>{
 			EV::Vert(vert_id)=>FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(vert_id),
 			EV::Edge(edge_id)=>{
 				println!("fix edge edge_id={:?}",edge_id);
+				match edge_id{
+					MinkowskiEdge::VertEdge(v0,e1)=>{
+						println!("v0={}",self.mesh0.vert(v0));
+						for face_id1 in self.mesh1.edge_faces(e1).iter(){
+							println!("e1 face_n={}",self.mesh1.face_nd(*face_id1).0);
+						}
+					},
+					MinkowskiEdge::EdgeVert(e0,v1)=>{
+						println!("v1={}",self.mesh1.vert(v1));
+						for face_id0 in self.mesh0.edge_faces(e0).iter(){
+							println!("e0 face_n={}",self.mesh0.face_nd(*face_id0).0);
+						}
+					},
+				}
 				//cross to face if the boundary is not crossable and we are on the wrong side
 				let edge_n=self.edge_n(edge_id);
 				println!("edge_n={}",edge_n);
