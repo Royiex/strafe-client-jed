@@ -575,21 +575,25 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 		match edge_id{
 			MinkowskiEdge::VertEdge(v0,e1)=>{
 				//faces are listed backwards from the minkowski mesh
-				let e1f=self.mesh1.edge_faces(e1);
 				let v0e=self.mesh0.vert_edges(v0);
-				Cow::Owned([(e1f[1],false),(e1f[0],true)].map(|(edge_face_id1,face_parity)|{
+				let &[e1f0,e1f1]=self.mesh1.edge_faces(e1).borrow();
+				let e1f0_n=self.mesh0.face_nd(e1f0).0;
+				let e1f1_n=self.mesh0.face_nd(e1f1).0;
+				Cow::Owned([(e1f1,e1f1_n,e1f0_n,false),(e1f0,e1f0_n,e1f1_n,true)].map(|(edge_face_id1,edge_face1_n,edge_other_face1_n,face_parity)|{
 					let mut best_edge=None;
-					let mut best_d=Planar64::ZERO;
-					let edge_face1_n=self.mesh1.face_nd(edge_face_id1).0;
+					let mut best_d=Planar64::MAX;
 					let edge_face1_nn=edge_face1_n.dot(edge_face1_n);
 					for &directed_edge_id0 in v0e.iter(){
 						let edge0_n=self.mesh0.directed_edge_n(directed_edge_id0);
-						let edge0_nn=edge0_n.dot(edge0_n);
-						let d=edge_face1_n.dot(edge0_n);
-						let dd=d*d/(edge_face1_nn*edge0_nn);
-						if dd<best_d{
-							best_d=dd;
-							best_edge=Some(directed_edge_id0);
+						//must be behind other face.
+						if edge_other_face1_n.dot(edge0_n)<Planar64::ZERO{
+							let edge0_nn=edge0_n.dot(edge0_n);
+							let d=edge_face1_n.dot(edge0_n);
+							let dd=d*d/(edge_face1_nn*edge0_nn);
+							if dd<best_d{
+								best_d=dd;
+								best_edge=Some(directed_edge_id0);
+							}
 						}
 					}
 					best_edge.map_or(
@@ -600,23 +604,24 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 			},
 			MinkowskiEdge::EdgeVert(e0,v1)=>{
 				//tracking index with an external variable because .enumerate() is not available
-				let mut i=0;
 				let v1e=self.mesh1.vert_edges(v1);
-				Cow::Owned(self.mesh0.edge_faces(e0).map(|edge_face_id0|{
-					let face_parity=i==0;//always two edge faces
-					i+=1;
+				let &[e0f0,e0f1]=self.mesh0.edge_faces(e0).borrow();
+				let e0f0_n=self.mesh0.face_nd(e0f0).0;
+				let e0f1_n=self.mesh0.face_nd(e0f1).0;
+				Cow::Owned([(e0f0,e0f0_n,e0f1_n,false),(e0f1,e0f1_n,e0f0_n,true)].map(|(edge_face_id0,edge_face0_n,edge_other_face0_n,face_parity)|{
 					let mut best_edge=None;
-					let mut best_d=Planar64::ZERO;
-					let edge_face0_n=self.mesh0.face_nd(edge_face_id0).0;
+					let mut best_d=Planar64::MAX;
 					let edge_face0_nn=edge_face0_n.dot(edge_face0_n);
 					for &directed_edge_id1 in v1e.iter(){
 						let edge1_n=self.mesh1.directed_edge_n(directed_edge_id1);
-						let edge1_nn=edge1_n.dot(edge1_n);
-						let d=edge_face0_n.dot(edge1_n);
-						let dd=d*d/(edge_face0_nn*edge1_nn);
-						if dd<best_d{
-							best_d=dd;
-							best_edge=Some(directed_edge_id1);
+						if edge_other_face0_n.dot(edge1_n)<Planar64::ZERO{
+							let edge1_nn=edge1_n.dot(edge1_n);
+							let d=edge_face0_n.dot(edge1_n);
+							let dd=d*d/(edge_face0_nn*edge1_nn);
+							if dd<best_d{
+								best_d=dd;
+								best_edge=Some(directed_edge_id1);
+							}
 						}
 					}
 					best_edge.map_or(
