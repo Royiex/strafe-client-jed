@@ -580,18 +580,18 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 				let &[e1f0,e1f1]=self.mesh1.edge_faces(e1).borrow();
 				let e1f0_n=self.mesh0.face_nd(e1f0).0;
 				let e1f1_n=self.mesh0.face_nd(e1f1).0;
-				Cow::Owned([(e1f1,e1f1_n,e1f0_n,true),(e1f0,e1f0_n,e1f1_n,false)].map(|(edge_face_id1,behind_n,sort_n,face_parity)|{
+				Cow::Owned([(e1f1,e1f1_n,true),(e1f0,e1f0_n,false)].map(|(edge_face_id1,edge_face_n,face_parity)|{
 					let mut best_edge=None;
-					let mut best_d=Planar64::MAX;
-					let sort_nn=sort_n.dot(sort_n);
+					let mut best_d=Planar64::ZERO;
+					let edge_face_nn=edge_face_n.dot(edge_face_n);
 					for &directed_edge_id0 in v0e.iter(){
 						let edge0_n=self.mesh0.directed_edge_n(directed_edge_id0);
 						//must be behind other face.
-						if behind_n.dot(edge0_n)<Planar64::ZERO{
+						let d=edge_face_n.dot(edge0_n);
+						if d<Planar64::ZERO{
 							let edge0_nn=edge0_n.dot(edge0_n);
-							let d=sort_n.dot(edge0_n);
-							let dd=d*d/(sort_nn*edge0_nn);
-							if dd<best_d{
+							let dd=d*d/(edge_face_nn*edge0_nn);
+							if best_d<dd{
 								best_d=dd;
 								best_edge=Some(directed_edge_id0);
 							}
@@ -609,17 +609,17 @@ impl MeshQuery<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert> for MinkowskiM
 				let &[e0f0,e0f1]=self.mesh0.edge_faces(e0).borrow();
 				let e0f0_n=self.mesh0.face_nd(e0f0).0;
 				let e0f1_n=self.mesh0.face_nd(e0f1).0;
-				Cow::Owned([(e0f0,e0f0_n,e0f1_n,true),(e0f1,e0f1_n,e0f0_n,false)].map(|(edge_face_id0,behind_n,sort_n,face_parity)|{
+				Cow::Owned([(e0f0,e0f0_n,true),(e0f1,e0f1_n,false)].map(|(edge_face_id0,edge_face_n,face_parity)|{
 					let mut best_edge=None;
-					let mut best_d=Planar64::MAX;
-					let sort_nn=sort_n.dot(sort_n);
+					let mut best_d=Planar64::ZERO;
+					let edge_face_nn=edge_face_n.dot(edge_face_n);
 					for &directed_edge_id1 in v1e.iter(){
 						let edge1_n=self.mesh1.directed_edge_n(directed_edge_id1);
-						if behind_n.dot(edge1_n)<Planar64::ZERO{
+						let d=edge_face_n.dot(edge1_n);
+						if d<Planar64::ZERO{
 							let edge1_nn=edge1_n.dot(edge1_n);
-							let d=sort_n.dot(edge1_n);
-							let dd=d*d/(sort_nn*edge1_nn);
-							if dd<best_d{
+							let dd=d*d/(edge_face_nn*edge1_nn);
+							if best_d<dd{
 								best_d=dd;
 								best_edge=Some(directed_edge_id1);
 							}
