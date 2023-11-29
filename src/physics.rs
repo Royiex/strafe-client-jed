@@ -1706,7 +1706,7 @@ fn test_collision_degenerate_north(){
 	),Some(Time::from_secs(2)));
 }
 #[test]
-fn test_collision_parabola_east(){
+fn test_collision_parabola_edge_east_from_west(){
 	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
 		Planar64Vec3::int(3,3,0),
 		Planar64Vec3::int(100,-1,0),
@@ -1715,7 +1715,7 @@ fn test_collision_parabola_east(){
 	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
 }
 #[test]
-fn test_collision_parabola_south(){
+fn test_collision_parabola_edge_south_from_north(){
 	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
 		Planar64Vec3::int(0,3,3),
 		Planar64Vec3::int(0,-1,100),
@@ -1724,7 +1724,7 @@ fn test_collision_parabola_south(){
 	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
 }
 #[test]
-fn test_collision_parabola_west(){
+fn test_collision_parabola_edge_west_from_east(){
 	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
 		Planar64Vec3::int(-3,3,0),
 		Planar64Vec3::int(-100,-1,0),
@@ -1733,10 +1733,82 @@ fn test_collision_parabola_west(){
 	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
 }
 #[test]
-fn test_collision_parabola_north(){
+fn test_collision_parabola_edge_north_from_south(){
 	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
 		Planar64Vec3::int(0,3,-3),
 		Planar64Vec3::int(0,-1,-100),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_north_from_ne(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(0,6,-7)/2,
+		Planar64Vec3::int(-10,-1,1),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_north_from_nw(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(0,6,-7)/2,
+		Planar64Vec3::int(10,-1,1),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_east_from_se(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(7,6,0)/2,
+		Planar64Vec3::int(-1,-1,-10),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_east_from_ne(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(7,6,0)/2,
+		Planar64Vec3::int(-1,-1,10),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_south_from_se(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(0,6,7)/2,
+		Planar64Vec3::int(-10,-1,-1),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_south_from_sw(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(0,6,7)/2,
+		Planar64Vec3::int(10,-1,-1),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_west_from_se(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(-7,6,0)/2,
+		Planar64Vec3::int(1,-1,-10),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_west_from_ne(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(-7,6,0)/2,
+		Planar64Vec3::int(1,-1,10),
 		Planar64Vec3::int(0,-1,0),
 		Time::ZERO
 	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
