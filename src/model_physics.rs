@@ -449,8 +449,10 @@ impl MinkowskiMesh<'_>{
 			//if a vert is returned, it is the closest point to the infinity point
 			EV::Vert(vert_id)=>FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Vert(vert_id),
 			EV::Edge(edge_id)=>{
+				println!("fix edge edge_id={:?}",edge_id);
 				//cross to face if the boundary is not crossable and we are on the wrong side
 				let edge_n=self.edge_n(edge_id);
+				println!("edge_n={}",edge_n);
 				let vert_sum={
 					let &[v0,v1]=self.edge_verts(edge_id).borrow();
 					self.vert(v0)+self.vert(v1)
