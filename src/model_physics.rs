@@ -441,6 +441,7 @@ impl MinkowskiMesh<'_>{
 	}
 	/// This function drops a vertex down to an edge or a face if the path from infinity did not cross any vertex-edge boundaries but the point is supposed to have already crossed a boundary down from a vertex
 	fn infinity_fev(&self,infinity_dir:Planar64Vec3,point:Planar64Vec3)->FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>{
+		println!("infinity_fev dir={} point={}",infinity_dir,point);
 		//start on any vertex
 		//cross uncrossable vertex-edge boundaries until you find the closest vertex or edge
 		//cross edge-face boundary if it's uncrossable

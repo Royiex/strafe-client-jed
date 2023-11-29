@@ -39,7 +39,7 @@ where <E as DirectedEdge>::UndirectedEdge:std::fmt::Debug{
 					let n=n.cross(edge_n);
 					let verts=mesh.edge_verts(directed_edge_id.as_undirected());
 					let d=n.dot(mesh.vert(verts[0])+mesh.vert(verts[1]));
-					println!("Face Edge n={} d={}",n,d/2);
+					println!("Face Edge boundary_n={} boundary_d={}",n,d/2);
 					//WARNING: d is moved out of the *2 block because of adding two vertices!
 					for t in zeroes2(n.dot(body.position)*2-d,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
@@ -63,7 +63,7 @@ where <E as DirectedEdge>::UndirectedEdge:std::fmt::Debug{
 					//edge_n gets parity from the order of edge_faces
 					let n=face_n.cross(edge_n)*((i as i64)*2-1);
 					let d=n.dot(vert_sum);
-					println!("Edge Face={:?} n={} d={}",edge_face_id,n,d/2);
+					println!("Edge Face={:?} boundary_n={} boundary_d={}",edge_face_id,n,d/2);
 					//WARNING yada yada d *2
 					for t in zeroes2((n.dot(body.position))*2-d,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
@@ -80,7 +80,7 @@ where <E as DirectedEdge>::UndirectedEdge:std::fmt::Debug{
 					//vertex normal gets parity from vert index
 					let n=edge_n*(1-2*(i as i64));
 					let d=n.dot(mesh.vert(vert_id));
-					println!("Edge Vert n={} d={}",n,d);
+					println!("Edge Vert boundary_n={} boundary_d={}",n,d);
 					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
 						println!("dt={} low={} upp={} into={}",t-body.time,time<=t,t<best_time,n.dot(body.extrapolated_velocity(t))<Planar64::ZERO);
@@ -99,7 +99,7 @@ where <E as DirectedEdge>::UndirectedEdge:std::fmt::Debug{
 					//edge is directed away from vertex, but we want the dot product to turn out negative
 					let n=-mesh.directed_edge_n(directed_edge_id);
 					let d=n.dot(mesh.vert(vert_id));
-					println!("Vert Edge={:?} n={} d={}",directed_edge_id,n,d);
+					println!("Vert Edge={:?} boundary_n={} boundary_d={}",directed_edge_id,n,d);
 					for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 						let t=body.time+Time::from(t);
 						println!("dt={} low={} upp={} into={}",t-body.time,time<=t,t<best_time,n.dot(body.extrapolated_velocity(t))<Planar64::ZERO);
