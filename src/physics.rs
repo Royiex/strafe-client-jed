@@ -345,6 +345,20 @@ struct Hitbox{
 	normal_transform:Planar64Mat3,
 }
 impl Hitbox{
+	fn new(mesh:PhysicsMesh,transform:crate::integer::Planar64Affine3)->Self{
+		//calculate extents
+		let normal_transform=transform.matrix3.inverse().transpose();
+		let mut aabb=crate::aabb::Aabb::default();
+		for vert in mesh.verts(){
+			aabb.grow(transform.transform_point3(vert));
+		}
+		Self{
+			halfsize:aabb.size()/2,
+			mesh,
+			transform,
+			normal_transform,
+		}
+	}
 	fn from_mesh_scale(mesh:PhysicsMesh,scale:Planar64Vec3)->Self{
 		Self{
 			halfsize:scale,
@@ -1654,14 +1668,38 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 }
 
 #[allow(dead_code)]
-fn test_collision(relative_body:Body,expected_collision_time:Option<Time>){
-	let h0=Hitbox::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cylinder()),Planar64Vec3::int(5,1,5)/2);
+fn test_collision_axis_aligned(relative_body:Body,expected_collision_time:Option<Time>){
+	let h0=Hitbox::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cube()),Planar64Vec3::int(5,1,5)/2);
 	let h1=Hitbox::roblox();
 	let hitbox_mesh=h1.transformed_mesh();
 	let platform_mesh=h0.transformed_mesh();
 	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
 	let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
 	assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
+}
+#[allow(dead_code)]
+fn test_collision_rotated(relative_body:Body,expected_collision_time:Option<Time>){
+	let h0=Hitbox::new(PhysicsMesh::from(&crate::primitives::unit_cube()),
+		crate::integer::Planar64Affine3::new(
+			crate::integer::Planar64Mat3::from_cols(
+				Planar64Vec3::int(5,0,1)/2,
+				Planar64Vec3::int(0,1,0)/2,
+				Planar64Vec3::int(-1,0,5)/2,
+			),
+			Planar64Vec3::ZERO,
+		)
+	);
+	let h1=Hitbox::roblox();
+	let hitbox_mesh=h1.transformed_mesh();
+	let platform_mesh=h0.transformed_mesh();
+	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
+	let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
+	assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
+}
+#[allow(dead_code)]
+fn test_collision(relative_body:Body,expected_collision_time:Option<Time>){
+	test_collision_axis_aligned(relative_body.clone(),expected_collision_time);
+	test_collision_rotated(relative_body,expected_collision_time);
 }
 #[test]
 fn test_collision_degenerate(){
