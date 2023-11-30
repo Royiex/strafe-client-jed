@@ -1,7 +1,9 @@
 //integer units
-#[derive(Clone,Copy,Hash,PartialEq,PartialOrd,Debug)]
+#[derive(Clone,Copy,Hash,Eq,PartialEq,PartialOrd,Debug)]
 pub struct Time(i64);
 impl Time{
+	pub const MIN:Self=Self(i64::MIN);
+	pub const MAX:Self=Self(i64::MAX);
 	pub const ZERO:Self=Self(0);
 	pub const ONE_SECOND:Self=Self(1_000_000_000);
 	pub const ONE_MILLISECOND:Self=Self(1_000_000);
@@ -414,6 +416,8 @@ pub struct Planar64(i64);
 impl Planar64{
 	pub const ZERO:Self=Self(0);
 	pub const ONE:Self=Self(1<<32);
+	pub const MAX:Self=Self(i64::MAX);
+	pub const MIN:Self=Self(i64::MIN);
 	#[inline]
 	pub const fn int(num:i32)->Self{
 		Self(Self::ONE.0*num as i64)
@@ -426,8 +430,13 @@ impl Planar64{
 	pub const fn get(&self)->i64{
 		self.0
 	}
+	#[inline]
 	pub fn sqrt(&self)->Self{
 		Planar64(unsafe{(((self.0 as i128)<<32) as f64).sqrt().to_int_unchecked()})
+	}
+	#[inline]
+	pub const fn signum_i64(&self)->i64{
+		((self.0&(1<<63)!=0) as i64)*2-1
 	}
 }
 const PLANAR64_ONE_FLOAT32:f32=(1u64<<32) as f32;
@@ -518,6 +527,12 @@ impl std::ops::Add<Planar64> for Planar64{
 		Planar64(self.0+rhs.0)
 	}
 }
+impl std::ops::AddAssign<Planar64> for Planar64{
+	#[inline]
+	fn add_assign(&mut self,rhs:Self){
+		*self=*self+rhs;
+	}
+}
 impl std::ops::Sub<Planar64> for Planar64{
 	type Output=Planar64;
 	#[inline]
@@ -582,6 +597,10 @@ impl Planar64Vec3{
 	pub const MIN:Self=Planar64Vec3(glam::I64Vec3::MIN);
 	pub const MAX:Self=Planar64Vec3(glam::I64Vec3::MAX);
 	#[inline]
+	pub const fn new(x:Planar64,y:Planar64,z:Planar64)->Self{
+		Self(glam::i64vec3(x.0,y.0,z.0))
+	}
+	#[inline]
 	pub const fn int(x:i32,y:i32,z:i32)->Self{
 		Self(glam::i64vec3((x as i64)<<32,(y as i64)<<32,(z as i64)<<32))
 	}
@@ -632,6 +651,26 @@ impl Planar64Vec3{
 			(self.0.y as i128)*(rhs.0.y as i128)+
 			(self.0.z as i128)*(rhs.0.z as i128)
 		)>>32) as i64)
+	}
+	#[inline]
+	pub fn dot128(&self,rhs:Self)->i128{
+		(self.0.x as i128)*(rhs.0.x as i128)+
+		(self.0.y as i128)*(rhs.0.y as i128)+
+		(self.0.z as i128)*(rhs.0.z as i128)
+	}
+	#[inline]
+	pub fn cross(&self,rhs:Self)->Planar64Vec3{
+		Planar64Vec3(glam::i64vec3(
+			(((self.0.y as i128)*(rhs.0.z as i128)-(self.0.z as i128)*(rhs.0.y as i128))>>32) as i64,
+			(((self.0.z as i128)*(rhs.0.x as i128)-(self.0.x as i128)*(rhs.0.z as i128))>>32) as i64,
+			(((self.0.x as i128)*(rhs.0.y as i128)-(self.0.y as i128)*(rhs.0.x as i128))>>32) as i64,
+		))
+	}
+	#[inline]
+	pub fn walkable(&self,slope:Planar64,up:Self)->bool{
+		let y=self.dot(up);
+		let x=self.cross(up).length();
+		x*slope<y
 	}
 	#[inline]
 	pub fn length(&self)->Planar64{
@@ -781,7 +820,7 @@ impl std::ops::Div<i64> for Planar64Vec3{
 }
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Hash,Eq,PartialEq)]
 pub struct Planar64Mat3{
 	x_axis:Planar64Vec3,
 	y_axis:Planar64Vec3,
@@ -797,16 +836,6 @@ impl Default for Planar64Mat3{
 		}
 	}
 }
-impl std::ops::Mul<Planar64Vec3> for Planar64Mat3{
-	type Output=Planar64Vec3;
-	#[inline]
-	fn mul(self,rhs:Planar64Vec3) -> Self::Output {
-		self.x_axis*rhs.x()
-		+self.y_axis*rhs.y()
-		+self.z_axis*rhs.z()
-	}
-}
-
 impl Planar64Mat3{
 	#[inline]
 	pub fn from_cols(x_axis:Planar64Vec3,y_axis:Planar64Vec3,z_axis:Planar64Vec3)->Self{
@@ -821,6 +850,14 @@ impl Planar64Mat3{
 			x_axis:Planar64Vec3::int(array[0],array[1],array[2]),
 			y_axis:Planar64Vec3::int(array[3],array[4],array[5]),
 			z_axis:Planar64Vec3::int(array[6],array[7],array[8]),
+		}
+	}
+	#[inline]
+	pub const fn from_diagonal(diagonal:Planar64Vec3)->Self{
+		Self{
+			x_axis:Planar64Vec3::raw(diagonal.0.x,0,0),
+			y_axis:Planar64Vec3::raw(0,diagonal.0.y,0),
+			z_axis:Planar64Vec3::raw(0,0,diagonal.0.z),
 		}
 	}
 	#[inline]
@@ -853,6 +890,49 @@ impl Planar64Mat3{
 			Planar64Vec3(glam::i64vec3(s,0,c)),
 		)
 	}
+	#[inline]
+	pub const fn inverse(&self)->Self{
+		let det=(
+			-self.x_axis.0.z as i128*self.y_axis.0.y as i128*self.z_axis.0.x as i128
+			+self.x_axis.0.y as i128*self.y_axis.0.z as i128*self.z_axis.0.x as i128
+			+self.x_axis.0.z as i128*self.y_axis.0.x as i128*self.z_axis.0.y as i128
+			-self.x_axis.0.x as i128*self.y_axis.0.z as i128*self.z_axis.0.y as i128
+			-self.x_axis.0.y as i128*self.y_axis.0.x as i128*self.z_axis.0.z as i128
+			+self.x_axis.0.x as i128*self.y_axis.0.y as i128*self.z_axis.0.z as i128
+			)>>32;
+		Self{
+			x_axis:Planar64Vec3::raw((((-(self.y_axis.0.z as i128*self.z_axis.0.y as i128)+self.y_axis.0.y as i128*self.z_axis.0.z as i128)<<32)/det) as i64,(((self.x_axis.0.z as i128*self.z_axis.0.y as i128-self.x_axis.0.y as i128*self.z_axis.0.z as i128)<<32)/det) as i64,(((-(self.x_axis.0.z as i128*self.y_axis.0.y as i128)+self.x_axis.0.y as i128*self.y_axis.0.z as i128)<<32)/det) as i64),
+			y_axis:Planar64Vec3::raw((((self.y_axis.0.z as i128*self.z_axis.0.x as i128-self.y_axis.0.x as i128*self.z_axis.0.z as i128)<<32)/det) as i64,(((-(self.x_axis.0.z as i128*self.z_axis.0.x as i128)+self.x_axis.0.x as i128*self.z_axis.0.z as i128)<<32)/det) as i64,(((self.x_axis.0.z as i128*self.y_axis.0.x as i128-self.x_axis.0.x as i128*self.y_axis.0.z as i128)<<32)/det) as i64),
+			z_axis:Planar64Vec3::raw((((-(self.y_axis.0.y as i128*self.z_axis.0.x as i128)+self.y_axis.0.x as i128*self.z_axis.0.y as i128)<<32)/det) as i64,(((self.x_axis.0.y as i128*self.z_axis.0.x as i128-self.x_axis.0.x as i128*self.z_axis.0.y as i128)<<32)/det) as i64,(((-(self.x_axis.0.y as i128*self.y_axis.0.x as i128)+self.x_axis.0.x as i128*self.y_axis.0.y as i128)<<32)/det) as i64),
+		}
+	}
+	#[inline]
+	pub const fn inverse_times_det(&self)->Self{
+		Self{
+			x_axis:Planar64Vec3::raw(((-(self.y_axis.0.z as i128*self.z_axis.0.y as i128)+self.y_axis.0.y as i128*self.z_axis.0.z as i128)>>32) as i64,((self.x_axis.0.z as i128*self.z_axis.0.y as i128-self.x_axis.0.y as i128*self.z_axis.0.z as i128)>>32) as i64,((-(self.x_axis.0.z as i128*self.y_axis.0.y as i128)+self.x_axis.0.y as i128*self.y_axis.0.z as i128)>>32) as i64),
+			y_axis:Planar64Vec3::raw(((self.y_axis.0.z as i128*self.z_axis.0.x as i128-self.y_axis.0.x as i128*self.z_axis.0.z as i128)>>32) as i64,((-(self.x_axis.0.z as i128*self.z_axis.0.x as i128)+self.x_axis.0.x as i128*self.z_axis.0.z as i128)>>32) as i64,((self.x_axis.0.z as i128*self.y_axis.0.x as i128-self.x_axis.0.x as i128*self.y_axis.0.z as i128)>>32) as i64),
+			z_axis:Planar64Vec3::raw(((-(self.y_axis.0.y as i128*self.z_axis.0.x as i128)+self.y_axis.0.x as i128*self.z_axis.0.y as i128)>>32) as i64,((self.x_axis.0.y as i128*self.z_axis.0.x as i128-self.x_axis.0.x as i128*self.z_axis.0.y as i128)>>32) as i64,((-(self.x_axis.0.y as i128*self.y_axis.0.x as i128)+self.x_axis.0.x as i128*self.y_axis.0.y as i128)>>32) as i64),
+		}
+	}
+	#[inline]
+	pub const fn transpose(&self)->Self{
+		Self{
+			x_axis:Planar64Vec3::raw(self.x_axis.0.x,self.y_axis.0.x,self.z_axis.0.x),
+			y_axis:Planar64Vec3::raw(self.x_axis.0.y,self.y_axis.0.y,self.z_axis.0.y),
+			z_axis:Planar64Vec3::raw(self.x_axis.0.z,self.y_axis.0.z,self.z_axis.0.z),
+		}
+	}
+	#[inline]
+	pub const fn determinant(&self)->Planar64{
+		Planar64(((
+			-self.x_axis.0.z as i128*self.y_axis.0.y as i128*self.z_axis.0.x as i128
+			+self.x_axis.0.y as i128*self.y_axis.0.z as i128*self.z_axis.0.x as i128
+			+self.x_axis.0.z as i128*self.y_axis.0.x as i128*self.z_axis.0.y as i128
+			-self.x_axis.0.x as i128*self.y_axis.0.z as i128*self.z_axis.0.y as i128
+			-self.x_axis.0.y as i128*self.y_axis.0.x as i128*self.z_axis.0.z as i128
+			+self.x_axis.0.x as i128*self.y_axis.0.y as i128*self.z_axis.0.z as i128
+		)>>64) as i64)
+	}
 }
 impl Into<glam::Mat3> for Planar64Mat3{
 	#[inline]
@@ -884,6 +964,15 @@ impl std::fmt::Display for Planar64Mat3{
 		)
 	}
 }
+impl std::ops::Mul<Planar64Vec3> for Planar64Mat3{
+	type Output=Planar64Vec3;
+	#[inline]
+	fn mul(self,rhs:Planar64Vec3) -> Self::Output {
+		self.x_axis*rhs.x()
+		+self.y_axis*rhs.y()
+		+self.z_axis*rhs.z()
+	}
+}
 impl std::ops::Div<i64> for Planar64Mat3{
 	type Output=Planar64Mat3;
 	#[inline]
@@ -897,7 +986,7 @@ impl std::ops::Div<i64> for Planar64Mat3{
 }
 
 ///[-1.0,1.0] = [-2^32,2^32]
-#[derive(Clone,Copy,Default)]
+#[derive(Clone,Copy,Default,Hash,Eq,PartialEq)]
 pub struct Planar64Affine3{
 	pub matrix3:Planar64Mat3,//includes scale above 1
 	pub translation:Planar64Vec3,
@@ -952,7 +1041,7 @@ impl std::fmt::Display for Planar64Affine3{
 #[test]
 fn test_sqrt(){
 	let r=Planar64::int(400);
-	println!("r{}",r.get());
+	assert_eq!(1717986918400,r.get());
 	let s=r.sqrt();
-	println!("s{}",s.get());
+	assert_eq!(85899345920,s.get());
 }

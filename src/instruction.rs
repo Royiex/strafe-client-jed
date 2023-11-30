@@ -25,7 +25,10 @@ impl<I> InstructionCollector<I>{
 			instruction:None
 		}
 	}
-
+	#[inline]
+	pub fn time(&self)->Time{
+		self.time
+	}
 	pub fn collect(&mut self,instruction:Option<TimedInstruction<I>>){
 		match instruction{
 			Some(unwrap_instruction)=>{
