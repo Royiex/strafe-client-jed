@@ -83,73 +83,78 @@ pub enum TempIndexedAttributes{
 }
 
 //you have this effect while in contact
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub struct ContactingLadder{
 	pub sticky:bool
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum ContactingBehaviour{
-    Surf,
-    Ladder(ContactingLadder),
-    Elastic(u32),//[1/2^32,1] 0=None (elasticity+1)/2^32
+	Surf,
+	Cling,//usable as a zipline, or other weird and wonderful things
+	Ladder(ContactingLadder),
+	Elastic(u32),//[1/2^32,1] 0=None (elasticity+1)/2^32
 }
 //you have this effect while intersecting
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub struct IntersectingWater{
 	pub viscosity:Planar64,
 	pub density:Planar64,
-	pub current:Planar64Vec3,
+	pub velocity:Planar64Vec3,
 }
 //All models can be given these attributes
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub struct GameMechanicAccelerator{
 	pub acceleration:Planar64Vec3
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum GameMechanicBooster{
 	Affine(Planar64Affine3),//capable of SetVelocity,DotVelocity,normal booster,bouncy part,redirect velocity, and much more
 	Velocity(Planar64Vec3),//straight up boost velocity adds to your current velocity
 	Energy{direction:Planar64Vec3,energy:Planar64},//increase energy in direction
 }
-#[derive(Clone)]
-pub enum GameMechanicCheckpoint{
-	Ordered{
-		mode_id:u32,
-		checkpoint_id:u32,
-	},
-	Unordered{
-		mode_id:u32,
-	},
-}
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum TrajectoryChoice{
 	HighArcLongDuration,//underhand lob at target: less horizontal speed and more air time
 	LowArcShortDuration,//overhand throw at target: more horizontal speed and less air time
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum GameMechanicSetTrajectory{
+	//Speed-type SetTrajectory
 	AirTime(Time),//air time (relative to gravity direction) is invariant across mass and gravity changes
 	Height(Planar64),//boost height (relative to gravity direction) is invariant across mass and gravity changes
+	DotVelocity{direction:Planar64Vec3,dot:Planar64},//set your velocity in a specific direction without touching other directions
+	//Velocity-type SetTrajectory
 	TargetPointTime{//launch on a trajectory that will land at a target point in a set amount of time
 		target_point:Planar64Vec3,
 		time:Time,//short time = fast and direct, long time = launch high in the air, negative time = wrong way
 	},
-	TrajectoryTargetPoint{//launch at a fixed speed and land at a target point
+	TargetPointSpeed{//launch at a fixed speed and land at a target point
 		target_point:Planar64Vec3,
 		speed:Planar64,//if speed is too low this will fail to reach the target.  The closest-passing trajectory will be chosen instead
 		trajectory_choice:TrajectoryChoice,
 	},
 	Velocity(Planar64Vec3),//SetVelocity
-	DotVelocity{direction:Planar64Vec3,dot:Planar64},//set your velocity in a specific direction without touching other directions
 }
-#[derive(Clone)]
+impl GameMechanicSetTrajectory{
+	fn is_velocity(&self)->bool{
+		match self{
+			GameMechanicSetTrajectory::AirTime(_)
+			|GameMechanicSetTrajectory::Height(_)
+			|GameMechanicSetTrajectory::DotVelocity{direction:_,dot:_}=>false,
+			GameMechanicSetTrajectory::TargetPointTime{target_point:_,time:_}
+			|GameMechanicSetTrajectory::TargetPointSpeed{target_point:_,speed:_,trajectory_choice:_}
+			|GameMechanicSetTrajectory::Velocity(_)=>true,
+		}
+	}
+}
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum ZoneBehaviour{
 	//Start is indexed
 	//Checkpoints are indexed
 	Finish,
 	Anitcheat,
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub struct GameMechanicZone{
 	pub mode_id:u32,
 	pub behaviour:ZoneBehaviour,
@@ -160,31 +165,36 @@ pub struct GameMechanicZone{
 // 	InRange(Planar64,Planar64),
 // 	OutsideRange(Planar64,Planar64),
 // }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum StageElementBehaviour{
- 	//Spawn,//The behaviour of stepping on a spawn setting the spawnid
- 	SpawnAt,
- 	Trigger,
- 	Teleport,
- 	Platform,
- 	//Acts like a trigger if you haven't hit all the checkpoints.
- 	Checkpoint{
- 		//if this is 2 you must have hit OrderedCheckpoint(0) OrderedCheckpoint(1) OrderedCheckpoint(2) to pass
- 		ordered_checkpoint_id:Option<u32>,
- 		//if this is 2 you must have hit at least 2 UnorderedCheckpoints to pass
- 		unordered_checkpoint_count:u32,
- 	},
- 	JumpLimit(u32),
- 	//Speedtrap(TrapCondition),//Acts as a trigger with a speed condition
+	//Spawn,//The behaviour of stepping on a spawn setting the spawnid
+	SpawnAt,//must be standing on top to get effect. except cancollide false
+	Trigger,
+	Teleport,
+	Platform,
+	//Checkpoint acts like a trigger if you haven't hit all the checkpoints yet.
+	//Note that all stage elements act like this for the next stage.
+	Checkpoint,
+	//OrderedCheckpoint. You must pass through all of these in ascending order.
+	//If you hit them out of order it acts like a trigger.
+	//Do not support backtracking at all for now.
+	Ordered{
+		checkpoint_id:u32,
+	},
+	//UnorderedCheckpoint. You must pass through all of these in any order.
+	Unordered,
+	//If you get reset by a jump limit
+	JumpLimit(u32),
+	//Speedtrap(TrapCondition),//Acts as a trigger with a speed condition
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub struct GameMechanicStageElement{
 	pub mode_id:u32,
 	pub stage_id:u32,//which spawn to send to
 	pub force:bool,//allow setting to lower spawn id i.e. 7->3
 	pub behaviour:StageElementBehaviour
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub struct GameMechanicWormhole{
 	//destination does not need to be another wormhole
 	//this defines a one way portal to a destination model transform
@@ -192,17 +202,16 @@ pub struct GameMechanicWormhole{
 	pub destination_model_id:u32,
 	//(position,angles)*=origin.transform.inverse()*destination.transform
 }
-#[derive(Clone)]
+#[derive(Clone,Hash,Eq,PartialEq)]
 pub enum TeleportBehaviour{
 	StageElement(GameMechanicStageElement),
 	Wormhole(GameMechanicWormhole),
 }
 //attributes listed in order of handling
-#[derive(Default,Clone)]
+#[derive(Default,Clone,Hash,Eq,PartialEq)]
 pub struct GameMechanicAttributes{
 	pub zone:Option<GameMechanicZone>,
 	pub booster:Option<GameMechanicBooster>,
-	pub checkpoint:Option<GameMechanicCheckpoint>,
 	pub trajectory:Option<GameMechanicSetTrajectory>,
 	pub teleport_behaviour:Option<TeleportBehaviour>,
 	pub accelerator:Option<GameMechanicAccelerator>,
@@ -211,13 +220,26 @@ impl GameMechanicAttributes{
 	pub fn any(&self)->bool{
 		self.zone.is_some()
 		||self.booster.is_some()
-		||self.checkpoint.is_some()
 		||self.trajectory.is_some()
 		||self.teleport_behaviour.is_some()
 		||self.accelerator.is_some()
 	}
+	pub fn is_wrcp(&self,current_mode_id:u32)->bool{
+		self.trajectory.as_ref().map_or(false,|t|t.is_velocity())
+		&&match &self.teleport_behaviour{
+			Some(TeleportBehaviour::StageElement(
+				GameMechanicStageElement{
+					mode_id,
+					stage_id:_,
+					force:true,
+					behaviour:StageElementBehaviour::Trigger|StageElementBehaviour::Teleport
+				}
+			))=>current_mode_id==*mode_id,
+			_=>false,
+		}
+	}
 }
-#[derive(Default,Clone)]
+#[derive(Default,Clone,Hash,Eq,PartialEq)]
 pub struct ContactingAttributes{
 	//friction?
 	pub contact_behaviour:Option<ContactingBehaviour>,
@@ -227,7 +249,7 @@ impl ContactingAttributes{
 		self.contact_behaviour.is_some()
 	}
 }
-#[derive(Default,Clone)]
+#[derive(Default,Clone,Hash,Eq,PartialEq)]
 pub struct IntersectingAttributes{
 	pub water:Option<IntersectingWater>,
 }

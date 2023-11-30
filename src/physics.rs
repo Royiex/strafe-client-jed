@@ -1,11 +1,11 @@
-use crate::{instruction::{InstructionEmitter, InstructionConsumer, TimedInstruction}, zeroes::zeroes2};
-
+use crate::instruction::{InstructionEmitter,InstructionConsumer,TimedInstruction};
 use crate::integer::{Time,Planar64,Planar64Vec3,Planar64Mat3,Angle32,Ratio64,Ratio64Vec2};
+use crate::model_physics::{PhysicsMesh,TransformedMesh,MeshQuery};
 
 #[derive(Debug)]
 pub enum PhysicsInstruction {
-	CollisionStart(RelativeCollision),
-	CollisionEnd(RelativeCollision),
+	CollisionStart(Collision),
+	CollisionEnd(Collision),
 	StrafeTick,
 	ReachWalkTargetVelocity,
 	// Water,
@@ -37,11 +37,22 @@ pub enum PhysicsInputInstruction {
 }
 
 #[derive(Clone,Hash,Default)]
-pub struct Body {
-	position: Planar64Vec3,//I64 where 2^32 = 1 u
-	velocity: Planar64Vec3,//I64 where 2^32 = 1 u/s
-	acceleration: Planar64Vec3,//I64 where 2^32 = 1 u/s/s
-	time:Time,//nanoseconds x xxxxD!
+pub struct Body{
+	pub position:Planar64Vec3,//I64 where 2^32 = 1 u
+	pub velocity:Planar64Vec3,//I64 where 2^32 = 1 u/s
+	pub acceleration:Planar64Vec3,//I64 where 2^32 = 1 u/s/s
+	pub time:Time,//nanoseconds x xxxxD!
+}
+impl std::ops::Neg for Body{
+	type Output=Self;
+	fn neg(self)->Self::Output{
+		Self{
+			position:self.position,
+			velocity:-self.velocity,
+			acceleration:self.acceleration,
+			time:-self.time,
+		}
+	}
 }
 
 //hey dumbass just use a delta
@@ -70,6 +81,10 @@ impl MouseState {
 	}
 }
 
+enum JumpDirection{
+	Exactly(Planar64Vec3),
+	FromContactNormal,
+}
 enum WalkEnum{
 	Reached,
 	Transient(WalkTarget),
@@ -79,50 +94,49 @@ struct WalkTarget{
 	time:Time,
 }
 struct WalkState{
-	normal:Planar64Vec3,
+	jump_direction:JumpDirection,
+	contact:ContactCollision,
 	state:WalkEnum,
 }
 impl WalkEnum{
 	//args going crazy
 	//(walk_enum,body.acceleration)=with_target_velocity();
-	fn with_target_velocity(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&PhysicsModels,mut velocity:Planar64Vec3,normal:&Planar64Vec3)->(WalkEnum,Planar64Vec3){
-		touching.constrain_velocity(models,&mut velocity);
+	fn with_target_velocity(body:&Body,style:&StyleModifiers,velocity:Planar64Vec3,normal:&Planar64Vec3,speed:Planar64,normal_accel:Planar64)->(WalkEnum,Planar64Vec3){
 		let mut target_diff=velocity-body.velocity;
 		//remove normal component
 		target_diff-=normal.clone()*(normal.dot(target_diff)/normal.dot(normal.clone()));
 		if target_diff==Planar64Vec3::ZERO{
-			let mut a=Planar64Vec3::ZERO;
-			touching.constrain_acceleration(models,&mut a);
-			(WalkEnum::Reached,a)
+			(WalkEnum::Reached,Planar64Vec3::ZERO)
 		}else{
 			//normal friction acceleration is clippedAcceleration.dot(normal)*friction
 			let diff_len=target_diff.length();
-			let friction=if diff_len<style.walk_speed{
+			let friction=if diff_len<speed{
 				style.static_friction
 			}else{
 				style.kinetic_friction
 			};
-			let accel=style.walk_accel.min(style.gravity.dot(Planar64Vec3::NEG_Y)*friction);
+			let accel=style.walk_accel.min(normal_accel*friction);
 			let time_delta=diff_len/accel;
-			let mut a=target_diff.with_length(accel);
-			touching.constrain_acceleration(models,&mut a);
+			let a=target_diff.with_length(accel);
 			(WalkEnum::Transient(WalkTarget{velocity,time:body.time+Time::from(time_delta)}),a)
 		}
 	}
 }
 impl WalkState{
-	fn ground(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&PhysicsModels,velocity:Planar64Vec3)->(Self,Planar64Vec3){
-		let (walk_enum,a)=WalkEnum::with_target_velocity(touching,body,style,models,velocity,&Planar64Vec3::Y);
+	fn ground(body:&Body,style:&StyleModifiers,gravity:Planar64Vec3,velocity:Planar64Vec3,contact:ContactCollision,normal:&Planar64Vec3)->(Self,Planar64Vec3){
+		let (walk_enum,a)=WalkEnum::with_target_velocity(body,style,velocity,&Planar64Vec3::Y,style.walk_speed,-normal.dot(gravity));
 		(Self{
 			state:walk_enum,
-			normal:Planar64Vec3::Y,
+			contact,
+			jump_direction:JumpDirection::Exactly(Planar64Vec3::Y),
 		},a)
 	}
-	fn ladder(touching:&TouchingState,body:&Body,style:&StyleModifiers,models:&PhysicsModels,velocity:Planar64Vec3,normal:&Planar64Vec3)->(Self,Planar64Vec3){
-		let (walk_enum,a)=WalkEnum::with_target_velocity(touching,body,style,models,velocity,normal);
+	fn ladder(body:&Body,style:&StyleModifiers,gravity:Planar64Vec3,velocity:Planar64Vec3,contact:ContactCollision,normal:&Planar64Vec3)->(Self,Planar64Vec3){
+		let (walk_enum,a)=WalkEnum::with_target_velocity(body,style,velocity,normal,style.ladder_speed,style.ladder_accel);
 		(Self{
 			state:walk_enum,
-			normal:normal.clone(),
+			contact,
+			jump_direction:JumpDirection::FromContactNormal,
 		},a)
 	}
 }
@@ -154,33 +168,63 @@ impl Default for Modes{
 	}
 }
 
+#[derive(Default)]
 struct PhysicsModels{
+	meshes:Vec<PhysicsMesh>,
 	models:Vec<PhysicsModel>,
+	//separate models into Contacting and Intersecting?
+	//wrap model id with ContactingModelId and IntersectingModelId
+	//attributes can be split into contacting and intersecting (this also saves a bit of memory)
+	//can go even further and deduplicate General attributes separately, reconstructing it when queried
+	attributes:Vec<PhysicsCollisionAttributes>,
 	model_id_from_wormhole_id:std::collections::HashMap::<u32,usize>,
 }
 impl PhysicsModels{
 	fn clear(&mut self){
+		self.meshes.clear();
 		self.models.clear();
+		self.attributes.clear();
 		self.model_id_from_wormhole_id.clear();
 	}
-	fn get(&self,i:usize)->Option<&PhysicsModel>{
-		self.models.get(i)
+	fn aabb_list(&self)->Vec<crate::aabb::Aabb>{
+		self.models.iter().map(|model|{
+			let mut aabb=crate::aabb::Aabb::default();
+			for pos in self.meshes[model.mesh_id].verts(){
+				aabb.grow(model.transform.transform_point3(pos));
+			}
+			aabb
+		}).collect()
+	}
+	//TODO: "statically" verify the maps don't refer to any nonexistant data, if they do delete the references.
+	//then I can make these getter functions unchecked.
+	fn mesh(&self,model_id:usize)->TransformedMesh{
+		TransformedMesh::new(
+			&self.meshes[self.models[model_id].mesh_id],
+			&self.models[model_id].transform,
+			&self.models[model_id].normal_transform,
+		)
+	}
+	fn model(&self,model_id:usize)->&PhysicsModel{
+		&self.models[model_id]
+	}
+	fn attr(&self,model_id:usize)->&PhysicsCollisionAttributes{
+		&self.attributes[self.models[model_id].attr_id]
 	}
 	fn get_wormhole_model(&self,wormhole_id:u32)->Option<&PhysicsModel>{
 		self.models.get(*self.model_id_from_wormhole_id.get(&wormhole_id)?)
 	}
-	fn push(&mut self,model:PhysicsModel)->usize{
+	fn push_mesh(&mut self,mesh:PhysicsMesh){
+		self.meshes.push(mesh);
+	}
+	fn push_model(&mut self,model:PhysicsModel)->usize{
 		let model_id=self.models.len();
 		self.models.push(model);
 		model_id
 	}
-}
-impl Default for PhysicsModels{
-	fn default() -> Self {
-		Self{
-			models:Vec::new(),
-			model_id_from_wormhole_id:std::collections::HashMap::new(),
-		}
+	fn push_attr(&mut self,attr:PhysicsCollisionAttributes)->usize{
+		let attr_id=self.attributes.len();
+		self.attributes.push(attr);
+		attr_id
 	}
 }
 
@@ -294,6 +338,55 @@ struct StrafeSettings{
 	tick_rate:Ratio64,
 }
 
+struct Hitbox{
+	halfsize:Planar64Vec3,
+	mesh:PhysicsMesh,
+	transform:crate::integer::Planar64Affine3,
+	normal_transform:Planar64Mat3,
+}
+impl Hitbox{
+	fn new(mesh:PhysicsMesh,transform:crate::integer::Planar64Affine3)->Self{
+		//calculate extents
+		let normal_transform=transform.matrix3.inverse_times_det().transpose();
+		let mut aabb=crate::aabb::Aabb::default();
+		for vert in mesh.verts(){
+			aabb.grow(transform.transform_point3(vert));
+		}
+		Self{
+			halfsize:aabb.size()/2,
+			mesh,
+			transform,
+			normal_transform,
+		}
+	}
+	fn from_mesh_scale(mesh:PhysicsMesh,scale:Planar64Vec3)->Self{
+		Self{
+			halfsize:scale,
+			mesh,
+			transform:crate::integer::Planar64Affine3::new(Planar64Mat3::from_diagonal(scale),Planar64Vec3::ZERO),
+			normal_transform:Planar64Mat3::from_diagonal(scale).inverse_times_det().transpose(),
+		}
+	}
+	fn from_mesh_scale_offset(mesh:PhysicsMesh,scale:Planar64Vec3,offset:Planar64Vec3)->Self{
+		Self{
+			halfsize:scale,
+			mesh,
+			transform:crate::integer::Planar64Affine3::new(Planar64Mat3::from_diagonal(scale),offset),
+			normal_transform:Planar64Mat3::from_diagonal(scale).inverse_times_det().transpose(),
+		}
+	}
+	fn roblox()->Self{
+		Self::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cylinder()),Planar64Vec3::int(2,5,2)/2)
+	}
+	fn source()->Self{
+		Self::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cube()),Planar64Vec3::raw(33<<28,73<<28,33<<28)/2)
+	}
+	#[inline]
+	fn transformed_mesh(&self)->TransformedMesh{
+		TransformedMesh::new(&self.mesh,&self.transform,&self.normal_transform)
+	}
+}
+
 struct StyleModifiers{
 	controls_used:u32,//controls which are allowed to pass into gameplay
 	controls_mask:u32,//controls which are masked from control state (e.g. jump in scroll style)
@@ -310,9 +403,10 @@ struct StyleModifiers{
 	swim_speed:Planar64,
 	mass:Planar64,
 	mv:Planar64,
+	surf_slope:Option<Planar64>,
 	rocket_force:Option<Planar64>,
 	gravity:Planar64Vec3,
-	hitbox_halfsize:Planar64Vec3,
+	hitbox:Hitbox,
 	camera_offset:Planar64Vec3,
 }
 impl std::default::Default for StyleModifiers{
@@ -334,14 +428,14 @@ impl StyleModifiers{
 	const UP_DIR:Planar64Vec3=Planar64Vec3::Y;
 	const FORWARD_DIR:Planar64Vec3=Planar64Vec3::NEG_Z;
 
-	fn new()->Self{
+	fn neo()->Self{
 		Self{
 			controls_used:!0,
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			strafe:Some(StrafeSettings{
 				enable:EnableStrafe::Always,
 				air_accel_limit:None,
-				tick_rate:Ratio64::new(128,Time::ONE_SECOND.nanos() as u64).unwrap(),
+				tick_rate:Ratio64::new(64,Time::ONE_SECOND.nanos() as u64).unwrap(),
 			}),
 			jump_impulse:JumpImpulse::FromEnergy(Planar64::int(512)),
 			jump_calculation:JumpCalculation::Energy,
@@ -349,7 +443,7 @@ impl StyleModifiers{
 			static_friction:Planar64::int(2),
 			kinetic_friction:Planar64::int(3),//unrealistic: kinetic friction is typically lower than static
 			mass:Planar64::int(1),
-			mv:Planar64::int(2),
+			mv:Planar64::int(3),
 			rocket_force:None,
 			walk_speed:Planar64::int(16),
 			walk_accel:Planar64::int(80),
@@ -357,7 +451,8 @@ impl StyleModifiers{
 			ladder_accel:Planar64::int(160),
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
-			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+			surf_slope:Some(Planar64::raw(7)/8),
+			hitbox:Hitbox::roblox(),
 			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
 	}
@@ -385,7 +480,8 @@ impl StyleModifiers{
 			ladder_accel:Planar64::int(180),
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
-			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
+			hitbox:Hitbox::roblox(),
 			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
 	}
@@ -412,7 +508,8 @@ impl StyleModifiers{
 			ladder_accel:Planar64::int(180),
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
-			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
+			hitbox:Hitbox::roblox(),
 			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
 	}
@@ -440,7 +537,8 @@ impl StyleModifiers{
 			ladder_accel:Planar64::int(180),//?
 			ladder_dot:(Planar64::int(1)/2).sqrt(),//?
 			swim_speed:Planar64::int(12),//?
-			hitbox_halfsize:Planar64Vec3::raw(33<<28,73<<28,33<<28)/2,
+			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
+			hitbox:Hitbox::source(),
 			camera_offset:Planar64Vec3::raw(0,(64<<28)-(73<<27),0),
 		}
 	}
@@ -467,7 +565,8 @@ impl StyleModifiers{
 			ladder_accel:Planar64::int(180),//?
 			ladder_dot:(Planar64::int(1)/2).sqrt(),//?
 			swim_speed:Planar64::int(12),//?
-			hitbox_halfsize:Planar64Vec3::raw(33<<28,73<<28,33<<28)/2,
+			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
+			hitbox:Hitbox::source(),
 			camera_offset:Planar64Vec3::raw(0,(64<<28)-(73<<27),0),
 		}
 	}
@@ -490,7 +589,8 @@ impl StyleModifiers{
 			ladder_accel:Planar64::int(180),
 			ladder_dot:(Planar64::int(1)/2).sqrt(),
 			swim_speed:Planar64::int(12),
-			hitbox_halfsize:Planar64Vec3::int(2,5,2)/2,
+			surf_slope:Some(Planar64::raw(3787805118)),// normal.y=0.75
+			hitbox:Hitbox::roblox(),
 			camera_offset:Planar64Vec3::int(0,2,0),//4.5-2.5=2
 		}
 	}
@@ -547,29 +647,66 @@ impl StyleModifiers{
 		}
 	}
 
-	fn get_walk_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
+	fn get_walk_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time,normal:&Planar64Vec3)->Planar64Vec3{
+		let mut control_dir=self.get_control_dir(controls);
+		if control_dir==Planar64Vec3::ZERO{
+			return control_dir;
+		}
 		let camera_mat=camera.simulate_move_rotation_y(camera.mouse.lerp(&next_mouse,time).x);
-		let control_dir=camera_mat*self.get_control_dir(controls);
-		control_dir*self.walk_speed
+		control_dir=camera_mat*control_dir;
+		let n=normal.length();
+		let m=control_dir.length();
+		let d=normal.dot(control_dir)/m;
+		if d<n{
+			let cr=normal.cross(control_dir);
+			if cr==Planar64Vec3::ZERO{
+				Planar64Vec3::ZERO
+			}else{
+				cr.cross(*normal)*(self.walk_speed/(n*(n*n-d*d).sqrt()*m))
+			}
+		}else{
+			Planar64Vec3::ZERO
+		}
 	}
-	fn get_ladder_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
+	fn get_ladder_target_velocity(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time,normal:&Planar64Vec3)->Planar64Vec3{
+		let mut control_dir=self.get_control_dir(controls);
+		if control_dir==Planar64Vec3::ZERO{
+			return control_dir;
+		}
 		let camera_mat=camera.simulate_move_rotation(camera.mouse.lerp(&next_mouse,time));
-		let control_dir=camera_mat*self.get_control_dir(controls);
-		// local m=sqrt(ControlDir.length_squared())
-		// local d=dot(Normal,ControlDir)/m
-		// if d<-LadderDot then
-		// 	ControlDir=Up*m
-		// 	d=dot(Normal,Up)
-		// elseif LadderDot<d then
-		// 	ControlDir=Up*-m
-		// 	d=-dot(Normal,Up)
-		// end
-		// return cross(cross(Normal,ControlDir),Normal)/sqrt(1-d*d)
-		control_dir*self.walk_speed
+		control_dir=camera_mat*control_dir;
+		let n=normal.length();
+		let m=control_dir.length();
+		let mut d=normal.dot(control_dir)/m;
+		if d< -self.ladder_dot*n{
+			control_dir=Planar64Vec3::Y*m;
+			d=normal.y();
+		}else if self.ladder_dot*n<d{
+			control_dir=Planar64Vec3::NEG_Y*m;
+			d=-normal.y();
+		}
+		//n=d if you are standing on top of a ladder and press E.
+		//two fixes:
+		//- ladder movement is not allowed on walkable surfaces
+		//- fix the underlying issue
+		if d.get().unsigned_abs()<n.get().unsigned_abs(){
+			let cr=normal.cross(control_dir);
+			if cr==Planar64Vec3::ZERO{
+				Planar64Vec3::ZERO
+			}else{
+				cr.cross(*normal)*(self.ladder_speed/(n*(n*n-d*d).sqrt()))
+			}
+		}else{
+			Planar64Vec3::ZERO
+		}
 	}
 	fn get_propulsion_control_dir(&self,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
 		let camera_mat=camera.simulate_move_rotation(camera.mouse.lerp(&next_mouse,time));
 		camera_mat*self.get_control_dir(controls)
+	}
+	#[inline]
+	fn mesh(&self)->TransformedMesh{
+		self.hitbox.transformed_mesh()
 	}
 }
 
@@ -592,7 +729,6 @@ pub struct PhysicsState{
 	pub next_mouse:MouseState,//Where is the mouse headed next
 	controls:u32,
 	move_state:MoveState,
-	//all models
 	models:PhysicsModels,
 	bvh:crate::bvh::BvhNode,
 	
@@ -613,10 +749,7 @@ impl PhysicsOutputState{
 	}
 }
 
-//pretend to be using what we want to eventually do
-type TreyMeshFace = crate::aabb::AabbFace;
-type TreyMesh = crate::aabb::Aabb;
-
+#[derive(Clone,Hash,Eq,PartialEq)]
 enum PhysicsCollisionAttributes{
 	Contact{//track whether you are contacting the object
 		contacting:crate::model::ContactingAttributes,
@@ -627,124 +760,221 @@ enum PhysicsCollisionAttributes{
 		general:crate::model::GameMechanicAttributes,
 	},
 }
+struct NonPhysicsError;
+impl TryFrom<&crate::model::CollisionAttributes> for PhysicsCollisionAttributes{
+	type Error=NonPhysicsError;
+	fn try_from(value:&crate::model::CollisionAttributes)->Result<Self,Self::Error>{
+		match value{
+			crate::model::CollisionAttributes::Decoration=>Err(NonPhysicsError),
+			crate::model::CollisionAttributes::Contact{contacting,general}=>Ok(Self::Contact{contacting:contacting.clone(),general:general.clone()}),
+			crate::model::CollisionAttributes::Intersect{intersecting,general}=>Ok(Self::Intersect{intersecting:intersecting.clone(),general:general.clone()}),
+		}
+	}
+}
 
-pub struct PhysicsModel {
+pub struct PhysicsModel{
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
-	mesh: TreyMesh,
+	mesh_id:usize,
+	attr_id:usize,
 	transform:crate::integer::Planar64Affine3,
-	attributes:PhysicsCollisionAttributes,
+	normal_transform:crate::integer::Planar64Mat3,
 }
 
-impl PhysicsModel {
-	fn from_model_transform_attributes(model:&crate::model::IndexedModel,transform:&crate::integer::Planar64Affine3,attributes:PhysicsCollisionAttributes)->Self{
-		let mut aabb=TreyMesh::default();
-		for indexed_vertex in &model.unique_vertices {
-			aabb.grow(transform.transform_point3(model.unique_pos[indexed_vertex.pos as usize]));
-		}
+impl PhysicsModel{
+	pub fn new(mesh_id:usize,attr_id:usize,transform:crate::integer::Planar64Affine3)->Self{
+		let normal_transform=transform.matrix3.inverse_times_det().transpose();
 		Self{
-			mesh:aabb,
-			attributes,
-			transform:transform.clone(),
+			mesh_id,
+			attr_id,
+			transform,
+			normal_transform,
 		}
-	}
-	pub fn from_model(model:&crate::model::IndexedModel,instance:&crate::model::ModelInstance) -> Option<Self> {
-		match &instance.attributes{
-			crate::model::CollisionAttributes::Contact{contacting,general}=>Some(PhysicsModel::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Contact{contacting:contacting.clone(),general:general.clone()})),
-			crate::model::CollisionAttributes::Intersect{intersecting,general}=>Some(PhysicsModel::from_model_transform_attributes(model,&instance.transform,PhysicsCollisionAttributes::Intersect{intersecting:intersecting.clone(),general:general.clone()})),
-			crate::model::CollisionAttributes::Decoration=>None,
-		}
-	}
-	pub fn unit_vertices(&self) -> [Planar64Vec3;8] {
-		TreyMesh::unit_vertices()
-	}
-	pub fn mesh(&self) -> &TreyMesh {
-		return &self.mesh;
-	}
-	// pub fn face_mesh(&self,face:TreyMeshFace)->TreyMesh{
-	// 	self.mesh.face(face)
-	// }
-	pub fn face_normal(&self,face:TreyMeshFace) -> Planar64Vec3 {
-		TreyMesh::normal(face)//this is wrong for scale
 	}
 }
 
-//need non-face (full model) variant for CanCollide false objects
-//OR have a separate list from contacts for model intersection
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
-pub struct RelativeCollision {
-	face:TreyMeshFace,//just an id
-	model:usize,//using id to avoid lifetimes
+struct ContactCollision{
+	face_id:crate::model_physics::MinkowskiFace,
+	model_id:usize,//using id to avoid lifetimes
 }
-
-impl RelativeCollision {
-	fn model<'a>(&self,models:&'a PhysicsModels)->Option<&'a PhysicsModel>{
-		models.get(self.model)
+#[derive(Debug,Clone,Eq,Hash,PartialEq)]
+struct IntersectCollision{
+	model_id:usize,
+}
+#[derive(Debug,Clone,Eq,Hash,PartialEq)]
+enum Collision{
+	Contact(ContactCollision),
+	Intersect(IntersectCollision),
+}
+impl Collision{
+	fn model_id(&self)->usize{
+		match self{
+			&Collision::Contact(ContactCollision{model_id,face_id:_})
+			|&Collision::Intersect(IntersectCollision{model_id})=>model_id,
+		}
 	}
-	// pub fn mesh(&self,models:&Vec<PhysicsModel>) -> TreyMesh {
-	// 	return self.model(models).unwrap().face_mesh(self.face).clone()
-	// }
-	fn normal(&self,models:&PhysicsModels) -> Planar64Vec3 {
-		return self.model(models).unwrap().face_normal(self.face)
+	fn face_id(&self)->Option<crate::model_physics::MinkowskiFace>{
+		match self{
+			&Collision::Contact(ContactCollision{model_id:_,face_id})=>Some(face_id),
+			&Collision::Intersect(IntersectCollision{model_id:_})=>None,
+		}
 	}
 }
-
+#[derive(Default)]
 struct TouchingState{
-	contacts:std::collections::HashMap::<usize,RelativeCollision>,
-	intersects:std::collections::HashMap::<usize,RelativeCollision>,
+	contacts:std::collections::HashSet::<ContactCollision>,
+	intersects:std::collections::HashSet::<IntersectCollision>,
 }
 impl TouchingState{
 	fn clear(&mut self){
 		self.contacts.clear();
 		self.intersects.clear();
 	}
-	fn insert_contact(&mut self,model_id:usize,collision:RelativeCollision)->Option<RelativeCollision>{
-		self.contacts.insert(model_id,collision)
+	fn insert(&mut self,collision:Collision)->bool{
+		match collision{
+			Collision::Contact(collision)=>self.contacts.insert(collision),
+			Collision::Intersect(collision)=>self.intersects.insert(collision),
+		}
 	}
-	fn remove_contact(&mut self,model_id:usize)->Option<RelativeCollision>{
-		self.contacts.remove(&model_id)
+	fn remove(&mut self,collision:&Collision)->bool{
+		match collision{
+			Collision::Contact(collision)=>self.contacts.remove(collision),
+			Collision::Intersect(collision)=>self.intersects.remove(collision),
+		}
 	}
-	fn insert_intersect(&mut self,model_id:usize,collision:RelativeCollision)->Option<RelativeCollision>{
-		self.intersects.insert(model_id,collision)
+	fn base_acceleration(&self,models:&PhysicsModels,style:&StyleModifiers,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->Planar64Vec3{
+		let mut a=style.gravity;
+		if let Some(rocket_force)=style.rocket_force{
+			a+=style.get_propulsion_control_dir(camera,controls,next_mouse,time)*rocket_force;
+		}
+		//add accelerators
+		for contact in &self.contacts{
+			match models.attr(contact.model_id){
+				PhysicsCollisionAttributes::Contact{contacting,general}=>{
+					match &general.accelerator{
+						Some(accelerator)=>a+=accelerator.acceleration,
+						None=>(),
+					}
+				},
+				_=>panic!("impossible touching state"),
+			}
+		}
+		for intersect in &self.intersects{
+			match models.attr(intersect.model_id){
+				PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
+					match &general.accelerator{
+						Some(accelerator)=>a+=accelerator.acceleration,
+						None=>(),
+					}
+				},
+				_=>panic!("impossible touching state"),
+			}
+		}
+		//add water../?
+		a
 	}
-	fn remove_intersect(&mut self,model_id:usize)->Option<RelativeCollision>{
-		self.intersects.remove(&model_id)
-	}
-	fn constrain_velocity(&self,models:&PhysicsModels,velocity:&mut Planar64Vec3){
-		for (_,contact) in &self.contacts {
-			let n=contact.normal(models);
-			let d=velocity.dot(n);
-			if d<Planar64::ZERO{
-				(*velocity)-=n*(d/n.dot(n));
+	fn constrain_velocity(&self,models:&PhysicsModels,style_mesh:&TransformedMesh,velocity:&mut Planar64Vec3){
+		//TODO: trey push solve
+		for contact in &self.contacts{
+			let n=contact_normal(models,style_mesh,contact);
+			let d=n.dot128(*velocity);
+			if d<0{
+				*velocity-=n*Planar64::raw(((d<<32)/n.dot128(n)) as i64);
 			}
 		}
 	}
-	fn constrain_acceleration(&self,models:&PhysicsModels,acceleration:&mut Planar64Vec3){
-		for (_,contact) in &self.contacts {
-			let n=contact.normal(models);
-			let d=acceleration.dot(n);
-			if d<Planar64::ZERO{
-				(*acceleration)-=n*(d/n.dot(n));
+	fn constrain_acceleration(&self,models:&PhysicsModels,style_mesh:&TransformedMesh,acceleration:&mut Planar64Vec3){
+		//TODO: trey push solve
+		for contact in &self.contacts{
+			let n=contact_normal(models,style_mesh,contact);
+			let d=n.dot128(*acceleration);
+			if d<0{
+				*acceleration-=n*Planar64::raw(((d<<32)/n.dot128(n)) as i64);
 			}
 		}
 	}
-}
-impl Default for TouchingState{
-	fn default() -> Self {
-		Self{
-			contacts: std::collections::HashMap::new(),
-			intersects: std::collections::HashMap::new(),
+	fn get_move_state(&self,body:&Body,models:&PhysicsModels,style:&StyleModifiers,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->(MoveState,Planar64Vec3){
+		//check current move conditions and use heuristics to determine
+		//which ladder to climb on, which ground to walk on, etc
+		//collect move state affecting objects from contacts (accelerator,water,ladder,ground)
+		let style_mesh=style.mesh();
+		let gravity=self.base_acceleration(models,style,camera,controls,next_mouse,time);
+		let mut move_state=MoveState::Air;
+		let mut a=gravity;
+		for contact in &self.contacts{
+			match models.attr(contact.model_id){
+				PhysicsCollisionAttributes::Contact{contacting,general}=>{
+					let normal=contact_normal(models,&style_mesh,contact);
+					match &contacting.contact_behaviour{
+						Some(crate::model::ContactingBehaviour::Ladder(_))=>{
+							//ladder walkstate
+							let mut target_velocity=style.get_ladder_target_velocity(camera,controls,next_mouse,time,&normal);
+							self.constrain_velocity(models,&style_mesh,&mut target_velocity);
+							let (walk_state,mut acceleration)=WalkState::ladder(body,style,gravity,target_velocity,contact.clone(),&normal);
+							move_state=MoveState::Ladder(walk_state);
+							self.constrain_acceleration(models,&style_mesh,&mut acceleration);
+							a=acceleration;
+						},
+						None=>if style.surf_slope.map_or(true,|s|normal.walkable(s,Planar64Vec3::Y)){
+							//check ground
+							let mut target_velocity=style.get_walk_target_velocity(camera,controls,next_mouse,time,&normal);
+							self.constrain_velocity(models,&style_mesh,&mut target_velocity);
+							let (walk_state,mut acceleration)=WalkState::ground(body,style,gravity,target_velocity,contact.clone(),&normal);
+							move_state=MoveState::Walk(walk_state);
+							self.constrain_acceleration(models,&style_mesh,&mut acceleration);
+							a=acceleration;
+						},
+						_=>(),
+					}
+				},
+				_=>panic!("impossible touching state"),
+			}
+		}
+		for intersect in &self.intersects{
+			//water
+		}
+		self.constrain_acceleration(models,&style_mesh,&mut a);
+		(move_state,a)
+	}
+	fn predict_collision_end(&self,collector:&mut crate::instruction::InstructionCollector<PhysicsInstruction>,models:&PhysicsModels,style_mesh:&TransformedMesh,body:&Body,time:Time){
+		let relative_body=VirtualBody::relative(&Body::default(),body).body(time);
+		for contact in &self.contacts{
+			//detect face slide off
+			let model_mesh=models.mesh(contact.model_id);
+			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
+			collector.collect(minkowski.predict_collision_face_out(&relative_body,collector.time(),contact.face_id).map(|(face,time)|{
+				TimedInstruction{
+					time,
+					instruction:PhysicsInstruction::CollisionEnd(
+						Collision::Contact(ContactCollision{model_id:contact.model_id,face_id:contact.face_id})
+					),
+				}
+			}));
+		}
+		for intersect in &self.intersects{
+			//detect model collision in reverse
+			let model_mesh=models.mesh(intersect.model_id);
+			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
+			collector.collect(minkowski.predict_collision_out(&relative_body,collector.time()).map(|(face,time)|{
+				TimedInstruction{
+					time,
+					instruction:PhysicsInstruction::CollisionEnd(
+						Collision::Intersect(IntersectCollision{model_id:intersect.model_id})
+					),
+				}
+			}));
 		}
 	}
 }
 
-impl Body {
-	pub fn with_pva(position:Planar64Vec3,velocity:Planar64Vec3,acceleration:Planar64Vec3) -> Self {
+impl Body{
+	pub fn new(position:Planar64Vec3,velocity:Planar64Vec3,acceleration:Planar64Vec3,time:Time)->Self{
 		Self{
 			position,
 			velocity,
 			acceleration,
-			time:Time::ZERO,
+			time,
 		}
 	}
 	pub fn extrapolated_position(&self,time:Time)->Planar64Vec3{
@@ -760,6 +990,42 @@ impl Body {
 		self.velocity=self.extrapolated_velocity(time);
 		self.time=time;
 	}
+	pub fn infinity_dir(&self)->Option<Planar64Vec3>{
+		if self.velocity==Planar64Vec3::ZERO{
+			if self.acceleration==Planar64Vec3::ZERO{
+				None
+			}else{
+				Some(self.acceleration)
+			}
+		}else{
+			Some(self.velocity)
+		}
+	}
+	pub fn grow_aabb(&self,aabb:&mut crate::aabb::Aabb,t0:Time,t1:Time){
+		aabb.grow(self.extrapolated_position(t0));
+		aabb.grow(self.extrapolated_position(t1));
+		//v+a*t==0
+		//goober code
+		if self.acceleration.x()!=Planar64::ZERO{
+			let t=Time::from(-self.velocity.x()/self.acceleration.x());
+			if t0<t&&t<t1{
+				aabb.grow(self.extrapolated_position(t));
+			}
+		}
+		if self.acceleration.y()!=Planar64::ZERO{
+			let t=Time::from(-self.velocity.y()/self.acceleration.y());
+			if t0<t&&t<t1{
+				aabb.grow(self.extrapolated_position(t));
+			}
+		}
+		if self.acceleration.z()!=Planar64::ZERO{
+			let t=Time::from(-self.velocity.z()/self.acceleration.z());
+			if t0<t&&t<t1{
+				aabb.grow(self.extrapolated_position(t));
+			}
+		}
+	}
+
 }
 impl std::fmt::Display for Body{
 	fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{
@@ -767,11 +1033,38 @@ impl std::fmt::Display for Body{
 	}
 }
 
+struct VirtualBody<'a>{
+	body0:&'a Body,
+	body1:&'a Body,
+}
+impl VirtualBody<'_>{
+	fn relative<'a>(body0:&'a Body,body1:&'a Body)->VirtualBody<'a>{
+		//(p0,v0,a0,t0)
+		//(p1,v1,a1,t1)
+		VirtualBody{
+			body0,
+			body1,
+		}
+	}
+	fn extrapolated_position(&self,time:Time)->Planar64Vec3{
+		self.body1.extrapolated_position(time)-self.body0.extrapolated_position(time)
+	}
+	fn extrapolated_velocity(&self,time:Time)->Planar64Vec3{
+		self.body1.extrapolated_velocity(time)-self.body0.extrapolated_velocity(time)
+	}
+	fn acceleration(&self)->Planar64Vec3{
+		self.body1.acceleration-self.body0.acceleration
+	}
+	fn body(&self,time:Time)->Body{
+		Body::new(self.extrapolated_position(time),self.extrapolated_velocity(time),self.acceleration(),time)
+	}
+}
+
 impl Default for PhysicsState{
 	fn default()->Self{
  		Self{
 			spawn_point:Planar64Vec3::int(0,50,0),
-			body:Body::with_pva(Planar64Vec3::int(0,50,0),Planar64Vec3::int(0,0,0),Planar64Vec3::int(0,-100,0)),
+			body:Body::new(Planar64Vec3::int(0,50,0),Planar64Vec3::int(0,0,0),Planar64Vec3::int(0,-100,0),Time::ZERO),
 			time:Time::ZERO,
 			style:StyleModifiers::default(),
 			touching:TouchingState::default(),
@@ -816,11 +1109,22 @@ impl PhysicsState {
 	pub fn generate_models(&mut self,indexed_models:&crate::model::IndexedModelInstances){
 		let mut starts=Vec::new();
 		let mut spawns=Vec::new();
+		let mut attr_hash=std::collections::HashMap::new();
 		for model in &indexed_models.models{
-			//make aabb and run vertices to get realistic bounds
+			let mesh_id=self.models.meshes.len();
+			let mut make_mesh=false;
 			for model_instance in &model.instances{
-				if let Some(model_physics)=PhysicsModel::from_model(model,model_instance){
-					let model_id=self.models.push(model_physics);
+				if let Ok(physics_attributes)=PhysicsCollisionAttributes::try_from(&model_instance.attributes){
+					let attr_id=if let Some(&attr_id)=attr_hash.get(&physics_attributes){
+						attr_id
+					}else{
+						let attr_id=self.models.push_attr(physics_attributes.clone());
+						attr_hash.insert(physics_attributes,attr_id);
+						attr_id
+					};
+					let model_physics=PhysicsModel::new(mesh_id,attr_id,model_instance.transform);
+					make_mesh=true;
+					let model_id=self.models.push_model(model_physics);
 					for attr in &model_instance.temp_indexing{
 						match attr{
 							crate::model::TempIndexedAttributes::Start(s)=>starts.push((model_id,s.clone())),
@@ -830,8 +1134,11 @@ impl PhysicsState {
 					}
 				}
 			}
+			if make_mesh{
+				self.models.push_mesh(PhysicsMesh::from(model));
+			}
 		}
-		self.bvh=crate::bvh::generate_bvh(self.models.models.iter().map(|m|m.mesh().clone()).collect());
+		self.bvh=crate::bvh::generate_bvh(self.models.aabb_list());
 		//I don't wanna write structs for temporary structures
 		//this code builds ModeDescriptions from the unsorted lists at the top of the function
 		starts.sort_by_key(|tup|tup.1.mode_id);
@@ -883,16 +1190,6 @@ impl PhysicsState {
 	fn set_control(&mut self,control:u32,state:bool){
 		self.controls=if state{self.controls|control}else{self.controls&!control};
 	}
-	fn jump(&mut self){
-		match &self.move_state{
-			MoveState::Walk(walk_state)|MoveState::Ladder(walk_state)=>{
-				let mut v=self.body.velocity+walk_state.normal*self.style.get_jump_deltav();
-				self.touching.constrain_velocity(&self.models,&mut v);
-				self.body.velocity=v;
-			},
-			MoveState::Air|MoveState::Water=>(),
-		}
-	}
 
 	fn next_strafe_instruction(&self)->Option<TimedInstruction<PhysicsInstruction>>{
 		self.style.strafe.as_ref().map(|strafe|{
@@ -935,20 +1232,29 @@ impl PhysicsState {
 	// 	});
 	// }
 
-	fn refresh_walk_target(&mut self)->Option<Planar64Vec3>{
+	fn refresh_walk_target(&mut self)->Planar64Vec3{
 		match &mut self.move_state{
-			MoveState::Air|MoveState::Water=>None,
-			MoveState::Walk(WalkState{normal,state})=>{
-				let n=normal;
-				let a;
-				(*state,a)=WalkEnum::with_target_velocity(&self.touching,&self.body,&self.style,&self.models,self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
-				Some(a)
+			MoveState::Air|MoveState::Water=>self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time),
+			MoveState::Walk(WalkState{state,contact,jump_direction:_})=>{
+				let style_mesh=self.style.mesh();
+				let n=contact_normal(&self.models,&style_mesh,contact);
+				let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+				let mut a;
+				let mut v=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time,&n);
+				self.touching.constrain_velocity(&self.models,&style_mesh,&mut v);
+				let normal_accel=-n.dot(gravity)/n.length();
+				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,v,&n,self.style.walk_speed,normal_accel);
+				a
 			},
-			MoveState::Ladder(WalkState{normal,state})=>{
-				let n=normal;
-				let a;
-				(*state,a)=WalkEnum::with_target_velocity(&self.touching,&self.body,&self.style,&self.models,self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&n);
-				Some(a)
+			MoveState::Ladder(WalkState{state,contact,jump_direction:_})=>{
+				let style_mesh=self.style.mesh();
+				let n=contact_normal(&self.models,&style_mesh,contact);
+				let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+				let mut a;
+				let mut v=self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time,&n);
+				self.touching.constrain_velocity(&self.models,&style_mesh,&mut v);
+				(*state,a)=WalkEnum::with_target_velocity(&self.body,&self.style,v,&n,self.style.ladder_speed,self.style.ladder_accel);
+				a
 			},
 		}
 	}
@@ -966,334 +1272,134 @@ impl PhysicsState {
 			MoveState::Water=>None,//TODO
 		}
 	}
-	fn mesh(&self) -> TreyMesh {
-		let mut aabb=TreyMesh::default();
-		for vertex in TreyMesh::unit_vertices(){
-			aabb.grow(self.body.position+self.style.hitbox_halfsize*vertex);
-		}
-		aabb
-	}
-	fn predict_collision_end(&self,time:Time,time_limit:Time,collision_data:&RelativeCollision) -> Option<TimedInstruction<PhysicsInstruction>> {
-		//must treat cancollide false objects differently: you may not exit through the same face you entered.
-		//RelativeCollsion must reference the full model instead of a particular face
-		//this is Ctrl+C Ctrl+V of predict_collision_start but with v=-v before the calc and t=-t after the calc
-		//find best t
-		let mut best_time=time_limit;
-		let mut exit_face:Option<TreyMeshFace>=None;
-		let mesh0=self.mesh();
-		let mesh1=self.models.get(collision_data.model as usize).unwrap().mesh();
-		let (v,a)=(-self.body.velocity,self.body.acceleration);
-		//collect x
-		match collision_data.face {
-			TreyMeshFace::Top|TreyMeshFace::Back|TreyMeshFace::Bottom|TreyMeshFace::Front=>{
-				for t in zeroes2(mesh0.max.x()-mesh1.min.x(),v.x(),a.x()/2) {
-					//negative t = back in time
-					//must be moving towards surface to collide
-					//must beat the current soonest collision time
-					//must be moving towards surface
-					let t_time=self.body.time-Time::from(t);
-					if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.x()+a.x()*-t{
-						//collect valid t
-						best_time=t_time;
-						exit_face=Some(TreyMeshFace::Left);
-						break;
-					}
-				}
-				for t in zeroes2(mesh0.min.x()-mesh1.max.x(),v.x(),a.x()/2) {
-					//negative t = back in time
-					//must be moving towards surface to collide
-					//must beat the current soonest collision time
-					//must be moving towards surface
-					let t_time=self.body.time-Time::from(t);
-					if time<=t_time&&t_time<best_time&&v.x()+a.x()*-t<Planar64::ZERO{
-						//collect valid t
-						best_time=t_time;
-						exit_face=Some(TreyMeshFace::Right);
-						break;
-					}
-				}
-			},
-			TreyMeshFace::Left=>{
-				//generate event if v.x<0||a.x<0
-				if -v.x()<Planar64::ZERO{
-					best_time=time;
-					exit_face=Some(TreyMeshFace::Left);
-				}
-			},
-			TreyMeshFace::Right=>{
-				//generate event if 0<v.x||0<a.x
-				if Planar64::ZERO<(-v.x()){
-					best_time=time;
-					exit_face=Some(TreyMeshFace::Right);
-				}
-			},
-		}
-		//collect y
-		match collision_data.face {
-			TreyMeshFace::Left|TreyMeshFace::Back|TreyMeshFace::Right|TreyMeshFace::Front=>{
-				for t in zeroes2(mesh0.max.y()-mesh1.min.y(),v.y(),a.y()/2) {
-					//negative t = back in time
-					//must be moving towards surface to collide
-					//must beat the current soonest collision time
-					//must be moving towards surface
-					let t_time=self.body.time-Time::from(t);
-					if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.y()+a.y()*-t{
-						//collect valid t
-						best_time=t_time;
-						exit_face=Some(TreyMeshFace::Bottom);
-						break;
-					}
-				}
-				for t in zeroes2(mesh0.min.y()-mesh1.max.y(),v.y(),a.y()/2) {
-					//negative t = back in time
-					//must be moving towards surface to collide
-					//must beat the current soonest collision time
-					//must be moving towards surface
-					let t_time=self.body.time-Time::from(t);
-					if time<=t_time&&t_time<best_time&&v.y()+a.y()*-t<Planar64::ZERO{
-						//collect valid t
-						best_time=t_time;
-						exit_face=Some(TreyMeshFace::Top);
-						break;
-					}
-				}
-			},
-			TreyMeshFace::Bottom=>{
-				//generate event if v.y<0||a.y<0
-				if -v.y()<Planar64::ZERO{
-					best_time=time;
-					exit_face=Some(TreyMeshFace::Bottom);
-				}
-			},
-			TreyMeshFace::Top=>{
-				//generate event if 0<v.y||0<a.y
-				if Planar64::ZERO<(-v.y()){
-					best_time=time;
-					exit_face=Some(TreyMeshFace::Top);
-				}
-			},
-		}
-		//collect z
-		match collision_data.face {
-			TreyMeshFace::Left|TreyMeshFace::Bottom|TreyMeshFace::Right|TreyMeshFace::Top=>{
-				for t in zeroes2(mesh0.max.z()-mesh1.min.z(),v.z(),a.z()/2) {
-					//negative t = back in time
-					//must be moving towards surface to collide
-					//must beat the current soonest collision time
-					//must be moving towards surface
-					let t_time=self.body.time-Time::from(t);
-					if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.z()+a.z()*-t{
-						//collect valid t
-						best_time=t_time;
-						exit_face=Some(TreyMeshFace::Front);
-						break;
-					}
-				}
-				for t in zeroes2(mesh0.min.z()-mesh1.max.z(),v.z(),a.z()/2) {
-					//negative t = back in time
-					//must be moving towards surface to collide
-					//must beat the current soonest collision time
-					//must be moving towards surface
-					let t_time=self.body.time-Time::from(t);
-					if time<=t_time&&t_time<best_time&&v.z()+a.z()*-t<Planar64::ZERO{
-						//collect valid t
-						best_time=t_time;
-						exit_face=Some(TreyMeshFace::Back);
-						break;
-					}
-				}
-			},
-			TreyMeshFace::Front=>{
-				//generate event if v.z<0||a.z<0
-				if -v.z()<Planar64::ZERO{
-					best_time=time;
-					exit_face=Some(TreyMeshFace::Front);
-				}
-			},
-			TreyMeshFace::Back=>{
-				//generate event if 0<v.z||0<a.z
-				if Planar64::ZERO<(-v.z()){
-					best_time=time;
-					exit_face=Some(TreyMeshFace::Back);
-				}
-			},
-		}
-		//generate instruction
-		if let Some(_face) = exit_face{
-			return Some(TimedInstruction {
-				time: best_time,
-				instruction: PhysicsInstruction::CollisionEnd(collision_data.clone())
-			})
-		}
-		None
-	}
-	fn predict_collision_start(&self,time:Time,time_limit:Time,model_id:usize) -> Option<TimedInstruction<PhysicsInstruction>> {
-		let mesh0=self.mesh();
-		let mesh1=self.models.get(model_id).unwrap().mesh();
-		let (p,v,a,body_time)=(self.body.position,self.body.velocity,self.body.acceleration,self.body.time);
-		//find best t
-		let mut best_time=time_limit;
-		let mut best_face:Option<TreyMeshFace>=None;
-		//collect x
-		for t in zeroes2(mesh0.max.x()-mesh1.min.x(),v.x(),a.x()/2) {
-			//must collide now or in the future
-			//must beat the current soonest collision time
-			//must be moving towards surface
-			let t_time=body_time+Time::from(t);
-			if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.x()+a.x()*t{
-				let dp=self.body.extrapolated_position(t_time)-p;
-				//faces must be overlapping
-				if mesh1.min.y()<mesh0.max.y()+dp.y()&&mesh0.min.y()+dp.y()<mesh1.max.y()&&mesh1.min.z()<mesh0.max.z()+dp.z()&&mesh0.min.z()+dp.z()<mesh1.max.z() {
-					//collect valid t
-					best_time=t_time;
-					best_face=Some(TreyMeshFace::Left);
-					break;
-				}
-			}
-		}
-		for t in zeroes2(mesh0.min.x()-mesh1.max.x(),v.x(),a.x()/2) {
-			//must collide now or in the future
-			//must beat the current soonest collision time
-			//must be moving towards surface
-			let t_time=body_time+Time::from(t);
-			if time<=t_time&&t_time<best_time&&v.x()+a.x()*t<Planar64::ZERO{
-				let dp=self.body.extrapolated_position(t_time)-p;
-				//faces must be overlapping
-				if mesh1.min.y()<mesh0.max.y()+dp.y()&&mesh0.min.y()+dp.y()<mesh1.max.y()&&mesh1.min.z()<mesh0.max.z()+dp.z()&&mesh0.min.z()+dp.z()<mesh1.max.z() {
-					//collect valid t
-					best_time=t_time;
-					best_face=Some(TreyMeshFace::Right);
-					break;
-				}
-			}
-		}
-		//collect y
-		for t in zeroes2(mesh0.max.y()-mesh1.min.y(),v.y(),a.y()/2) {
-			//must collide now or in the future
-			//must beat the current soonest collision time
-			//must be moving towards surface
-			let t_time=body_time+Time::from(t);
-			if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.y()+a.y()*t{
-				let dp=self.body.extrapolated_position(t_time)-p;
-				//faces must be overlapping
-				if mesh1.min.x()<mesh0.max.x()+dp.x()&&mesh0.min.x()+dp.x()<mesh1.max.x()&&mesh1.min.z()<mesh0.max.z()+dp.z()&&mesh0.min.z()+dp.z()<mesh1.max.z() {
-					//collect valid t
-					best_time=t_time;
-					best_face=Some(TreyMeshFace::Bottom);
-					break;
-				}
-			}
-		}
-		for t in zeroes2(mesh0.min.y()-mesh1.max.y(),v.y(),a.y()/2) {
-			//must collide now or in the future
-			//must beat the current soonest collision time
-			//must be moving towards surface
-			let t_time=body_time+Time::from(t);
-			if time<=t_time&&t_time<best_time&&v.y()+a.y()*t<Planar64::ZERO{
-				let dp=self.body.extrapolated_position(t_time)-p;
-				//faces must be overlapping
-				if mesh1.min.x()<mesh0.max.x()+dp.x()&&mesh0.min.x()+dp.x()<mesh1.max.x()&&mesh1.min.z()<mesh0.max.z()+dp.z()&&mesh0.min.z()+dp.z()<mesh1.max.z() {
-					//collect valid t
-					best_time=t_time;
-					best_face=Some(TreyMeshFace::Top);
-					break;
-				}
-			}
-		}
-		//collect z
-		for t in zeroes2(mesh0.max.z()-mesh1.min.z(),v.z(),a.z()/2) {
-			//must collide now or in the future
-			//must beat the current soonest collision time
-			//must be moving towards surface
-			let t_time=body_time+Time::from(t);
-			if time<=t_time&&t_time<best_time&&Planar64::ZERO<v.z()+a.z()*t{
-				let dp=self.body.extrapolated_position(t_time)-p;
-				//faces must be overlapping
-				if mesh1.min.y()<mesh0.max.y()+dp.y()&&mesh0.min.y()+dp.y()<mesh1.max.y()&&mesh1.min.x()<mesh0.max.x()+dp.x()&&mesh0.min.x()+dp.x()<mesh1.max.x() {
-					//collect valid t
-					best_time=t_time;
-					best_face=Some(TreyMeshFace::Front);
-					break;
-				}
-			}
-		}
-		for t in zeroes2(mesh0.min.z()-mesh1.max.z(),v.z(),a.z()/2) {
-			//must collide now or in the future
-			//must beat the current soonest collision time
-			//must be moving towards surface
-			let t_time=body_time+Time::from(t);
-			if time<=t_time&&t_time<best_time&&v.z()+a.z()*t<Planar64::ZERO{
-				let dp=self.body.extrapolated_position(t_time)-p;
-				//faces must be overlapping
-				if mesh1.min.y()<mesh0.max.y()+dp.y()&&mesh0.min.y()+dp.y()<mesh1.max.y()&&mesh1.min.x()<mesh0.max.x()+dp.x()&&mesh0.min.x()+dp.x()<mesh1.max.x() {
-					//collect valid t
-					best_time=t_time;
-					best_face=Some(TreyMeshFace::Back);
-					break;
-				}
-			}
-		}
-		//generate instruction
-		if let Some(face)=best_face{
-			return Some(TimedInstruction{
-				time: best_time,
-				instruction:PhysicsInstruction::CollisionStart(RelativeCollision{
-					face,
-					model:model_id
-				})
-			})
-		}
-		None
-	}
 }
 
-impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState {
+impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState{
 	//this little next instruction function can cache its return value and invalidate the cached value by watching the State.
-	fn next_instruction(&self,time_limit:Time) -> Option<TimedInstruction<PhysicsInstruction>> {
+	fn next_instruction(&self,time_limit:Time)->Option<TimedInstruction<PhysicsInstruction>>{
 		//JUST POLLING!!! NO MUTATION
 		let mut collector = crate::instruction::InstructionCollector::new(time_limit);
-		//check for collision stop instructions with curent contacts
-		//TODO: make this into a touching.next_instruction(&mut collector) member function
-		for (_,collision_data) in &self.touching.contacts {
-			collector.collect(self.predict_collision_end(self.time,time_limit,collision_data));
-		}
-		// for collision_data in &self.intersects{
-		// 	collector.collect(self.predict_collision_end2(self.time,time_limit,collision_data));
-		// }
-		//check for collision start instructions (against every part in the game with no optimization!!)
-		let mut aabb=crate::aabb::Aabb::default();
-		aabb.grow(self.body.extrapolated_position(self.time));
-		aabb.grow(self.body.extrapolated_position(time_limit));
-		aabb.inflate(self.style.hitbox_halfsize);
-		self.bvh.the_tester(&aabb,&mut |id|{
-			if !(self.touching.contacts.contains_key(&id)||self.touching.intersects.contains_key(&id)){
-				collector.collect(self.predict_collision_start(self.time,time_limit,id));
-			}
-		});
+
 		collector.collect(self.next_move_instruction());
+
+		let style_mesh=self.style.mesh();
+		//check for collision ends
+		self.touching.predict_collision_end(&mut collector,&self.models,&style_mesh,&self.body,self.time);
+		//check for collision starts
+		let mut aabb=crate::aabb::Aabb::default();
+		self.body.grow_aabb(&mut aabb,self.time,collector.time());
+		aabb.inflate(self.style.hitbox.halfsize);
+		//common body
+		let relative_body=VirtualBody::relative(&Body::default(),&self.body).body(self.time);
+		self.bvh.the_tester(&aabb,&mut |id|{
+			//no checks are needed because of the time limits.
+			let model_mesh=self.models.mesh(id);
+			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
+			collector.collect(minkowski.predict_collision_in(&relative_body,collector.time())
+				//temp (?) code to avoid collision loops
+				.map_or(None,|(face,time)|if time==self.time{None}else{Some((face,time))})
+				.map(|(face,time)|{
+				TimedInstruction{time,instruction:PhysicsInstruction::CollisionStart(match self.models.attr(id){
+					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>Collision::Contact(ContactCollision{model_id:id,face_id:face}),
+					PhysicsCollisionAttributes::Intersect{intersecting:_,general:_}=>Collision::Intersect(IntersectCollision{model_id:id}),
+				})}
+			}));
+		});
 		collector.instruction()
 	}
 }
 
-fn teleport(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,point:Planar64Vec3)->MoveState{
+fn get_walk_state(move_state:&MoveState)->Option<&WalkState>{
+	match move_state{
+		MoveState::Walk(walk_state)|MoveState::Ladder(walk_state)=>Some(walk_state),
+		MoveState::Air|MoveState::Water=>None,
+	}
+}
+
+fn jumped_velocity(models:&PhysicsModels,style:&StyleModifiers,walk_state:&WalkState,v:&mut Planar64Vec3){
+	let jump_dir=match &walk_state.jump_direction{
+		JumpDirection::FromContactNormal=>contact_normal(models,&style.mesh(),&walk_state.contact),
+		&JumpDirection::Exactly(dir)=>dir,
+	};
+	*v=*v+jump_dir*(style.get_jump_deltav()/jump_dir.length());
+}
+
+fn contact_normal(models:&PhysicsModels,style_mesh:&TransformedMesh,contact:&ContactCollision)->Planar64Vec3{
+	let model_mesh=models.mesh(contact.model_id);
+	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,style_mesh);
+	minkowski.face_nd(contact.face_id).0
+}
+
+fn set_position(body:&mut Body,touching:&mut TouchingState,point:Planar64Vec3)->Planar64Vec3{
+	//test intersections at new position
+	//hovering above the surface 0 units is not intersecting.  you will fall into it just fine
 	body.position=point;
 	//manual clear //for c in contacts{process_instruction(CollisionEnd(c))}
 	touching.clear();
-	body.acceleration=style.gravity;
-	MoveState::Air
 	//TODO: calculate contacts and determine the actual state
 	//touching.recalculate(body);
+	point
 }
-fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,mode:&crate::model::ModeDescription,models:&PhysicsModels,stage_id:u32)->Option<MoveState>{
-	let model=models.get(*mode.get_spawn_model_id(stage_id)? as usize)?;
-	let point=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(style.hitbox_halfsize.y()+Planar64::ONE/16);
-	Some(teleport(body,touching,style,point))
+fn set_velocity_cull(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,style_mesh:&TransformedMesh,v:Planar64Vec3)->bool{
+	//This is not correct but is better than what I have
+	let mut culled=false;
+	touching.contacts.retain(|contact|{
+		let n=contact_normal(models,style_mesh,contact);
+		let r=n.dot(v)<=Planar64::ZERO;
+		if !r{
+			culled=true;
+			println!("set_velocity_cull contact={:?}",contact);
+		}
+		r
+	});
+	set_velocity(body,touching,models,style_mesh,v);
+	culled
+}
+fn set_velocity(body:&mut Body,touching:&TouchingState,models:&PhysicsModels,style_mesh:&TransformedMesh,mut v:Planar64Vec3)->Planar64Vec3{
+	touching.constrain_velocity(models,style_mesh,&mut v);
+	body.velocity=v;
+	v
+}
+fn set_acceleration_cull(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,style_mesh:&TransformedMesh,a:Planar64Vec3)->bool{
+	//This is not correct but is better than what I have
+	let mut culled=false;
+	touching.contacts.retain(|contact|{
+		let n=contact_normal(models,style_mesh,contact);
+		let r=n.dot(a)<=Planar64::ZERO;
+		if !r{
+			culled=true;
+			println!("set_acceleration_cull contact={:?}",contact);
+		}
+		r
+	});
+	set_acceleration(body,touching,models,style_mesh,a);
+	culled
+}
+fn set_acceleration(body:&mut Body,touching:&TouchingState,models:&PhysicsModels,style_mesh:&TransformedMesh,mut a:Planar64Vec3)->Planar64Vec3{
+	touching.constrain_acceleration(models,style_mesh,&mut a);
+	body.acceleration=a;
+	a
 }
 
-fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&PhysicsModels,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body,model:&PhysicsModel)->Option<MoveState>{
+fn teleport(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,style:&StyleModifiers,point:Planar64Vec3)->MoveState{
+	set_position(body,touching,point);
+	set_acceleration(body,touching,models,&style.mesh(),style.gravity);
+	MoveState::Air
+}
+fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,mode:&crate::model::ModeDescription,models:&PhysicsModels,stage_id:u32)->Option<MoveState>{
+	let model=models.model(*mode.get_spawn_model_id(stage_id)? as usize);
+	let point=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(style.hitbox.halfsize.y()+Planar64::ONE/16);
+	Some(teleport(body,touching,models,style,point))
+}
+
+fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&PhysicsModels,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body,model_id:usize)->Option<MoveState>{
+	//TODO: jump count and checkpoints are always reset on teleport.
+	//Map makers are expected to use tools to prevent
+	//multi-boosting on JumpLimit boosters such as spawning into a SetVelocity
 	match teleport_behaviour{
 		Some(crate::model::TeleportBehaviour::StageElement(stage_element))=>{
 			if stage_element.force||game.stage_id<stage_element.stage_id{
+				//TODO: check if all checkpoints are complete up to destination stage id, otherwise set to checkpoint completion stage it
 				game.stage_id=stage_element.stage_id;
 			}
 			match &stage_element.behaviour{
@@ -1304,28 +1410,48 @@ fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehav
 					teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
 				},
 				crate::model::StageElementBehaviour::Platform=>None,
+				&crate::model::StageElementBehaviour::Checkpoint=>{
+					// let mode=modes.get_mode(stage_element.mode_id)?;
+					// if mode.ordered_checkpoint_id.map_or(true,|id|id<game.next_ordered_checkpoint_id)
+					// 	&&mode.unordered_checkpoint_count<=game.unordered_checkpoints.len() as u32{
+					// 	//pass
+					 	None
+					// }else{
+					// 	//fail
+					// 	teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
+					// }
+				},
+				&crate::model::StageElementBehaviour::Ordered{checkpoint_id}=>{
+					if checkpoint_id<game.next_ordered_checkpoint_id{
+						//if you hit a checkpoint you already hit, nothing happens
+						None
+					}else if game.next_ordered_checkpoint_id==checkpoint_id{
+						//if you hit the next number in a sequence of ordered checkpoints
+						//increment the current checkpoint id
+						game.next_ordered_checkpoint_id+=1;
+						None
+					}else{
+						//If you hit an ordered checkpoint after missing a previous one
+						teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
+					}
+				},
+				crate::model::StageElementBehaviour::Unordered=>{
+					//count model id in accumulated unordered checkpoints
+					game.unordered_checkpoints.insert(model_id);
+					None
+				},
 				&crate::model::StageElementBehaviour::JumpLimit(jump_limit)=>{
 					//let count=game.jump_counts.get(&model.id);
 					//TODO
 					None
 				},
-				&crate::model::StageElementBehaviour::Checkpoint{ordered_checkpoint_id,unordered_checkpoint_count}=>{
-					if (ordered_checkpoint_id.is_none()||ordered_checkpoint_id.is_some_and(|id|id<game.next_ordered_checkpoint_id))
-						&&unordered_checkpoint_count<=game.unordered_checkpoints.len() as u32{
-						//pass
-						None
-					}else{
-						//fail
-						teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
-					}
-				},
 			}
 		},
 		Some(crate::model::TeleportBehaviour::Wormhole(wormhole))=>{
-			let origin_model=model;
+			let origin_model=models.model(model_id);
 			let destination_model=models.get_wormhole_model(wormhole.destination_model_id)?;
 			//ignore the transform for now
-			Some(teleport(body,touching,style,body.position-origin_model.transform.translation+destination_model.transform.translation))
+			Some(teleport(body,touching,models,style,body.position-origin_model.transform.translation+destination_model.transform.translation))
 		}
 		None=>None,
 	}
@@ -1333,15 +1459,15 @@ fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehav
 
 impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 	fn process_instruction(&mut self, ins:TimedInstruction<PhysicsInstruction>) {
-		match &ins.instruction {
+		match &ins.instruction{
 			PhysicsInstruction::Input(PhysicsInputInstruction::Idle)
 			|PhysicsInstruction::Input(PhysicsInputInstruction::SetNextMouse(_))
 			|PhysicsInstruction::Input(PhysicsInputInstruction::ReplaceMouse(_,_))
-			|PhysicsInstruction::StrafeTick => (),
+			|PhysicsInstruction::StrafeTick=>(),
 			_=>println!("{}|{:?}",ins.time,ins.instruction),
 		}
 		//selectively update body
-		match &ins.instruction {
+		match &ins.instruction{
 			PhysicsInstruction::Input(PhysicsInputInstruction::Idle)=>self.time=ins.time,//idle simply updates time
 			PhysicsInstruction::Input(_)
 			|PhysicsInstruction::ReachWalkTargetVelocity
@@ -1349,121 +1475,125 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 			|PhysicsInstruction::CollisionEnd(_)
 			|PhysicsInstruction::StrafeTick=>self.advance_time(ins.time),
 		}
-		match ins.instruction {
-			PhysicsInstruction::CollisionStart(c) => {
-				let model=c.model(&self.models).unwrap();
-				match &model.attributes{
-					PhysicsCollisionAttributes::Contact{contacting,general}=>{
+		match ins.instruction{
+			PhysicsInstruction::CollisionStart(c)=>{
+				let style_mesh=self.style.mesh();
+				let model_id=c.model_id();
+				match (self.models.attr(model_id),&c){
+					(PhysicsCollisionAttributes::Contact{contacting,general},Collision::Contact(contact))=>{
 						let mut v=self.body.velocity;
+						let normal=contact_normal(&self.models,&style_mesh,contact);
 						match &contacting.contact_behaviour{
 							Some(crate::model::ContactingBehaviour::Surf)=>println!("I'm surfing!"),
+							Some(crate::model::ContactingBehaviour::Cling)=>println!("Unimplemented!"),
 							&Some(crate::model::ContactingBehaviour::Elastic(elasticity))=>{
-								let n=c.normal(&self.models);
-								let d=n.dot(v)*Planar64::raw(-1-elasticity as i64);
-								v-=n*(d/n.dot(n));
+								//velocity and normal are facing opposite directions so this is inherently negative.
+								let d=normal.dot(v)*(Planar64::ONE+Planar64::raw(elasticity as i64+1));
+								v+=normal*(d/normal.dot(normal));
 							},
 							Some(crate::model::ContactingBehaviour::Ladder(contacting_ladder))=>{
 								if contacting_ladder.sticky{
 									//kill v
+									//actually you could do this with a booster attribute :thinking:
 									v=Planar64Vec3::ZERO;//model.velocity
 								}
 								//ladder walkstate
-								let (walk_state,a)=WalkState::ladder(&self.touching,&self.body,&self.style,&self.models,self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time),&c.normal(&self.models));
+								let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+								let mut target_velocity=self.style.get_ladder_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time,&normal);
+								self.touching.constrain_velocity(&self.models,&style_mesh,&mut target_velocity);
+								let (walk_state,a)=WalkState::ladder(&self.body,&self.style,gravity,target_velocity,contact.clone(),&normal);
 								self.move_state=MoveState::Ladder(walk_state);
-								self.body.acceleration=a;
+								set_acceleration(&mut self.body,&self.touching,&self.models,&style_mesh,a);
 							}
-							None=>match &c.face {
-								TreyMeshFace::Top => {
-									//ground
-									let (walk_state,a)=WalkState::ground(&self.touching,&self.body,&self.style,&self.models,self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time));
-									self.move_state=MoveState::Walk(walk_state);
-									self.body.acceleration=a;
-								},
-								_ => (),
+							None=>if self.style.surf_slope.map_or(true,|s|contact_normal(&self.models,&style_mesh,contact).walkable(s,Planar64Vec3::Y)){
+								//ground
+								let gravity=self.touching.base_acceleration(&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+								let mut target_velocity=self.style.get_walk_target_velocity(&self.camera,self.controls,&self.next_mouse,self.time,&normal);
+								self.touching.constrain_velocity(&self.models,&style_mesh,&mut target_velocity);
+								let (walk_state,a)=WalkState::ground(&self.body,&self.style,gravity,target_velocity,contact.clone(),&normal);
+								self.move_state=MoveState::Walk(walk_state);
+								set_acceleration(&mut self.body,&self.touching,&self.models,&style_mesh,a);
 							},
 						}
 						//check ground
-						self.touching.insert_contact(c.model,c);
+						self.touching.insert(c);
 						//I love making functions with 10 arguments to dodge the borrow checker
-						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model);
+						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model_id);
 						//flatten v
-						self.touching.constrain_velocity(&self.models,&mut v);
+						self.touching.constrain_velocity(&self.models,&style_mesh,&mut v);
 						match &general.booster{
 							Some(booster)=>{
+								//DELETE THIS when boosters get converted to height machines
 								match booster{
 									&crate::model::GameMechanicBooster::Affine(transform)=>v=transform.transform_point3(v),
 									&crate::model::GameMechanicBooster::Velocity(velocity)=>v+=velocity,
 									&crate::model::GameMechanicBooster::Energy{direction: _,energy: _}=>todo!(),
 								}
-								self.touching.constrain_velocity(&self.models,&mut v);
 							},
 							None=>(),
 						}
+						let calc_move=if self.style.get_control(StyleModifiers::CONTROL_JUMP,self.controls){
+							if let Some(walk_state)=get_walk_state(&self.move_state){
+								jumped_velocity(&self.models,&self.style,walk_state,&mut v);
+								set_velocity_cull(&mut self.body,&mut self.touching,&self.models,&style_mesh,v)
+							}else{false}
+						}else{false};
 						match &general.trajectory{
 							Some(trajectory)=>{
 								match trajectory{
 									crate::model::GameMechanicSetTrajectory::AirTime(_) => todo!(),
 									crate::model::GameMechanicSetTrajectory::Height(_) => todo!(),
 									crate::model::GameMechanicSetTrajectory::TargetPointTime { target_point: _, time: _ } => todo!(),
-									crate::model::GameMechanicSetTrajectory::TrajectoryTargetPoint { target_point: _, speed: _, trajectory_choice: _ } => todo!(),
+									crate::model::GameMechanicSetTrajectory::TargetPointSpeed { target_point: _, speed: _, trajectory_choice: _ } => todo!(),
 									&crate::model::GameMechanicSetTrajectory::Velocity(velocity)=>v=velocity,
 									crate::model::GameMechanicSetTrajectory::DotVelocity { direction: _, dot: _ } => todo!(),
 								}
-								self.touching.constrain_velocity(&self.models,&mut v);
 							},
 							None=>(),
 						}
-						self.body.velocity=v;
-						if self.style.get_control(StyleModifiers::CONTROL_JUMP,self.controls){
-							self.jump();
+						set_velocity(&mut self.body,&self.touching,&self.models,&style_mesh,v);
+						//not sure if or is correct here
+						if calc_move||Planar64::ZERO<normal.dot(v){
+							(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 						}
-						if let Some(a)=self.refresh_walk_target(){
-							self.body.acceleration=a;
-						}
+						let a=self.refresh_walk_target();
+						set_acceleration(&mut self.body,&self.touching,&self.models,&self.style.mesh(),a);
 					},
-					PhysicsCollisionAttributes::Intersect{intersecting: _,general}=>{
+					(PhysicsCollisionAttributes::Intersect{intersecting: _,general},Collision::Intersect(intersect))=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
-						self.touching.insert_intersect(c.model,c);
-						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model);
+						self.touching.insert(c);
+						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model_id);
 					},
+					_=>panic!("invalid pair"),
 				}
 			},
 			PhysicsInstruction::CollisionEnd(c) => {
-				let model=c.model(&self.models).unwrap();
-				match &model.attributes{
-					PhysicsCollisionAttributes::Contact{contacting: _,general: _}=>{
-						self.touching.remove_contact(c.model);//remove contact before calling contact_constrain_acceleration
-						let mut a=self.style.gravity;
-						if let Some(rocket_force)=self.style.rocket_force{
-							a+=self.style.get_propulsion_control_dir(&self.camera,self.controls,&self.next_mouse,self.time)*rocket_force;
-						}
-						self.touching.constrain_acceleration(&self.models,&mut a);
-						self.body.acceleration=a;
+				match self.models.attr(c.model_id()){
+					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>{
+						self.touching.remove(&c);//remove contact before calling contact_constrain_acceleration
 						//check ground
-						//self.touching.get_move_state();
-						match &c.face {
-							TreyMeshFace::Top => {
-								//TODO: make this more advanced checking contacts
-								self.move_state=MoveState::Air;
-							},
-							_=>if let Some(a)=self.refresh_walk_target(){
-								self.body.acceleration=a;
-							},
-						}
+						(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 					},
-					PhysicsCollisionAttributes::Intersect{intersecting: _,general: _}=>{
-						self.touching.remove_intersect(c.model);
+					PhysicsCollisionAttributes::Intersect{intersecting:_,general:_}=>{
+						self.touching.remove(&c);
 					},
 				}
 			},
 			PhysicsInstruction::StrafeTick => {
-				let camera_mat=self.camera.simulate_move_rotation_y(self.camera.mouse.lerp(&self.next_mouse,self.time).x);
-				let control_dir=camera_mat*self.style.get_control_dir(self.controls);
-				let d=self.body.velocity.dot(control_dir);
-				if d<self.style.mv {
-					let mut v=self.body.velocity+control_dir*(self.style.mv-d);
-					self.touching.constrain_velocity(&self.models,&mut v);
-					self.body.velocity=v;
+				let control_dir=self.style.get_control_dir(self.controls);
+				if control_dir!=Planar64Vec3::ZERO{
+					let camera_mat=self.camera.simulate_move_rotation_y(self.camera.mouse.lerp(&self.next_mouse,self.time).x);
+					let control_dir=camera_mat*control_dir;
+					//normalize but careful for zero
+					let d=self.body.velocity.dot(control_dir);
+					if d<self.style.mv {
+						let v=self.body.velocity+control_dir*(self.style.mv-d);
+						//this is wrong but will work ig
+						//need to note which push planes activate in push solve and keep those
+						if set_velocity_cull(&mut self.body,&mut self.touching,&self.models,&self.style.mesh(),v){
+							(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+						}
+					}
 				}
 			}
 			PhysicsInstruction::ReachWalkTargetVelocity => {
@@ -1473,13 +1603,12 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						match &mut walk_state.state{
 							WalkEnum::Reached=>(),
 							WalkEnum::Transient(walk_target)=>{
+								let style_mesh=self.style.mesh();
 								//precisely set velocity
-								let mut a=self.style.gravity;
-								self.touching.constrain_acceleration(&self.models,&mut a);
-								self.body.acceleration=a;
-								let mut v=walk_target.velocity;
-								self.touching.constrain_velocity(&self.models,&mut v);
-								self.body.velocity=v;
+								let a=Planar64Vec3::ZERO;//ignore gravity for now.
+								set_acceleration(&mut self.body,&self.touching,&self.models,&style_mesh,a);
+								let v=walk_target.velocity;
+								set_velocity(&mut self.body,&self.touching,&self.models,&style_mesh,v);
 								walk_state.state=WalkEnum::Reached;
 							},
 						}
@@ -1505,7 +1634,13 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 					PhysicsInputInstruction::SetMoveDown(s) => self.set_control(StyleModifiers::CONTROL_MOVEDOWN,s),
 					PhysicsInputInstruction::SetJump(s) => {
 						self.set_control(StyleModifiers::CONTROL_JUMP,s);
-						self.jump();
+						if let Some(walk_state)=get_walk_state(&self.move_state){
+							let mut v=self.body.velocity;
+							jumped_velocity(&self.models,&self.style,walk_state,&mut v);
+							if set_velocity_cull(&mut self.body,&mut self.touching,&self.models,&self.style.mesh(),v){
+								(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
+							}
+						}
 						refresh_walk_target=false;
 					},
 					PhysicsInputInstruction::SetZoom(s) => {
@@ -1513,28 +1648,236 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 						refresh_walk_target=false;
 					},
 					PhysicsInputInstruction::Reset => {
-						//temp
-						self.body.position=self.spawn_point;
-						self.body.velocity=Planar64Vec3::ZERO;
-						//manual clear //for c in self.contacts{process_instruction(CollisionEnd(c))}
-						self.touching.clear();
-						self.body.acceleration=self.style.gravity;
-						self.move_state=MoveState::Air;
+						//it matters which of these runs first, but I have not thought it through yet as it doesn't matter yet
+						set_position(&mut self.body,&mut self.touching,self.spawn_point);
+						set_velocity(&mut self.body,&self.touching,&self.models,&self.style.mesh(),Planar64Vec3::ZERO);
+						(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 						refresh_walk_target=false;
 					},
 					PhysicsInputInstruction::Idle => {refresh_walk_target=false;},//literally idle!
 				}
 				if refresh_walk_target{
-					if let Some(a)=self.refresh_walk_target(){
-						self.body.acceleration=a;
-					}else if let Some(rocket_force)=self.style.rocket_force{
-						let mut a=self.style.gravity;
-						a+=self.style.get_propulsion_control_dir(&self.camera,self.controls,&self.next_mouse,self.time)*rocket_force;
-						self.touching.constrain_acceleration(&self.models,&mut a);
-						self.body.acceleration=a;
+					let a=self.refresh_walk_target();
+					if set_acceleration_cull(&mut self.body,&mut self.touching,&self.models,&self.style.mesh(),a){
+						(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 					}
 				}
 			},
 		}
 	}
+}
+
+#[allow(dead_code)]
+fn test_collision_axis_aligned(relative_body:Body,expected_collision_time:Option<Time>){
+	let h0=Hitbox::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cube()),Planar64Vec3::int(5,1,5)/2);
+	let h1=Hitbox::roblox();
+	let hitbox_mesh=h1.transformed_mesh();
+	let platform_mesh=h0.transformed_mesh();
+	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
+	let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
+	assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
+}
+#[allow(dead_code)]
+fn test_collision_rotated(relative_body:Body,expected_collision_time:Option<Time>){
+	let h0=Hitbox::new(PhysicsMesh::from(&crate::primitives::unit_cube()),
+		crate::integer::Planar64Affine3::new(
+			crate::integer::Planar64Mat3::from_cols(
+				Planar64Vec3::int(5,0,1)/2,
+				Planar64Vec3::int(0,1,0)/2,
+				Planar64Vec3::int(-1,0,5)/2,
+			),
+			Planar64Vec3::ZERO,
+		)
+	);
+	let h1=Hitbox::roblox();
+	let hitbox_mesh=h1.transformed_mesh();
+	let platform_mesh=h0.transformed_mesh();
+	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
+	let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
+	assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
+}
+#[allow(dead_code)]
+fn test_collision(relative_body:Body,expected_collision_time:Option<Time>){
+	test_collision_axis_aligned(relative_body.clone(),expected_collision_time);
+	test_collision_rotated(relative_body,expected_collision_time);
+}
+#[test]
+fn test_collision_degenerate(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,5,0),
+		Planar64Vec3::int(0,-1,0),
+		Planar64Vec3::ZERO,
+		Time::ZERO
+	),Some(Time::from_secs(2)));
+}
+#[test]
+fn test_collision_degenerate_east(){
+	test_collision(Body::new(
+		Planar64Vec3::int(3,5,0),
+		Planar64Vec3::int(0,-1,0),
+		Planar64Vec3::ZERO,
+		Time::ZERO
+	),Some(Time::from_secs(2)));
+}
+#[test]
+fn test_collision_degenerate_south(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,5,3),
+		Planar64Vec3::int(0,-1,0),
+		Planar64Vec3::ZERO,
+		Time::ZERO
+	),Some(Time::from_secs(2)));
+}
+#[test]
+fn test_collision_degenerate_west(){
+	test_collision(Body::new(
+		Planar64Vec3::int(-3,5,0),
+		Planar64Vec3::int(0,-1,0),
+		Planar64Vec3::ZERO,
+		Time::ZERO
+	),Some(Time::from_secs(2)));
+}
+#[test]
+fn test_collision_degenerate_north(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,5,-3),
+		Planar64Vec3::int(0,-1,0),
+		Planar64Vec3::ZERO,
+		Time::ZERO
+	),Some(Time::from_secs(2)));
+}
+#[test]
+fn test_collision_parabola_edge_east_from_west(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(3,3,0),
+		Planar64Vec3::int(100,-1,0),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_south_from_north(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(0,3,3),
+		Planar64Vec3::int(0,-1,100),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_west_from_east(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(-3,3,0),
+		Planar64Vec3::int(-100,-1,0),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_north_from_south(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(0,3,-3),
+		Planar64Vec3::int(0,-1,-100),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_north_from_ne(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(0,6,-7)/2,
+		Planar64Vec3::int(-10,-1,1),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_north_from_nw(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(0,6,-7)/2,
+		Planar64Vec3::int(10,-1,1),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_east_from_se(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(7,6,0)/2,
+		Planar64Vec3::int(-1,-1,-10),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_east_from_ne(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(7,6,0)/2,
+		Planar64Vec3::int(-1,-1,10),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_south_from_se(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(0,6,7)/2,
+		Planar64Vec3::int(-10,-1,-1),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_south_from_sw(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(0,6,7)/2,
+		Planar64Vec3::int(10,-1,-1),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_west_from_se(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(-7,6,0)/2,
+		Planar64Vec3::int(1,-1,-10),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_parabola_edge_west_from_ne(){
+	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+		Planar64Vec3::int(-7,6,0)/2,
+		Planar64Vec3::int(1,-1,10),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+}
+#[test]
+fn test_collision_oblique(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,5,0),
+		Planar64Vec3::int(1,-64,2)/64,
+		Planar64Vec3::ZERO,
+		Time::ZERO
+	),Some(Time::from_secs(2)));
+}
+#[test]
+fn zoom_hit_nothing(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,10,0),
+		Planar64Vec3::int(1,0,0),
+		Planar64Vec3::int(0,1,0),
+		Time::ZERO
+	),None);
+}
+#[test]
+fn already_inside_hit_nothing(){
+	test_collision(Body::new(
+		Planar64Vec3::ZERO,
+		Planar64Vec3::int(1,0,0),
+		Planar64Vec3::int(0,1,0),
+		Time::ZERO
+	),None);
 }
