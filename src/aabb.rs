@@ -2,8 +2,8 @@ use crate::integer::Planar64Vec3;
 
 #[derive(Clone)]
 pub struct Aabb{
-	pub min:Planar64Vec3,
-	pub max:Planar64Vec3,
+	min:Planar64Vec3,
+	max:Planar64Vec3,
 }
 
 impl Default for Aabb {
@@ -28,8 +28,11 @@ impl Aabb{
 	pub fn intersects(&self,aabb:&Aabb)->bool{
 		(self.min.cmplt(aabb.max)&aabb.min.cmplt(self.max)).all()
 	}
+	pub fn size(&self)->Planar64Vec3{
+		self.max-self.min
+	}
 	pub fn center(&self)->Planar64Vec3{
-		return self.min.midpoint(self.max)
+		self.min.midpoint(self.max)
 	}
 	//probably use floats for area & volume because we don't care about precision
 	// pub fn area_weight(&self)->f32{
