@@ -11,10 +11,12 @@ pub fn zeroes2(a0:Planar64,a1:Planar64,a2:Planar64) -> Vec<Planar64>{
 		//start with f64 sqrt
 		let planar_radicand=Planar64::raw(unsafe{(radicand as f64).sqrt().to_int_unchecked()});
 		//TODO: one or two newtons
-		if Planar64::ZERO<a2 {
-			return vec![(-a1-planar_radicand)/(a2*2),(-a1+planar_radicand)/(a2*2)];
-		} else {
-			return vec![(-a1+planar_radicand)/(a2*2),(-a1-planar_radicand)/(a2*2)];
+		//sort roots ascending and avoid taking the difference of large numbers
+		match (Planar64::ZERO<a2,Planar64::ZERO<a1){
+			(true, true )=>vec![(-a1-planar_radicand)/(a2*2),(a0*2)/(-a1-planar_radicand)],
+			(true, false)=>vec![(a0*2)/(-a1+planar_radicand),(-a1+planar_radicand)/(a2*2)],
+			(false,true )=>vec![(a0*2)/(-a1-planar_radicand),(-a1-planar_radicand)/(a2*2)],
+			(false,false)=>vec![(-a1+planar_radicand)/(a2*2),(a0*2)/(-a1+planar_radicand)],
 		}
 	} else if radicand==0 {
 		return vec![a1/(a2*-2)];
