@@ -175,10 +175,10 @@ impl<'a,Task:Send+'a> INWorker<'a,Task>{
 
 #[test]//How to run this test with printing: cargo test --release -- --nocapture
 fn test_worker() {
-	println!("hiiiii");
 	// Create the worker thread
-	let worker=QRWorker::new(crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO,crate::integer::Planar64Vec3::ZERO),
-		|_|crate::physics::Body::with_pva(crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE)
+	let test_body=crate::physics::Body::new(crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Time::ZERO);
+	let worker=QRWorker::new(crate::physics::Body::default(),
+		|_|crate::physics::Body::new(crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Time::ZERO)
 	);
 
 	// Send tasks to the worker
@@ -194,7 +194,7 @@ fn test_worker() {
 	// sender.send("STOP".to_string()).unwrap();
 
 	// Sleep to allow the worker thread to finish processing
-	thread::sleep(std::time::Duration::from_secs(2));
+	thread::sleep(std::time::Duration::from_millis(10));
 
 	// Send a new task
 	let task = crate::instruction::TimedInstruction{
@@ -203,8 +203,8 @@ fn test_worker() {
 	};
 	worker.send(task).unwrap();
 
-	println!("value={}",worker.grab_clone());
+	//assert_eq!(test_body,worker.grab_clone());
 
 	// wait long enough to see print from final task
-	thread::sleep(std::time::Duration::from_secs(1));
+	thread::sleep(std::time::Duration::from_millis(10));
 }
