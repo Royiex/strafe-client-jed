@@ -907,6 +907,14 @@ impl Planar64Mat3{
 		}
 	}
 	#[inline]
+	pub const fn inverse_times_det(&self)->Self{
+		Self{
+			x_axis:Planar64Vec3::raw(((-(self.y_axis.0.z as i128*self.z_axis.0.y as i128)+self.y_axis.0.y as i128*self.z_axis.0.z as i128)>>32) as i64,((self.x_axis.0.z as i128*self.z_axis.0.y as i128-self.x_axis.0.y as i128*self.z_axis.0.z as i128)>>32) as i64,((-(self.x_axis.0.z as i128*self.y_axis.0.y as i128)+self.x_axis.0.y as i128*self.y_axis.0.z as i128)>>32) as i64),
+			y_axis:Planar64Vec3::raw(((self.y_axis.0.z as i128*self.z_axis.0.x as i128-self.y_axis.0.x as i128*self.z_axis.0.z as i128)>>32) as i64,((-(self.x_axis.0.z as i128*self.z_axis.0.x as i128)+self.x_axis.0.x as i128*self.z_axis.0.z as i128)>>32) as i64,((self.x_axis.0.z as i128*self.y_axis.0.x as i128-self.x_axis.0.x as i128*self.y_axis.0.z as i128)>>32) as i64),
+			z_axis:Planar64Vec3::raw(((-(self.y_axis.0.y as i128*self.z_axis.0.x as i128)+self.y_axis.0.x as i128*self.z_axis.0.y as i128)>>32) as i64,((self.x_axis.0.y as i128*self.z_axis.0.x as i128-self.x_axis.0.x as i128*self.z_axis.0.y as i128)>>32) as i64,((-(self.x_axis.0.y as i128*self.y_axis.0.x as i128)+self.x_axis.0.x as i128*self.y_axis.0.y as i128)>>32) as i64),
+		}
+	}
+	#[inline]
 	pub const fn transpose(&self)->Self{
 		Self{
 			x_axis:Planar64Vec3::raw(self.x_axis.0.x,self.y_axis.0.x,self.z_axis.0.x),
