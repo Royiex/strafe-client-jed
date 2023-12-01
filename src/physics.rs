@@ -520,7 +520,7 @@ impl StyleModifiers{
 			controls_mask:!0,//&!(Self::CONTROL_MOVEUP|Self::CONTROL_MOVEDOWN),
 			strafe:Some(StrafeSettings{
 				enable:EnableStrafe::Always,
-				air_accel_limit:Some(Planar64::raw(150<<28)*66),
+				air_accel_limit:Some(Planar64::raw(150<<28)*100),
 				tick_rate:Ratio64::new(100,Time::ONE_SECOND.nanos() as u64).unwrap(),
 			}),
 			jump_impulse:JumpImpulse::FromHeight(Planar64::raw(52<<28)),
