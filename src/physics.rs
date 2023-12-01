@@ -1864,6 +1864,42 @@ fn test_collision_oblique(){
 	),Some(Time::from_secs(2)));
 }
 #[test]
+fn test_collision_oblique_north(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,4,0),
+		Planar64Vec3::int(0,-1,-1),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	),Some(Time::from_nanos(732050807)));
+}
+#[test]
+fn test_collision_oblique_east(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,4,0),
+		Planar64Vec3::int(1,-1,0),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	),Some(Time::from_nanos(732050807)));
+}
+#[test]
+fn test_collision_oblique_south(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,4,0),
+		Planar64Vec3::int(0,-1,1),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	),Some(Time::from_nanos(732050807)));
+}
+#[test]
+fn test_collision_oblique_west(){
+	test_collision(Body::new(
+		Planar64Vec3::int(0,4,0),
+		Planar64Vec3::int(-1,-1,0),
+		Planar64Vec3::int(0,-1,0),
+		Time::ZERO
+	),Some(Time::from_nanos(732050807)));
+}
+#[test]
 fn zoom_hit_nothing(){
 	test_collision(Body::new(
 		Planar64Vec3::int(0,10,0),
