@@ -1669,7 +1669,7 @@ impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsStat
 
 #[allow(dead_code)]
 fn test_collision_axis_aligned(relative_body:Body,expected_collision_time:Option<Time>){
-	let h0=Hitbox::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cube()),Planar64Vec3::int(5,1,5)/2);
+	let h0=Hitbox::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cube()),Planar64Vec3::int(256,1,256)/2);
 	let h1=Hitbox::roblox();
 	let hitbox_mesh=h1.transformed_mesh();
 	let platform_mesh=h0.transformed_mesh();
@@ -1682,9 +1682,9 @@ fn test_collision_rotated(relative_body:Body,expected_collision_time:Option<Time
 	let h0=Hitbox::new(PhysicsMesh::from(&crate::primitives::unit_cube()),
 		crate::integer::Planar64Affine3::new(
 			crate::integer::Planar64Mat3::from_cols(
-				Planar64Vec3::int(5,0,1)/2,
+				Planar64Vec3::int(256,0,1)/2,
 				Planar64Vec3::int(0,1,0)/2,
-				Planar64Vec3::int(-1,0,5)/2,
+				Planar64Vec3::int(-1,0,256)/2,
 			),
 			Planar64Vec3::ZERO,
 		)
