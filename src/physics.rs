@@ -347,7 +347,7 @@ struct Hitbox{
 impl Hitbox{
 	fn new(mesh:PhysicsMesh,transform:crate::integer::Planar64Affine3)->Self{
 		//calculate extents
-		let normal_transform=transform.matrix3.inverse().transpose();
+		let normal_transform=transform.matrix3.inverse_times_det().transpose();
 		let mut aabb=crate::aabb::Aabb::default();
 		for vert in mesh.verts(){
 			aabb.grow(transform.transform_point3(vert));
@@ -364,7 +364,7 @@ impl Hitbox{
 			halfsize:scale,
 			mesh,
 			transform:crate::integer::Planar64Affine3::new(Planar64Mat3::from_diagonal(scale),Planar64Vec3::ZERO),
-			normal_transform:Planar64Mat3::from_diagonal(scale).inverse().transpose(),
+			normal_transform:Planar64Mat3::from_diagonal(scale).inverse_times_det().transpose(),
 		}
 	}
 	fn from_mesh_scale_offset(mesh:PhysicsMesh,scale:Planar64Vec3,offset:Planar64Vec3)->Self{
@@ -372,7 +372,7 @@ impl Hitbox{
 			halfsize:scale,
 			mesh,
 			transform:crate::integer::Planar64Affine3::new(Planar64Mat3::from_diagonal(scale),offset),
-			normal_transform:Planar64Mat3::from_diagonal(scale).inverse().transpose(),
+			normal_transform:Planar64Mat3::from_diagonal(scale).inverse_times_det().transpose(),
 		}
 	}
 	fn roblox()->Self{
@@ -783,7 +783,7 @@ pub struct PhysicsModel{
 
 impl PhysicsModel{
 	pub fn new(mesh_id:usize,attr_id:usize,transform:crate::integer::Planar64Affine3)->Self{
-		let normal_transform=transform.matrix3.inverse().transpose();
+		let normal_transform=transform.matrix3.inverse_times_det().transpose();
 		Self{
 			mesh_id,
 			attr_id,
