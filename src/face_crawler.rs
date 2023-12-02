@@ -20,6 +20,8 @@ enum Transition<F,E:DirectedEdge,V>{
 				//n=face.normal d=face.dot
 				//n.a t^2+n.v t+n.p-d==0
 				let (n,d)=mesh.face_nd(face_id);
+				//TODO: use higher precision d value?
+				//use the mesh transform translation instead of baking it into the d value.
 				for t in zeroes2((n.dot(body.position)-d)*2,n.dot(body.velocity)*2,n.dot(body.acceleration)){
 					let t=body.time+Time::from(t);
 					if time<=t&&t<best_time&&n.dot(body.extrapolated_velocity(t))<Planar64::ZERO{
