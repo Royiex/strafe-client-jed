@@ -238,17 +238,20 @@ pub struct TransformedMesh<'a>{
 	mesh:&'a PhysicsMesh,
 	transform:&'a crate::integer::Planar64Affine3,
 	normal_transform:&'a crate::integer::Planar64Mat3,
+	transform_det:Planar64,
 }
 impl TransformedMesh<'_>{
 	pub fn new<'a>(
 		mesh:&'a PhysicsMesh,
 		transform:&'a crate::integer::Planar64Affine3,
 		normal_transform:&'a crate::integer::Planar64Mat3,
+		transform_det:Planar64,
 		)->TransformedMesh<'a>{
 		TransformedMesh{
 			mesh,
 			transform,
 			normal_transform,
+			transform_det,
 		}
 	}
 	fn farthest_vert(&self,dir:Planar64Vec3)->VertId{
@@ -269,7 +272,7 @@ impl MeshQuery<FaceId,DirectedEdgeId,VertId> for TransformedMesh<'_>{
 	fn face_nd(&self,face_id:FaceId)->(Planar64Vec3,Planar64){
 		let (n,d)=self.mesh.face_nd(face_id);
 		let transformed_n=*self.normal_transform*n;
-		let transformed_d=Planar64::raw(((transformed_n.dot128(self.transform.matrix3*n)<<32)/n.dot128(n)) as i64)*d+transformed_n.dot(self.transform.translation);
+		let transformed_d=self.transform_det*d+transformed_n.dot(self.transform.translation);
 		(transformed_n,transformed_d)
 	}
 	fn vert(&self,vert_id:VertId)->Planar64Vec3{
