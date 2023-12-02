@@ -105,23 +105,23 @@ impl Ratio64{
 			None
 		}else{
 			let d=gcd(num.unsigned_abs(),den);
-			Some(Self{num:num/d as i64,den:den/d})
+			Some(Self{num:num/(d as i64),den:den/d})
 		}
 	}
 	#[inline]
 	pub fn mul_int(&self,rhs:i64)->i64{
-		rhs*self.num/self.den as i64
+		rhs*self.num/(self.den as i64)
 	}
 	#[inline]
 	pub fn rhs_div_int(&self,rhs:i64)->i64{
-		rhs*self.den as i64/self.num
+		rhs*(self.den as i64)/self.num
 	}
 	#[inline]
 	pub fn mul_ref(&self,rhs:&Ratio64)->Ratio64{
 		let (num,den)=(self.num*rhs.num,self.den*rhs.den);
 		let d=gcd(num.unsigned_abs(),den);
 		Self{
-			num:num/d as i64,
+			num:num/(d as i64),
 			den:den/d,
 		}
 	}
@@ -234,7 +234,7 @@ impl std::ops::Mul<Ratio64> for Ratio64{
 		let (num,den)=(self.num*rhs.num,self.den*rhs.den);
 		let d=gcd(num.unsigned_abs(),den);
 		Self{
-			num:num/d as i64,
+			num:num/(d as i64),
 			den:den/d,
 		}
 	}
@@ -451,7 +451,7 @@ impl Into<f32> for Planar64{
 impl From<Ratio64> for Planar64{
 	#[inline]
 	fn from(ratio:Ratio64)->Self{
-		Self((((ratio.num as i128)<<32)/ratio.den as i128) as i64)
+		Self((((ratio.num as i128)<<32)/(ratio.den as i128)) as i64)
 	}
 }
 #[derive(Debug)]
@@ -572,7 +572,7 @@ impl std::ops::Div<Planar64> for Planar64{
 	type Output=Planar64;
 	#[inline]
 	fn div(self, rhs: Planar64) -> Self::Output {
-		Planar64((((self.0 as i128)<<32)/rhs.0 as i128) as i64)
+		Planar64((((self.0 as i128)<<32)/(rhs.0 as i128)) as i64)
 	}
 }
 // impl PartialOrd<i64> for Planar64{
