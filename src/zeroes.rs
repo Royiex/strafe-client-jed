@@ -28,7 +28,12 @@ pub fn zeroes2(a0:Planar64,a1:Planar64,a2:Planar64) -> Vec<Planar64>{
 pub fn zeroes1(a0:Planar64,a1:Planar64) -> Vec<Planar64> {
 	if a1==Planar64::ZERO{
 		return vec![];
-	} else {
-		return vec![-a0/a1];
+	}else{
+		let q=((-a0.get() as i128)<<32)/(a1.get() as i128);
+		if i64::MIN as i128<=q&&q<=i64::MAX as i128{
+			return vec![Planar64::raw(q as i64)];
+		}else{
+			return vec![];
+		}
 	}
 }
