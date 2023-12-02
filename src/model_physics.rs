@@ -384,12 +384,12 @@ impl MinkowskiMesh<'_>{
 		for &directed_edge_id in self.vert_edges(vert_id).iter(){
 			let edge_n=self.directed_edge_n(directed_edge_id);
 			//is boundary uncrossable by a crawl from infinity
-			if infinity_dir.dot(edge_n)==Planar64::ZERO{
-				let edge_verts=self.edge_verts(directed_edge_id.as_undirected());
-				//select opposite vertex
-				let test_vert_id=edge_verts[directed_edge_id.parity() as usize];
-				//test if it's closer
-				let diff=point-self.vert(test_vert_id);
+			let edge_verts=self.edge_verts(directed_edge_id.as_undirected());
+			//select opposite vertex
+			let test_vert_id=edge_verts[directed_edge_id.parity() as usize];
+			//test if it's closer
+			let diff=point-self.vert(test_vert_id);
+			if crate::zeroes::zeroes1(edge_n.dot(diff),edge_n.dot(infinity_dir)).len()==0{
 				let distance_squared=diff.dot(diff);
 				if distance_squared<*best_distance_squared{
 					best_transition=Transition::Vert(test_vert_id);
@@ -405,9 +405,10 @@ impl MinkowskiMesh<'_>{
 		for &directed_edge_id in self.vert_edges(vert_id).iter(){
 			let edge_n=self.directed_edge_n(directed_edge_id);
 			//is boundary uncrossable by a crawl from infinity
-			if infinity_dir.dot(edge_n)==Planar64::ZERO{
+			//check if time of collision is outside Time::MIN..Time::MAX
+			let d=edge_n.dot(diff);
+			if crate::zeroes::zeroes1(d,edge_n.dot(infinity_dir)).len()==0{
 				//test the edge
-				let d=diff.dot(edge_n);
 				let edge_nn=edge_n.dot(edge_n);
 				if Planar64::ZERO<=d&&d<=edge_nn{
 					let distance_squared={
@@ -446,7 +447,8 @@ impl MinkowskiMesh<'_>{
 			EV::Edge(edge_id)=>{
 				//cross to face if the boundary is not crossable and we are on the wrong side
 				let edge_n=self.edge_n(edge_id);
-				let vert_sum={
+				// point is multiplied by two because vert_sum sums two vertices.
+				let delta_pos=point*2-{
 					let &[v0,v1]=self.edge_verts(edge_id).borrow();
 					self.vert(v0)+self.vert(v1)
 				};
@@ -454,9 +456,10 @@ impl MinkowskiMesh<'_>{
 					let face_n=self.face_nd(face_id).0;
 					//edge-face boundary nd, n facing out of the face towards the edge
 					let boundary_n=face_n.cross(edge_n)*(i as i64*2-1);
-					let boundary_d=boundary_n.dot128(vert_sum);
-					// point.dot(boundary_n) is multiplied by two because vert_sum sums two vertices.
-					if infinity_dir.dot(boundary_n)==Planar64::ZERO&&point.dot128(boundary_n)*2<=boundary_d{
+					let boundary_d=boundary_n.dot(delta_pos);
+					//check if time of collision is outside Time::MIN..Time::MAX
+					//infinity_dir can always be treated as a velocity
+					if (boundary_d)<=Planar64::ZERO&&crate::zeroes::zeroes1(boundary_d,boundary_n.dot(infinity_dir)*2).len()==0{
 						//both faces cannot pass this condition, return early if one does.
 						return FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Face(face_id);
 					}
