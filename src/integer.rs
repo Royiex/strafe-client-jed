@@ -807,6 +807,17 @@ impl std::ops::Mul<Time> for Planar64Vec3{
 		))
 	}
 }
+impl std::ops::Div<Planar64> for Planar64Vec3{
+	type Output=Planar64Vec3;
+	#[inline]
+	fn div(self,rhs:Planar64)->Self::Output{
+		Planar64Vec3(glam::i64vec3(
+			(((self.0.x as i128)<<32)/(rhs.0 as i128)) as i64,
+			(((self.0.y as i128)<<32)/(rhs.0 as i128)) as i64,
+			(((self.0.z as i128)<<32)/(rhs.0 as i128)) as i64,
+		))
+	}
+}
 impl std::ops::Div<i64> for Planar64Vec3{
 	type Output=Planar64Vec3;
 	#[inline]
