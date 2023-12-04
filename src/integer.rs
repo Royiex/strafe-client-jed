@@ -209,8 +209,8 @@ impl TryFrom<f32> for Ratio64{
 			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
 			std::num::FpCategory::Infinite=>Err(Self::Error::Infinite),
 			std::num::FpCategory::Zero=>Ok(Self::ZERO),
-			std::num::FpCategory::Subnormal=>Err(Self::Error::Subnormal),
-			std::num::FpCategory::Normal=>ratio64_from_mes(integer_decode_f32(value)),
+			std::num::FpCategory::Subnormal
+			|std::num::FpCategory::Normal=>ratio64_from_mes(integer_decode_f32(value)),
 		}
 	}
 }
@@ -222,8 +222,8 @@ impl TryFrom<f64> for Ratio64{
 			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
 			std::num::FpCategory::Infinite=>Err(Self::Error::Infinite),
 			std::num::FpCategory::Zero=>Ok(Self::ZERO),
-			std::num::FpCategory::Subnormal=>Err(Self::Error::Subnormal),
-			std::num::FpCategory::Normal=>ratio64_from_mes(integer_decode_f64(value)),
+			std::num::FpCategory::Subnormal
+			|std::num::FpCategory::Normal=>ratio64_from_mes(integer_decode_f64(value)),
 		}
 	}
 }
@@ -488,8 +488,8 @@ impl TryFrom<f32> for Planar64{
 			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
 			std::num::FpCategory::Infinite=>Err(Self::Error::Infinite),
 			std::num::FpCategory::Zero=>Ok(Self::ZERO),
-			std::num::FpCategory::Subnormal=>Err(Self::Error::Subnormal),
-			std::num::FpCategory::Normal=>planar64_from_mes(integer_decode_f32(value)),
+			std::num::FpCategory::Subnormal
+			|std::num::FpCategory::Normal=>planar64_from_mes(integer_decode_f32(value)),
 		}
 	}
 }
@@ -501,8 +501,8 @@ impl TryFrom<f64> for Planar64{
 			std::num::FpCategory::Nan=>Err(Self::Error::Nan),
 			std::num::FpCategory::Infinite=>Err(Self::Error::Infinite),
 			std::num::FpCategory::Zero=>Ok(Self::ZERO),
-			std::num::FpCategory::Subnormal=>Err(Self::Error::Subnormal),
-			std::num::FpCategory::Normal=>planar64_from_mes(integer_decode_f64(value)),
+			std::num::FpCategory::Subnormal
+			|std::num::FpCategory::Normal=>planar64_from_mes(integer_decode_f64(value)),
 		}
 	}
 }
