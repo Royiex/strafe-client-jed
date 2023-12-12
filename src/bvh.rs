@@ -72,9 +72,9 @@ fn generate_bvh_node(boxen:Vec<(usize,Aabb)>)->BvhNode{
 			sort_y.push((*i,center.y()));
 			sort_z.push((*i,center.z()));
 		}
-		sort_x.sort_by(|tup0,tup1|tup0.1.partial_cmp(&tup1.1).unwrap());
-		sort_y.sort_by(|tup0,tup1|tup0.1.partial_cmp(&tup1.1).unwrap());
-		sort_z.sort_by(|tup0,tup1|tup0.1.partial_cmp(&tup1.1).unwrap());
+		sort_x.sort_by(|tup0,tup1|tup0.1.cmp(&tup1.1));
+		sort_y.sort_by(|tup0,tup1|tup0.1.cmp(&tup1.1));
+		sort_z.sort_by(|tup0,tup1|tup0.1.cmp(&tup1.1));
 		let h=n/2;
 		let median_x=sort_x[h].1;
 		let median_y=sort_y[h].1;
