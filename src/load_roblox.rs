@@ -14,12 +14,15 @@ fn class_is_a(class: &str, superclass: &str) -> bool {
 	return false
 }
 fn recursive_collect_superclass(objects: &mut std::vec::Vec<rbx_dom_weak::types::Ref>,dom: &rbx_dom_weak::WeakDom, instance: &rbx_dom_weak::Instance, superclass: &str){
-	for &referent in instance.children() {
-		if let Some(c) = dom.get_by_ref(referent) {
-			if class_is_a(c.class.as_str(), superclass) {
-				objects.push(c.referent());//copy ref
+	let mut stack=vec![instance];
+	while let Some(item)=stack.pop(){
+		for &referent in item.children(){
+			if let Some(c)=dom.get_by_ref(referent){
+				if class_is_a(c.class.as_str(),superclass){
+					objects.push(c.referent());//copy ref
+				}
+				stack.push(c);
 			}
-			recursive_collect_superclass(objects,dom,c,superclass);
 		}
 	}
 }
