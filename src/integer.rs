@@ -459,26 +459,8 @@ pub enum Planar64TryFromFloatError{
 	Nan,
 	Infinite,
 	Subnormal,
-	HighlyNegativeExponent(i16),
-	HighlyPositiveExponent(i16),
-}
-#[inline]
-fn planar64_from_mes((m,e,s):(u64,i16,i8))->Result<Planar64,Planar64TryFromFloatError>{
-	let e32=e+32;
-	if e32<0&&(m>>-e32)==0{//shifting m will underflow to 0
-		Ok(Planar64::ZERO)
-		// println!("m{} e{} s{}",m,e,s);
-		// println!("f={}",(m as f64)*(2.0f64.powf(e as f64))*(s as f64));
-		// Err(Planar64TryFromFloatError::HighlyNegativeExponent(e))
-	}else if (64-m.leading_zeros() as i16)+e32<64{//shifting m will not overflow
-		if e32<0{
-			Ok(Planar64((m as i64)*(s as i64)>>-e32))
-		}else{
-			Ok(Planar64((m as i64)*(s as i64)<<e32))
-		}
-	}else{//if shifting m will overflow (prev check failed)
-		Err(Planar64TryFromFloatError::HighlyPositiveExponent(e))
-	}
+	HighlyNegativeExponent,
+	HighlyPositiveExponent,
 }
 impl TryFrom<f32> for Planar64{
 	type Error=Planar64TryFromFloatError;
@@ -489,7 +471,14 @@ impl TryFrom<f32> for Planar64{
 			std::num::FpCategory::Infinite=>Err(Self::Error::Infinite),
 			std::num::FpCategory::Zero=>Ok(Self::ZERO),
 			std::num::FpCategory::Subnormal
-			|std::num::FpCategory::Normal=>planar64_from_mes(integer_decode_f32(value)),
+			|std::num::FpCategory::Normal=>{
+				let planar=value*PLANAR64_ONE_FLOAT32;
+				if planar<(i64::MIN as f32)||(i64::MAX as f32)<planar{
+					Err(Self::Error::HighlyPositiveExponent)
+				}else{
+					Ok(Planar64(unsafe{planar.to_int_unchecked()}))
+				}
+			}
 		}
 	}
 }
@@ -502,7 +491,14 @@ impl TryFrom<f64> for Planar64{
 			std::num::FpCategory::Infinite=>Err(Self::Error::Infinite),
 			std::num::FpCategory::Zero=>Ok(Self::ZERO),
 			std::num::FpCategory::Subnormal
-			|std::num::FpCategory::Normal=>planar64_from_mes(integer_decode_f64(value)),
+			|std::num::FpCategory::Normal=>{
+				let planar=value*PLANAR64_ONE_FLOAT64;
+				if planar<(i64::MIN as f64)||(i64::MAX as f64)<planar{
+					Err(Self::Error::HighlyPositiveExponent)
+				}else{
+					Ok(Planar64(unsafe{planar.to_int_unchecked()}))
+				}
+			}
 		}
 	}
 }
