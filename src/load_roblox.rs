@@ -265,6 +265,18 @@ pub fn generate_indexed_models(dom:rbx_dom_weak::WeakDom) -> crate::model::Index
 			{
 				let model_transform=planar64_affine3_from_roblox(cf,size);
 
+				if model_transform.matrix3.determinant()==Planar64::ZERO{
+					let mut parent_ref=object.parent();
+					let mut full_path=object.name.clone();
+					while let Some(parent)=dom.get_by_ref(parent_ref){
+						full_path=format!("{}.{}",parent.name,full_path);
+						parent_ref=parent.parent();
+					}
+					println!("Zero determinant CFrame at location {}",full_path);
+					println!("matrix3:{}",model_transform.matrix3);
+					continue;
+				}
+
 				//push TempIndexedAttributes
 				let mut force_intersecting=false;
 				let mut temp_indexing_attributes=Vec::new();
