@@ -22,7 +22,7 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 				//non-deduplicated
 				let mut spam_pos=Vec::new();
 				let mut spam_tex=Vec::new();
-				let mut spam_normal=vec![[0.0,1.0,0.0]];
+				let mut spam_normal=Vec::new();
 				let mut spam_vertices=Vec::new();
 				let groups=world_model.faces()
 				.filter(|face| face.is_visible())//TODO: look at this
@@ -31,6 +31,11 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 					let face_texture_data=face_texture.texture_data();
 					let (s,t)=(glam::Vec3A::from_slice(&face_texture.texture_transforms_u[0..3]),glam::Vec3A::from_slice(&face_texture.texture_transforms_v[0..3]));
 					let (s0,t0)=(face_texture.texture_transforms_u[3],face_texture.texture_transforms_v[3]);
+
+					//normal
+					let normal=face.normal();
+					let normal_idx=spam_normal.len() as u32;
+					spam_normal.push(crate::integer::Planar64Vec3::try_from([normal.x,normal.z,normal.y]).unwrap());
 					
 					crate::model::IndexedGroup{
 						texture:None,
@@ -48,7 +53,7 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 							spam_vertices.push(crate::model::IndexedVertex{
 								pos: pos_idx as u32,
 								tex: tex_idx as u32,
-								normal: 0,
+								normal: normal_idx,
 								color: 0,
 							});
 							i
@@ -58,7 +63,7 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 				crate::model::IndexedModel{
 					unique_pos:spam_pos.into_iter().map(|v|crate::integer::Planar64Vec3::try_from(v).unwrap()).collect(),
 					unique_tex:spam_tex.into_iter().map(|v|crate::model::TextureCoordinate::from_array(v)).collect(),
-					unique_normal:spam_normal.into_iter().map(|v|crate::integer::Planar64Vec3::try_from(v).unwrap()).collect(),
+					unique_normal:spam_normal,
 					unique_color:vec![glam::Vec4::ONE],
 					unique_vertices:spam_vertices,
 					groups,
