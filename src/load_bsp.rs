@@ -42,12 +42,12 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 						polys:vec![crate::model::IndexedPolygon{vertices:face.vertex_indexes().map(|vertex_index|{
 							let pos=glam::Vec3A::from_array(vertices[vertex_index as usize]);
 							let pos_idx=spam_pos.len();
-							spam_pos.push(glam::Vec3Swizzles::xzy(pos)*VALVE_SCALE);
+							spam_pos.push(crate::integer::Planar64Vec3::try_from(glam::Vec3Swizzles::xzy(pos)*VALVE_SCALE).unwrap());
 
 							//calculate texture coordinates
 							let tex=[(pos.dot(s)+s0)/face_texture_data.width as f32,(pos.dot(t)+t0)/face_texture_data.height as f32];
 							let tex_idx=spam_tex.len() as u32;
-							spam_tex.push(tex);
+							spam_tex.push(crate::model::TextureCoordinate::from_array(tex));
 
 							let i=spam_vertices.len() as u32;
 							spam_vertices.push(crate::model::IndexedVertex{
@@ -61,8 +61,8 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 					}
 				}).collect();
 				crate::model::IndexedModel{
-					unique_pos:spam_pos.into_iter().map(|v|crate::integer::Planar64Vec3::try_from(v).unwrap()).collect(),
-					unique_tex:spam_tex.into_iter().map(|v|crate::model::TextureCoordinate::from_array(v)).collect(),
+					unique_pos:spam_pos,
+					unique_tex:spam_tex,
 					unique_normal:spam_normal,
 					unique_color:vec![glam::Vec4::ONE],
 					unique_vertices:spam_vertices,
