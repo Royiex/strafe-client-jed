@@ -1,4 +1,7 @@
 const VALVE_SCALE:f32=1.0/16.0;
+fn valve_transform(v:[f32;3])->crate::integer::Planar64Vec3{
+	crate::integer::Planar64Vec3::try_from([v[0]*VALVE_SCALE,v[2]*VALVE_SCALE,v[1]*VALVE_SCALE]).unwrap()
+}
 pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Result<crate::model::IndexedModelInstances,vbsp::BspError>{
 	let mut s=Vec::new();
 
@@ -31,8 +34,9 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 				.map(|face|{
 					let face_texture=face.texture();
 					let face_texture_data=face_texture.texture_data();
-					let (s,t)=(glam::Vec3A::from_slice(&face_texture.texture_transforms_u[0..3]),glam::Vec3A::from_slice(&face_texture.texture_transforms_v[0..3]));
-					let (s0,t0)=(face_texture.texture_transforms_u[3],face_texture.texture_transforms_v[3]);
+					let (texture_u,texture_v)=(glam::Vec3A::from_slice(&face_texture.texture_transforms_u[0..3]),glam::Vec3A::from_slice(&face_texture.texture_transforms_v[0..3]));
+					let texture_offset=glam::vec2(face_texture.texture_transforms_u[3],face_texture.texture_transforms_v[3]);
+					let texture_size=glam::vec2(face_texture_data.width as f32,face_texture_data.height as f32);
 
 					//texture
 					let texture_id=if let Some(&texture_id)=texture_id_from_name.get(face_texture_data.name()){
@@ -47,19 +51,19 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 					//normal
 					let normal=face.normal();
 					let normal_idx=spam_normal.len() as u32;
-					spam_normal.push(crate::integer::Planar64Vec3::try_from([normal.x,normal.z,normal.y]).unwrap());
+					spam_normal.push(valve_transform(<[f32;3]>::from(normal)));
 					
 					crate::model::IndexedGroup{
 						texture:Some(texture_id),
 						polys:vec![crate::model::IndexedPolygon{vertices:face.vertex_indexes().map(|vertex_index|{
 							let pos=glam::Vec3A::from_array(vertices[vertex_index as usize]);
 							let pos_idx=spam_pos.len();
-							spam_pos.push(crate::integer::Planar64Vec3::try_from(glam::Vec3Swizzles::xzy(pos)*VALVE_SCALE).unwrap());
+							spam_pos.push(valve_transform(vertices[vertex_index as usize]));
 
 							//calculate texture coordinates
-							let tex=[(pos.dot(s)+s0)/face_texture_data.width as f32,(pos.dot(t)+t0)/face_texture_data.height as f32];
+							let tex=(glam::vec2(pos.dot(texture_u),pos.dot(texture_v))+texture_offset)/texture_size;
 							let tex_idx=spam_tex.len() as u32;
-							spam_tex.push(crate::model::TextureCoordinate::from_array(tex));
+							spam_tex.push(tex);
 
 							let i=spam_vertices.len() as u32;
 							spam_vertices.push(crate::model::IndexedVertex{
