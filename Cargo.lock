@@ -1758,6 +1758,7 @@ dependencies = [
  "rbx_reflection_database",
  "rbx_xml",
  "vbsp",
+ "vmdl",
  "wgpu",
  "winit",
 ]
@@ -1879,7 +1880,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3523ab5a71916ccf420eebdf5521fcef02141234bbc0b8a49f2fdc4544364ef"
 dependencies = [
  "pin-project-lite",
+ "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.48",
 ]
 
 [[package]]
@@ -1887,6 +1900,9 @@ name = "tracing-core"
 version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c06d3da6113f116aaee68e4d601191614c9053067f9ab7f6edbcb161237daa54"
+dependencies = [
+ "once_cell",
+]
 
 [[package]]
 name = "ttf-parser"
@@ -1956,6 +1972,22 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+
+[[package]]
+name = "vmdl"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "892922743c4c107372331efd8f67c57282590f8c18c26b4465c4b0e1e6678664"
+dependencies = [
+ "arrayvec",
+ "bitflags 2.4.1",
+ "bytemuck",
+ "cgmath",
+ "itertools",
+ "static_assertions",
+ "thiserror",
+ "tracing",
+]
 
 [[package]]
 name = "walkdir"
