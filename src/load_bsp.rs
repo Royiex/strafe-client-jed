@@ -17,6 +17,8 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 				.map(|vertex|<[f32;3]>::from(vertex.position))
 				.collect();
 
+			let mut name_from_texture_id=Vec::new();
+			let mut texture_id_from_name=std::collections::HashMap::new();
 
 			let models=bsp.models().map(|world_model|{
 				//non-deduplicated
@@ -32,13 +34,23 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 					let (s,t)=(glam::Vec3A::from_slice(&face_texture.texture_transforms_u[0..3]),glam::Vec3A::from_slice(&face_texture.texture_transforms_v[0..3]));
 					let (s0,t0)=(face_texture.texture_transforms_u[3],face_texture.texture_transforms_v[3]);
 
+					//texture
+					let texture_id=if let Some(&texture_id)=texture_id_from_name.get(face_texture_data.name()){
+						texture_id
+					}else{
+						let texture_id=name_from_texture_id.len() as u32;
+						texture_id_from_name.insert(face_texture_data.name(),texture_id);
+						name_from_texture_id.push(face_texture_data.name().to_string());
+						texture_id
+					};
+
 					//normal
 					let normal=face.normal();
 					let normal_idx=spam_normal.len() as u32;
 					spam_normal.push(crate::integer::Planar64Vec3::try_from([normal.x,normal.z,normal.y]).unwrap());
 					
 					crate::model::IndexedGroup{
-						texture:None,
+						texture:Some(texture_id),
 						polys:vec![crate::model::IndexedPolygon{vertices:face.vertex_indexes().map(|vertex_index|{
 							let pos=glam::Vec3A::from_array(vertices[vertex_index as usize]);
 							let pos_idx=spam_pos.len();
@@ -75,7 +87,7 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 			}).collect();
 
 			Ok(crate::model::IndexedModelInstances{
-				textures:Vec::new(),
+				textures:name_from_texture_id,
 				models,
 				spawn_point,
 				modes:Vec::new(),
