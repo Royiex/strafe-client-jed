@@ -18,7 +18,7 @@ rbx_binary = "0.7.1"
 rbx_dom_weak = "2.5.0"
 rbx_reflection_database = "0.2.7"
 rbx_xml = "0.13.1"
-vbsp = { git="https://github.com/icewind1991/vbsp", rev = "b4e08b6e657357f2d0412617cf27a3e92f413dc0" }
+vbsp = "0.5.0"
 wgpu = "0.18.0"
 winit = { version = "0.29.2", features = ["rwh_05"] }
 
