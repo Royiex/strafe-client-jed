@@ -23,7 +23,7 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 			let mut name_from_texture_id=Vec::new();
 			let mut texture_id_from_name=std::collections::HashMap::new();
 
-			let models=bsp.models().map(|world_model|{
+			let mut models=bsp.models().map(|world_model|{
 				//non-deduplicated
 				let mut spam_pos=Vec::new();
 				let mut spam_tex=Vec::new();
@@ -94,9 +94,103 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 				}
 			}).collect();
 
+			//dedupe prop models
+			let mut model_dedupe=std::collections::HashSet::new();
+			for prop in bsp.static_props(){
+				model_dedupe.insert(prop.model());
+			}
+
+			//generate unique meshes
+			let mut model_map=std::collections::HashMap::with_capacity(model_dedupe.len());
+			let mut prop_models=Vec::new();
+			for model_name in model_dedupe{
+				//.mdl, .vvd, .dx90.vtx
+				let mut path=std::path::PathBuf::from(model_name);
+				let file_name=std::path::PathBuf::from(path.file_stem().unwrap());
+				path.pop();
+				path.push(file_name);
+				let mut vvd_path=path.clone();
+				let mut vtx_path=path.clone();
+				vvd_path.set_extension("vvd");
+				vtx_path.set_extension("dx90.vtx");
+				match (bsp.pack.get(model_name),bsp.pack.get(vvd_path.as_os_str().to_str().unwrap()),bsp.pack.get(vtx_path.as_os_str().to_str().unwrap())){
+					(Ok(Some(mdl_file)),Ok(Some(vvd_file)),Ok(Some(vtx_file)))=>{
+						match (vmdl::mdl::Mdl::read(mdl_file.as_ref()),vmdl::vvd::Vvd::read(vvd_file.as_ref()),vmdl::vtx::Vtx::read(vtx_file.as_ref())){
+							(Ok(mdl),Ok(vvd),Ok(vtx))=>{
+								let model=vmdl::Model::from_parts(mdl,vtx,vvd);
+
+								let mut spam_pos=Vec::with_capacity(model.vertices().len());
+								let mut spam_normal=Vec::with_capacity(model.vertices().len());
+								let mut spam_tex=Vec::with_capacity(model.vertices().len());
+								let mut spam_vertices=Vec::with_capacity(model.vertices().len());
+								for (i,vertex) in model.vertices().iter().enumerate(){
+									spam_pos.push(valve_transform(<[f32;3]>::from(vertex.position)));
+									spam_normal.push(valve_transform(<[f32;3]>::from(vertex.normal)));
+									spam_tex.push(glam::Vec2::from_array(vertex.texture_coordinates));
+									spam_vertices.push(crate::model::IndexedVertex{
+										pos:i as u32,
+										tex:i as u32,
+										normal:i as u32,
+										color:0,
+									});
+								}
+
+								let model_id=prop_models.len();
+								model_map.insert(model_name,model_id);
+								prop_models.push(crate::model::IndexedModel{
+									unique_pos:spam_pos,
+									unique_normal:spam_normal,
+									unique_tex:spam_tex,
+									unique_color:vec![glam::Vec4::ONE],
+									unique_vertices:spam_vertices,
+									groups:model.meshes().map(|mesh|{
+										crate::model::IndexedGroup{
+											texture:None,//mesh.material_index(),
+											polys:mesh.vertex_strip_indices().map(|poly|{
+												crate::model::IndexedPolygon{
+													vertices:poly.map(|i|i as u32).collect()
+												}
+											}).collect(),
+										}
+									}).collect(),
+									instances:Vec::new(),
+								});
+							},
+							_=>print!("model_name={} error",model_name),
+						}
+					},
+					_=>print!("no model name={}",model_name),
+				}
+			}
+
+			//generate model instances
+			for prop in bsp.static_props(){
+				let placement=prop.as_prop_placement();
+				println!("prop={}",placement.model);
+				let model=prop_models.get_mut(model_map[placement.model]).unwrap();
+				model.instances.push(crate::model::ModelInstance{
+					transform:crate::integer::Planar64Affine3::new(
+						crate::integer::Planar64Mat3::try_from(
+							glam::Mat3A::from_diagonal(glam::Vec3::splat(placement.scale))
+							*glam::Mat3A::from_quat(
+								//TODO: does rotation need valve transform?
+								glam::Quat::from_xyzw(placement.rotation.v.x,placement.rotation.v.y,placement.rotation.v.z,placement.rotation.s),
+								
+							)
+						).unwrap(),
+						valve_transform(<[f32;3]>::from(placement.origin)),
+					),
+					attributes:crate::model::CollisionAttributes::Decoration,
+					..Default::default()
+				});
+			}
+
+			//actually add the prop models
+			prop_models.append(&mut models);
+
 			Ok(crate::model::IndexedModelInstances{
 				textures:name_from_texture_id,
-				models,
+				models:prop_models,
 				spawn_point,
 				modes:Vec::new(),
 			})
