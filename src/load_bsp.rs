@@ -11,56 +11,67 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 		Ok(bsp)=>{
 			let mut spawn_point=crate::integer::Planar64Vec3::ZERO;
 
-			let mut indexed_models=Vec::new();
-
 			let vertices: Vec<_> = bsp
 				.vertices
 				.iter()
-				.map(|vertex|[vertex.position.x*VALVE_SCALE,vertex.position.z*VALVE_SCALE,vertex.position.y*VALVE_SCALE])
+				.map(|vertex|<[f32;3]>::from(vertex.position))
 				.collect();
 
-			let world_objects=bsp.models().map(|world_model|{
-				let world_polygons:Vec<obj::SimplePolygon> = world_model
-					.faces()
-					.filter(|face| face.is_visible())
-					.map(|face| {
-						face.vertex_indexes()
-							.map(|vertex_index| obj::IndexTuple(vertex_index as usize, Some(0), Some(0)))
-							.collect()
-					})
-					.map(obj::SimplePolygon)
-					.collect();
 
-				obj::Object {
-					name: "".to_string(),
-					groups: vec![obj::Group {
-						name: "".to_string(),
-						index: 0,
-						material: None,
-						polys: world_polygons,
+			let models=bsp.models().map(|world_model|{
+				//non-deduplicated
+				let mut spam_pos=Vec::new();
+				let mut spam_tex=Vec::new();
+				let mut spam_normal=vec![[0.0,1.0,0.0]];
+				let mut spam_vertices=Vec::new();
+				let groups=world_model.faces()
+				.filter(|face| face.is_visible())//TODO: look at this
+				.map(|face|{
+					let face_texture=face.texture();
+					let face_texture_data=face_texture.texture_data();
+					let (s,t)=(glam::Vec3A::from_slice(&face_texture.texture_transforms_u[0..3]),glam::Vec3A::from_slice(&face_texture.texture_transforms_v[0..3]));
+					let (s0,t0)=(face_texture.texture_transforms_u[3],face_texture.texture_transforms_v[3]);
+					
+					crate::model::IndexedGroup{
+						texture:None,
+						polys:vec![crate::model::IndexedPolygon{vertices:face.vertex_indexes().map(|vertex_index|{
+							let pos=glam::Vec3A::from_array(vertices[vertex_index as usize]);
+							let pos_idx=spam_pos.len();
+							spam_pos.push(glam::Vec3Swizzles::xzy(pos)*VALVE_SCALE);
+
+							//calculate texture coordinates
+							let tex=[(pos.dot(s)+s0)/face_texture_data.width as f32,(pos.dot(t)+t0)/face_texture_data.height as f32];
+							let tex_idx=spam_tex.len() as u32;
+							spam_tex.push(tex);
+
+							let i=spam_vertices.len() as u32;
+							spam_vertices.push(crate::model::IndexedVertex{
+								pos: pos_idx as u32,
+								tex: tex_idx as u32,
+								normal: 0,
+								color: 0,
+							});
+							i
+						}).collect()}],
+					}
+				}).collect();
+				crate::model::IndexedModel{
+					unique_pos:spam_pos.into_iter().map(|v|crate::integer::Planar64Vec3::try_from(v).unwrap()).collect(),
+					unique_tex:spam_tex.into_iter().map(|v|crate::model::TextureCoordinate::from_array(v)).collect(),
+					unique_normal:spam_normal.into_iter().map(|v|crate::integer::Planar64Vec3::try_from(v).unwrap()).collect(),
+					unique_color:vec![glam::Vec4::ONE],
+					unique_vertices:spam_vertices,
+					groups,
+					instances:vec![crate::model::ModelInstance{
+						attributes:crate::model::CollisionAttributes::Decoration,
+						..Default::default()
 					}],
 				}
 			}).collect();
 
-			let obj_data = obj::ObjData {
-				position: vertices,
-				texture: vec![[0.0,0.0]],
-				normal: vec![[1.0,0.0,0.0]],
-				objects: world_objects,
-				material_libs: Vec::new(),
-			};
-
-			let mut new_indexed_models=crate::model::generate_indexed_model_list_from_obj(obj_data,glam::Vec4::ONE);
-
-			for indexed_model in &mut new_indexed_models{
-				indexed_model.instances.push(crate::model::ModelInstance{attributes:crate::model::CollisionAttributes::Decoration,..Default::default()});
-			}
-
-			indexed_models.append(&mut new_indexed_models);
-
 			Ok(crate::model::IndexedModelInstances{
 				textures:Vec::new(),
-				models:indexed_models,
+				models,
 				spawn_point,
 				modes:Vec::new(),
 			})
