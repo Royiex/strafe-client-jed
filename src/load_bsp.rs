@@ -1,4 +1,4 @@
-
+const VALVE_SCALE:f32=1.0/16.0;
 pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Result<crate::model::IndexedModelInstances,vbsp::BspError>{
 	let mut s=Vec::new();
 
@@ -16,13 +16,10 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 			let vertices: Vec<_> = bsp
 				.vertices
 				.iter()
-				.map(|vertex| <[f32; 3]>::from(vertex.position*0.01))
+				.map(|vertex|[vertex.position.x*VALVE_SCALE,vertex.position.z*VALVE_SCALE,vertex.position.y*VALVE_SCALE])
 				.collect();
 
-			println!("num vertices={}",vertices.len());
-
-			for world_model in bsp.models(){
-
+			let world_objects=bsp.models().map(|world_model|{
 				let world_polygons:Vec<obj::SimplePolygon> = world_model
 					.faces()
 					.filter(|face| face.is_visible())
@@ -34,9 +31,7 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 					.map(obj::SimplePolygon)
 					.collect();
 
-				println!("num world_polygons={}",world_polygons.len());
-
-				let world_object = obj::Object {
+				obj::Object {
 					name: "".to_string(),
 					groups: vec![obj::Group {
 						name: "".to_string(),
@@ -44,24 +39,24 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 						material: None,
 						polys: world_polygons,
 					}],
-				};
-
-				let obj_data = obj::ObjData {
-					position: vertices.clone(),//TODO: don't clone all vertices lmao
-					texture: vec![[0.0,0.0]],
-					normal: vec![[1.0,0.0,0.0]],
-					objects: vec![world_object],
-					material_libs: Vec::new(),
-				};
-
-				let mut new_indexed_models=crate::model::generate_indexed_model_list_from_obj(obj_data,glam::Vec4::ONE);
-
-				for indexed_model in &mut new_indexed_models{
-					indexed_model.instances.push(crate::model::ModelInstance{attributes:crate::model::CollisionAttributes::Decoration,..Default::default()});
 				}
+			}).collect();
 
-				indexed_models.append(&mut new_indexed_models);
+			let obj_data = obj::ObjData {
+				position: vertices,
+				texture: vec![[0.0,0.0]],
+				normal: vec![[1.0,0.0,0.0]],
+				objects: world_objects,
+				material_libs: Vec::new(),
+			};
+
+			let mut new_indexed_models=crate::model::generate_indexed_model_list_from_obj(obj_data,glam::Vec4::ONE);
+
+			for indexed_model in &mut new_indexed_models{
+				indexed_model.instances.push(crate::model::ModelInstance{attributes:crate::model::CollisionAttributes::Decoration,..Default::default()});
 			}
+
+			indexed_models.append(&mut new_indexed_models);
 
 			Ok(crate::model::IndexedModelInstances{
 				textures:Vec::new(),
