@@ -85,6 +85,10 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 					groups,
 					instances:vec![crate::model::ModelInstance{
 						attributes:crate::model::CollisionAttributes::Decoration,
+						transform:crate::integer::Planar64Affine3::new(
+							crate::integer::Planar64Mat3::default(),
+							valve_transform(<[f32;3]>::from(world_model.origin))
+						),
 						..Default::default()
 					}],
 				}
