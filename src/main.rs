@@ -47,7 +47,7 @@ fn load_file(path: std::path::PathBuf)->Option<model::IndexedModelInstances>{
 						},
 					}
 				},
-				b"VBSP"=>Some(load_bsp::generate_indexed_models(&mut input)),
+				b"VBSP"=>load_bsp::generate_indexed_models(&mut input).ok(),
 				//b"SNFM"=>Some(sniffer::generate_indexed_models(input)),
 				//b"SNFB"=>Some(sniffer::load_bot(input)),
 				other=>{
