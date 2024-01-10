@@ -180,22 +180,24 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 			//generate model instances
 			for prop in bsp.static_props(){
 				let placement=prop.as_prop_placement();
-				let model=prop_models.get_mut(model_map[placement.model]).unwrap();
-				model.instances.push(crate::model::ModelInstance{
-					transform:crate::integer::Planar64Affine3::new(
-						crate::integer::Planar64Mat3::try_from(
-							glam::Mat3A::from_diagonal(glam::Vec3::splat(placement.scale))
-							*glam::Mat3A::from_quat(
-								//TODO: does rotation need valve transform?
-								glam::Quat::from_xyzw(placement.rotation.v.x,placement.rotation.v.y,placement.rotation.v.z,placement.rotation.s),
-								
-							)
-						).unwrap(),
-						valve_transform(<[f32;3]>::from(placement.origin)),
-					),
-					attributes:crate::model::CollisionAttributes::Decoration,
-					..Default::default()
-				});
+				if let Some(&model_index)=model_map.get(placement.model){
+					prop_models[model_index].instances.push(crate::model::ModelInstance{
+						transform:crate::integer::Planar64Affine3::new(
+							crate::integer::Planar64Mat3::try_from(
+								glam::Mat3A::from_diagonal(glam::Vec3::splat(placement.scale))
+								*glam::Mat3A::from_quat(
+									//TODO: does rotation need valve transform?
+									glam::Quat::from_xyzw(placement.rotation.v.x,placement.rotation.v.y,placement.rotation.v.z,placement.rotation.s),
+								)
+							).unwrap(),
+							valve_transform(<[f32;3]>::from(placement.origin)),
+						),
+						attributes:crate::model::CollisionAttributes::Decoration,
+						..Default::default()
+					});
+				}else{
+					println!("model not found {}",placement.model);
+				}
 			}
 
 			//actually add the prop models
