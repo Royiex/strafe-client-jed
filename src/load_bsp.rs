@@ -159,12 +159,16 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 										};
 
 										crate::model::IndexedGroup{
-											polys:mesh.vertex_strip_indices().map(|poly|{
-												crate::model::IndexedPolygon{
-													vertices:poly.map(|i|i as u32).collect()
-												}
-											}).collect(),
 											texture,
+											polys:{
+												//looking at the code, it would seem that the strips are pre-deindexed into triangle lists when calling this function
+												mesh.vertex_strip_indices().map(|strip|{
+													strip.collect::<Vec<usize>>().chunks(3).map(|tri|{
+														//tris are ccw, probably because of the quaternion
+														crate::model::IndexedPolygon{vertices:vec![tri[1] as u32,tri[0] as u32,tri[2] as u32]}
+													}).collect::<Vec<crate::model::IndexedPolygon>>()
+												}).flatten().collect()
+											},
 										}
 									}).collect(),
 									instances:Vec::new(),
