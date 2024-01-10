@@ -166,7 +166,6 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 			//generate model instances
 			for prop in bsp.static_props(){
 				let placement=prop.as_prop_placement();
-				println!("prop={}",placement.model);
 				let model=prop_models.get_mut(model_map[placement.model]).unwrap();
 				model.instances.push(crate::model::ModelInstance{
 					transform:crate::integer::Planar64Affine3::new(

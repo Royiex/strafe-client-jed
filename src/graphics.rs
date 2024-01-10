@@ -159,7 +159,7 @@ impl GraphicsState{
 					ddsfile::Dds::read(&mut file).unwrap()
 				})));
 			}else{
-				println!("missing texture path={:?}",path);
+				//println!("missing texture path={:?}",path);
 			}
 		}
 
