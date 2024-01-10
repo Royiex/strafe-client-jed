@@ -43,7 +43,7 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 						texture_id
 					}else{
 						let texture_id=name_from_texture_id.len() as u32;
-						texture_id_from_name.insert(face_texture_data.name(),texture_id);
+						texture_id_from_name.insert(face_texture_data.name().to_string(),texture_id);
 						name_from_texture_id.push(face_texture_data.name().to_string());
 						texture_id
 					};
@@ -118,6 +118,7 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 						match (vmdl::mdl::Mdl::read(mdl_file.as_ref()),vmdl::vvd::Vvd::read(vvd_file.as_ref()),vmdl::vtx::Vtx::read(vtx_file.as_ref())){
 							(Ok(mdl),Ok(vvd),Ok(vtx))=>{
 								let model=vmdl::Model::from_parts(mdl,vtx,vvd);
+								let skin=model.skin_tables().nth(0).unwrap();
 
 								let mut spam_pos=Vec::with_capacity(model.vertices().len());
 								let mut spam_normal=Vec::with_capacity(model.vertices().len());
@@ -144,13 +145,26 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 									unique_color:vec![glam::Vec4::ONE],
 									unique_vertices:spam_vertices,
 									groups:model.meshes().map(|mesh|{
+										let texture=match skin.texture(mesh.material_index()){
+											Some(texture_name)=>Some(if let Some(&texture_id)=texture_id_from_name.get(texture_name){
+												texture_id
+											}else{
+												//println!("texture! {}",texture_name);
+												let texture_id=name_from_texture_id.len() as u32;
+												texture_id_from_name.insert(texture_name.to_string(),texture_id);
+												name_from_texture_id.push(texture_name.to_string());
+												texture_id
+											}),
+											None=>None,
+										};
+
 										crate::model::IndexedGroup{
-											texture:None,//mesh.material_index(),
 											polys:mesh.vertex_strip_indices().map(|poly|{
 												crate::model::IndexedPolygon{
 													vertices:poly.map(|i|i as u32).collect()
 												}
 											}).collect(),
+											texture,
 										}
 									}).collect(),
 									instances:Vec::new(),
