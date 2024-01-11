@@ -199,10 +199,13 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 						transform:crate::integer::Planar64Affine3::new(
 							crate::integer::Planar64Mat3::try_from(
 								glam::Mat3A::from_diagonal(glam::Vec3::splat(placement.scale))
-								*glam::Mat3A::from_quat(
-									//TODO: does rotation need valve transform?
-									glam::Quat::from_xyzw(placement.rotation.v.x,placement.rotation.v.y,placement.rotation.v.z,placement.rotation.s),
-								)
+								//TODO: figure this out
+								*glam::Mat3A::from_quat(glam::Quat::from_xyzw(
+									placement.rotation.v.x,//b
+									placement.rotation.v.y,//c
+									placement.rotation.v.z,//d
+									placement.rotation.s,//a
+								))
 							).unwrap(),
 							valve_transform(<[f32;3]>::from(placement.origin)),
 						),
