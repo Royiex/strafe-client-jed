@@ -184,10 +184,10 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 									instances:Vec::new(),
 								});
 							},
-							_=>print!("model_name={} error",model_name),
+							_=>println!("model_name={} error",model_name),
 						}
 					},
-					_=>print!("no model name={}",model_name),
+					_=>println!("no model name={}",model_name),
 				}
 			}
 
@@ -210,7 +210,7 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 						..Default::default()
 					});
 				}else{
-					println!("model not found {}",placement.model);
+					//println!("model not found {}",placement.model);
 				}
 			}
 
