@@ -11,8 +11,33 @@ pub struct IndexedVertex{
 pub struct IndexedPolygon{
 	pub vertices:Vec<u32>,
 }
+pub type TextureId=u32;
+pub type ShaderId=u32;
+pub enum ShaderResource{
+	Model,//pass in model attributes
+	Texture(TextureId),
+	Depth,//current draw depth
+	Normal,
+	BehindTexture,//what is drawn behind this pixel
+}
+pub enum RenderType{
+	NoTexture,//simply draw the vertex color or model color or something
+	Texture(TextureId),
+	Material{
+		texture:TextureId,
+		normal:TextureId,
+	},
+	//GUI,
+	Portal{
+		transform:glam::Mat4,
+	},
+	Shader{
+		id:ShaderId,
+		resources:Vec<ShaderResource>,
+	},
+}
 pub struct IndexedGroup{
-	pub texture:Option<u32>,//RenderPattern? material/texture/shader/flat color
+	pub texture:Option<u32>,//TODO: RenderType
 	pub polys:Vec<IndexedPolygon>,
 }
 pub struct IndexedModel{
