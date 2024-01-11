@@ -104,8 +104,9 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 			let mut model_map=std::collections::HashMap::with_capacity(model_dedupe.len());
 			let mut prop_models=Vec::new();
 			for model_name in model_dedupe{
+				let model_name_lower=model_name.to_lowercase();
 				//.mdl, .vvd, .dx90.vtx
-				let mut path=std::path::PathBuf::from(model_name);
+				let mut path=std::path::PathBuf::from(model_name_lower.as_str());
 				let file_name=std::path::PathBuf::from(path.file_stem().unwrap());
 				path.pop();
 				path.push(file_name);
@@ -113,11 +114,15 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 				let mut vtx_path=path.clone();
 				vvd_path.set_extension("vvd");
 				vtx_path.set_extension("dx90.vtx");
-				match (bsp.pack.get(model_name),bsp.pack.get(vvd_path.as_os_str().to_str().unwrap()),bsp.pack.get(vtx_path.as_os_str().to_str().unwrap())){
+				match (bsp.pack.get(model_name_lower.as_str()),bsp.pack.get(vvd_path.as_os_str().to_str().unwrap()),bsp.pack.get(vtx_path.as_os_str().to_str().unwrap())){
 					(Ok(Some(mdl_file)),Ok(Some(vvd_file)),Ok(Some(vtx_file)))=>{
 						match (vmdl::mdl::Mdl::read(mdl_file.as_ref()),vmdl::vvd::Vvd::read(vvd_file.as_ref()),vmdl::vtx::Vtx::read(vtx_file.as_ref())){
 							(Ok(mdl),Ok(vvd),Ok(vtx))=>{
 								let model=vmdl::Model::from_parts(mdl,vtx,vvd);
+								let texture_paths=model.texture_directories();
+								if texture_paths.len()!=1{
+									println!("WARNING: multiple texture paths");
+								}
 								let skin=model.skin_tables().nth(0).unwrap();
 
 								let mut spam_pos=Vec::with_capacity(model.vertices().len());
@@ -145,17 +150,22 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 									unique_color:vec![glam::Vec4::ONE],
 									unique_vertices:spam_vertices,
 									groups:model.meshes().map(|mesh|{
-										let texture=match skin.texture(mesh.material_index()){
-											Some(texture_name)=>Some(if let Some(&texture_id)=texture_id_from_name.get(texture_name){
+										let texture=if let (Some(texture_path),Some(texture_name))=(texture_paths.get(0),skin.texture(mesh.material_index())){
+											let mut path=std::path::PathBuf::from(texture_path.as_str());
+											path.push(texture_name);
+											let texture_location=path.as_os_str().to_str().unwrap();
+											let texture_id=if let Some(&texture_id)=texture_id_from_name.get(texture_location){
 												texture_id
 											}else{
-												//println!("texture! {}",texture_name);
+												println!("texture! {}",texture_location);
 												let texture_id=name_from_texture_id.len() as u32;
-												texture_id_from_name.insert(texture_name.to_string(),texture_id);
-												name_from_texture_id.push(texture_name.to_string());
+												texture_id_from_name.insert(texture_location.to_string(),texture_id);
+												name_from_texture_id.push(texture_location.to_string());
 												texture_id
-											}),
-											None=>None,
+											};
+											Some(texture_id)
+										}else{
+											None
 										};
 
 										crate::model::IndexedGroup{
