@@ -30,18 +30,17 @@ for block_id in 0..num_blocks{
 
 /* block types
 BLOCK_MAP_HEADER:
-StyleInfoOverrides style_info_overrides
+DefaultStyleInfo style_info
 //bvh goes here
 u64 num_nodes
 //node 0 parent node is implied to be None
 for node_id in 1..num_nodes{
 	u64 parent_node
 }
-//block 0 is the current block, not part of the map data
 u64 num_spacial_blocks
-for block_id in 1..num_spacial_blocks{
+for spacial_block_id in 0..num_spacial_blocks{
 	u64 node_id
-	u64 block_id
+	u64 block_id //data block
 	Aabb block_extents
 }
 //ideally spacial blocks are sorted from distance to start zone
@@ -61,6 +60,7 @@ BLOCK_MAP_OBJECT:
 	- model instance
 	- located resource
 //for a list of resources, parse the object.
+//alternatively, BLOCK_MAP_REGION lists a group of objects to be decoded all at once
 
 BLOCK_BOT_HEADER:
 u128 map_resource_uuid //which map is this bot running
