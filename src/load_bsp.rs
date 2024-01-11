@@ -1,6 +1,6 @@
 const VALVE_SCALE:f32=1.0/16.0;
 fn valve_transform(v:[f32;3])->crate::integer::Planar64Vec3{
-	crate::integer::Planar64Vec3::try_from([v[0]*VALVE_SCALE,v[2]*VALVE_SCALE,v[1]*VALVE_SCALE]).unwrap()
+	crate::integer::Planar64Vec3::try_from([v[0]*VALVE_SCALE,v[2]*VALVE_SCALE,-v[1]*VALVE_SCALE]).unwrap()
 }
 pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Result<crate::model::IndexedModelInstances,vbsp::BspError>{
 	let mut s=Vec::new();
@@ -52,28 +52,29 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 					let normal=face.normal();
 					let normal_idx=spam_normal.len() as u32;
 					spam_normal.push(valve_transform(<[f32;3]>::from(normal)));
-					
+					let mut vertices:Vec<u32>=face.vertex_indexes().map(|vertex_index|{
+						let pos=glam::Vec3A::from_array(vertices[vertex_index as usize]);
+						let pos_idx=spam_pos.len();
+						spam_pos.push(valve_transform(vertices[vertex_index as usize]));
+
+						//calculate texture coordinates
+						let tex=(glam::vec2(pos.dot(texture_u),pos.dot(texture_v))+texture_offset)/texture_size;
+						let tex_idx=spam_tex.len() as u32;
+						spam_tex.push(tex);
+
+						let i=spam_vertices.len() as u32;
+						spam_vertices.push(crate::model::IndexedVertex{
+							pos: pos_idx as u32,
+							tex: tex_idx as u32,
+							normal: normal_idx,
+							color: 0,
+						});
+						i
+					}).collect();
+					vertices.reverse();
 					crate::model::IndexedGroup{
 						texture:Some(texture_id),
-						polys:vec![crate::model::IndexedPolygon{vertices:face.vertex_indexes().map(|vertex_index|{
-							let pos=glam::Vec3A::from_array(vertices[vertex_index as usize]);
-							let pos_idx=spam_pos.len();
-							spam_pos.push(valve_transform(vertices[vertex_index as usize]));
-
-							//calculate texture coordinates
-							let tex=(glam::vec2(pos.dot(texture_u),pos.dot(texture_v))+texture_offset)/texture_size;
-							let tex_idx=spam_tex.len() as u32;
-							spam_tex.push(tex);
-
-							let i=spam_vertices.len() as u32;
-							spam_vertices.push(crate::model::IndexedVertex{
-								pos: pos_idx as u32,
-								tex: tex_idx as u32,
-								normal: normal_idx,
-								color: 0,
-							});
-							i
-						}).collect()}],
+						polys:vec![crate::model::IndexedPolygon{vertices}],
 					}
 				}).collect();
 				crate::model::IndexedModel{
@@ -174,8 +175,7 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 												//looking at the code, it would seem that the strips are pre-deindexed into triangle lists when calling this function
 												mesh.vertex_strip_indices().map(|strip|{
 													strip.collect::<Vec<usize>>().chunks(3).map(|tri|{
-														//tris are ccw, probably because of the quaternion
-														crate::model::IndexedPolygon{vertices:vec![tri[1] as u32,tri[0] as u32,tri[2] as u32]}
+														crate::model::IndexedPolygon{vertices:vec![tri[0] as u32,tri[1] as u32,tri[2] as u32]}
 													}).collect::<Vec<crate::model::IndexedPolygon>>()
 												}).flatten().collect()
 											},
