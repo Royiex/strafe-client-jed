@@ -18,7 +18,7 @@ WorkerDescription{
 pub fn new<'a>(
 		mut graphics:crate::graphics::GraphicsState,
 		mut config:wgpu::SurfaceConfiguration,
-		surface:wgpu::Surface,
+		surface:wgpu::Surface<'a>,
 		device:wgpu::Device,
 		queue:wgpu::Queue,
 	)->crate::compat_worker::INWorker<'a,Instruction>{

@@ -15,7 +15,7 @@ struct WindowContext<'a>{
 	mouse:crate::physics::MouseState,//std::sync::Arc<std::sync::Mutex<>>
 	screen_size:glam::UVec2,
 	user_settings:crate::settings::UserSettings,
-	window:winit::window::Window,
+	window:&'a winit::window::Window,
 	physics_thread:crate::compat_worker::QNWorker<'a, TimedInstruction<crate::physics_worker::Instruction>>,
 }
 
@@ -158,15 +158,15 @@ impl WindowContext<'_>{
 	}
 }
 
-pub struct WindowContextSetup{
+pub struct WindowContextSetup<'a>{
 	user_settings:crate::settings::UserSettings,
-	window:winit::window::Window,
+	window:&'a winit::window::Window,
 	physics:crate::physics::PhysicsState,
 	graphics:crate::graphics::GraphicsState,
 }
 
-impl WindowContextSetup{
-	pub fn new(context:&crate::setup::SetupContext,window:winit::window::Window)->Self{
+impl<'a> WindowContextSetup<'a>{
+	pub fn new(context:&crate::setup::SetupContext,window:&'a winit::window::Window)->Self{
 		//wee
 		let user_settings=crate::settings::read_user_settings();
 
@@ -194,7 +194,7 @@ impl WindowContextSetup{
 		}
 	}
 
-	fn into_context<'a>(self,setup_context:crate::setup::SetupContext)->WindowContext<'a>{
+	fn into_context(self,setup_context:crate::setup::SetupContext<'a>)->WindowContext<'a>{
 		let screen_size=glam::uvec2(setup_context.config.width,setup_context.config.height);
 		let graphics_thread=crate::graphics_worker::new(self.graphics,setup_context.config,setup_context.surface,setup_context.device,setup_context.queue);
 		WindowContext{
@@ -208,7 +208,7 @@ impl WindowContextSetup{
 		}
 	}
 
-	pub fn into_worker<'a>(self,setup_context:crate::setup::SetupContext)->crate::compat_worker::QNWorker<'a,TimedInstruction<WindowInstruction>>{
+	pub fn into_worker(self,setup_context:crate::setup::SetupContext<'a>)->crate::compat_worker::QNWorker<'a,TimedInstruction<WindowInstruction>>{
 		let mut window_context=self.into_context(setup_context);
 		crate::compat_worker::QNWorker::new(move |ins:TimedInstruction<WindowInstruction>|{
 			match ins.instruction{

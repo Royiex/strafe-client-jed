@@ -203,6 +203,7 @@ impl GraphicsState{
 					label: Some(format!("Texture{}",texture_id).as_str()),
 					view_formats: &[],
 				},
+				wgpu::util::TextureDataOrder::LayerMajor,
 				&image.data,
 			);
 			texture.create_view(&wgpu::TextureViewDescriptor {
@@ -700,6 +701,7 @@ impl GraphicsState{
 					label: Some("Skybox Texture"),
 					view_formats: &[],
 				},
+				wgpu::util::TextureDataOrder::LayerMajor,
 				&skybox_image.data,
 			);
 
@@ -740,6 +742,7 @@ impl GraphicsState{
 					label: Some("Squid Texture"),
 					view_formats: &[],
 				},
+				wgpu::util::TextureDataOrder::LayerMajor,
 				&image.data,
 			);
 

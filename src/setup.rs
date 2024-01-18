@@ -46,21 +46,21 @@ fn create_instance()->SetupContextPartial1{
 	}
 }
 impl SetupContextPartial1{
-	fn create_surface(self,window:&winit::window::Window)->Result<SetupContextPartial2,wgpu::CreateSurfaceError>{
+	fn create_surface<'a>(self,window:&'a winit::window::Window)->Result<SetupContextPartial2<'a>,wgpu::CreateSurfaceError>{
 		Ok(SetupContextPartial2{
 			backends:self.backends,
-			surface:unsafe{self.instance.create_surface(window)}?,
+			surface:self.instance.create_surface(window)?,
 			instance:self.instance,
 		})
 	}
 }
-struct SetupContextPartial2{
+struct SetupContextPartial2<'a>{
 	backends:wgpu::Backends,
 	instance:wgpu::Instance,
-	surface:wgpu::Surface,
+	surface:wgpu::Surface<'a>,
 }
-impl SetupContextPartial2{
-	fn pick_adapter(self)->SetupContextPartial3{
+impl<'a> SetupContextPartial2<'a>{
+	fn pick_adapter(self)->SetupContextPartial3<'a>{
 		let adapter;
 
 		//TODO: prefer adapter that implements optional features
@@ -122,13 +122,13 @@ impl SetupContextPartial2{
 		}
 	}
 }
-struct SetupContextPartial3{
+struct SetupContextPartial3<'a>{
 	instance:wgpu::Instance,
-	surface:wgpu::Surface,
+	surface:wgpu::Surface<'a>,
 	adapter:wgpu::Adapter,
 }
-impl SetupContextPartial3{
-	fn request_device(self)->SetupContextPartial4{
+impl<'a> SetupContextPartial3<'a>{
+	fn request_device(self)->SetupContextPartial4<'a>{
 		let optional_features=optional_features();
 		let required_features=required_features();
 
@@ -140,8 +140,8 @@ impl SetupContextPartial3{
 			.request_device(
 				&wgpu::DeviceDescriptor {
 					label: None,
-					features: (optional_features & self.adapter.features()) | required_features,
-					limits: needed_limits,
+					required_features: (optional_features & self.adapter.features()) | required_features,
+					required_limits: needed_limits,
 				},
 				trace_dir.ok().as_ref().map(std::path::Path::new),
 			))
@@ -156,15 +156,15 @@ impl SetupContextPartial3{
 		}
 	}
 }
-struct SetupContextPartial4{
+struct SetupContextPartial4<'a>{
 	instance:wgpu::Instance,
-	surface:wgpu::Surface,
+	surface:wgpu::Surface<'a>,
 	adapter:wgpu::Adapter,
 	device:wgpu::Device,
 	queue:wgpu::Queue,
 }
-impl SetupContextPartial4{
-	fn configure_surface(self,size:&winit::dpi::PhysicalSize<u32>)->SetupContext{
+impl<'a> SetupContextPartial4<'a>{
+	fn configure_surface(self,size:&'a winit::dpi::PhysicalSize<u32>)->SetupContext<'a>{
 		let mut config=self.surface
 			.get_default_config(&self.adapter, size.width, size.height)
 			.expect("Surface isn't supported by the adapter.");
@@ -182,22 +182,22 @@ impl SetupContextPartial4{
 		}
 	}
 }
-pub struct SetupContext{
+pub struct SetupContext<'a>{
 	pub instance:wgpu::Instance,
-	pub surface:wgpu::Surface,
+	pub surface:wgpu::Surface<'a>,
 	pub device:wgpu::Device,
 	pub queue:wgpu::Queue,
 	pub config:wgpu::SurfaceConfiguration,
 }
 
-pub fn setup(title:&str)->SetupContextSetup{
+pub fn setup_and_start(title:String){
 	let event_loop=winit::event_loop::EventLoop::new().unwrap();
-
-	let window=create_window(title,&event_loop).unwrap();
 
 	println!("Initializing the surface...");
 
 	let partial_1=create_instance();
+
+	let window=create_window(title.as_str(),&event_loop).unwrap();
 
 	let partial_2=partial_1.create_surface(&window).unwrap();
 
@@ -205,42 +205,19 @@ pub fn setup(title:&str)->SetupContextSetup{
 
 	let partial_4=partial_3.request_device();
 
-	SetupContextSetup{
-		window,
-		event_loop,
-		partial_context:partial_4,
-	}
-}
+	let size=window.inner_size();
 
-pub struct SetupContextSetup{
-	window:winit::window::Window,
-	event_loop:winit::event_loop::EventLoop<()>,
-	partial_context:SetupContextPartial4,
-}
+	let setup_context=partial_4.configure_surface(&size);
 
-impl SetupContextSetup{
-	fn into_split(self)->(winit::window::Window,winit::event_loop::EventLoop<()>,SetupContext){
-		let size=self.window.inner_size();
-		//Steal values and drop self
-		(
-			self.window,
-			self.event_loop,
-			self.partial_context.configure_surface(&size),
-		)
-	}
-	pub fn start(self){
-		let (window,event_loop,setup_context)=self.into_split();
+	//dedicated thread to ping request redraw back and resize the window doesn't seem logical
 
-		//dedicated thread to ping request redraw back and resize the window doesn't seem logical
+	let window=crate::window::WindowContextSetup::new(&setup_context,&window);
+	//the thread that spawns the physics thread
+	let window_thread=window.into_worker(setup_context);
 
-		let window=crate::window::WindowContextSetup::new(&setup_context,window);
-		//the thread that spawns the physics thread
-		let window_thread=window.into_worker(setup_context);
-
-		println!("Entering event loop...");
-		let root_time=std::time::Instant::now();
-		run_event_loop(event_loop,window_thread,root_time).unwrap();
-	}
+	println!("Entering event loop...");
+	let root_time=std::time::Instant::now();
+	run_event_loop(event_loop,window_thread,root_time).unwrap();
 }
 
 fn run_event_loop(
