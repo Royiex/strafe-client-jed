@@ -152,11 +152,14 @@ impl GraphicsState{
 		let mut texture_loading_threads=Vec::new();
 		let num_textures=indexed_models.textures.len();
 		for (i,texture_id) in indexed_models.textures.into_iter().enumerate(){
-			if let Ok(mut file) = std::fs::File::open(std::path::Path::new(&format!("textures/{}.dds",texture_id))){
+			let path=std::path::PathBuf::from(format!("textures/{}.dds",texture_id));
+			if let Ok(mut file) = std::fs::File::open(path.clone()){
 				double_map.insert(i as u32, texture_loading_threads.len() as u32);
 				texture_loading_threads.push((texture_id,std::thread::spawn(move ||{
 					ddsfile::Dds::read(&mut file).unwrap()
 				})));
+			}else{
+				//println!("missing texture path={:?}",path);
 			}
 		}
 
