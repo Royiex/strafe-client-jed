@@ -9,7 +9,7 @@ edition = "2021"
 bytemuck = { version = "1.13.1", features = ["derive"] }
 configparser = "3.0.2"
 ddsfile = "0.5.1"
-glam = "0.24.1"
+glam = "0.25.0"
 lazy-regex = "3.0.2"
 obj = "0.10.2"
 parking_lot = "0.12.1"
