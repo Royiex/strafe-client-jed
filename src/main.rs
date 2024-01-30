@@ -1,6 +1,5 @@
-use strafesnet_common::integer;
+use strafesnet_common::{model,integer};
 
-mod model;
 mod setup;
 mod window;
 mod worker;
