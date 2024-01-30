@@ -1,4 +1,4 @@
-use crate::integer::{Time,Planar64,Planar64Vec3,Planar64Affine3};
+use strafesnet_common::integer::{Time,Planar64,Planar64Vec3,Planar64Affine3};
 pub type TextureCoordinate=glam::Vec2;
 pub type Color4=glam::Vec4;
 #[derive(Clone,Hash,PartialEq,Eq)]

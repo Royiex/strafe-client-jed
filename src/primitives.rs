@@ -1,5 +1,5 @@
 use crate::model::{Color4,TextureCoordinate,IndexedModel,IndexedPolygon,IndexedGroup,IndexedVertex};
-use crate::integer::Planar64Vec3;
+use strafesnet_common::integer::Planar64Vec3;
 
 #[derive(Debug)]
 pub enum Primitives{

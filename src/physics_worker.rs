@@ -1,6 +1,6 @@
-use crate::integer::Time;
 use crate::physics::{MouseState,PhysicsInputInstruction};
-use crate::instruction::{TimedInstruction,InstructionConsumer};
+use strafesnet_common::integer::Time;
+use strafesnet_common::instruction::{TimedInstruction,InstructionConsumer};
 #[derive(Debug)]
 pub enum InputInstruction {
 	MoveMouse(glam::IVec2),

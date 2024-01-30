@@ -1,6 +1,8 @@
-use crate::instruction::{InstructionEmitter,InstructionConsumer,TimedInstruction};
-use crate::integer::{Time,Planar64,Planar64Vec3,Planar64Mat3,Angle32,Ratio64,Ratio64Vec2};
 use crate::model_physics::{PhysicsMesh,TransformedMesh,MeshQuery};
+use strafesnet_common::bvh;
+use strafesnet_common::aabb;
+use strafesnet_common::instruction::{self,InstructionEmitter,InstructionConsumer,TimedInstruction};
+use strafesnet_common::integer::{self,Time,Planar64,Planar64Vec3,Planar64Mat3,Angle32,Ratio64,Ratio64Vec2};
 
 #[derive(Debug)]
 pub enum PhysicsInstruction {
@@ -186,9 +188,9 @@ impl PhysicsModels{
 		self.attributes.clear();
 		self.model_id_from_wormhole_id.clear();
 	}
-	fn aabb_list(&self)->Vec<crate::aabb::Aabb>{
+	fn aabb_list(&self)->Vec<aabb::Aabb>{
 		self.models.iter().map(|model|{
-			let mut aabb=crate::aabb::Aabb::default();
+			let mut aabb=aabb::Aabb::default();
 			for pos in self.meshes[model.mesh_id].verts(){
 				aabb.grow(model.transform.transform_point3(pos));
 			}
@@ -342,14 +344,14 @@ struct StrafeSettings{
 struct Hitbox{
 	halfsize:Planar64Vec3,
 	mesh:PhysicsMesh,
-	transform:crate::integer::Planar64Affine3,
+	transform:integer::Planar64Affine3,
 	normal_transform:Planar64Mat3,
 	transform_det:Planar64,
 }
 impl Hitbox{
-	fn new(mesh:PhysicsMesh,transform:crate::integer::Planar64Affine3)->Self{
+	fn new(mesh:PhysicsMesh,transform:integer::Planar64Affine3)->Self{
 		//calculate extents
-		let mut aabb=crate::aabb::Aabb::default();
+		let mut aabb=aabb::Aabb::default();
 		for vert in mesh.verts(){
 			aabb.grow(transform.transform_point3(vert));
 		}
@@ -367,7 +369,7 @@ impl Hitbox{
 			halfsize:scale,
 			mesh,
 			normal_transform:matrix3.inverse_times_det().transpose(),
-			transform:crate::integer::Planar64Affine3::new(matrix3,Planar64Vec3::ZERO),
+			transform:integer::Planar64Affine3::new(matrix3,Planar64Vec3::ZERO),
 			transform_det:matrix3.determinant(),//scale.x*scale.y*scale.z but whatever
 		}
 	}
@@ -377,7 +379,7 @@ impl Hitbox{
 			halfsize:scale,
 			mesh,
 			normal_transform:matrix3.inverse_times_det().transpose(),
-			transform:crate::integer::Planar64Affine3::new(matrix3,offset),
+			transform:integer::Planar64Affine3::new(matrix3,offset),
 			transform_det:matrix3.determinant(),
 		}
 	}
@@ -736,7 +738,7 @@ pub struct PhysicsState{
 	controls:u32,
 	move_state:MoveState,
 	models:PhysicsModels,
-	bvh:crate::bvh::BvhNode,
+	bvh:bvh::BvhNode,
 	
 	modes:Modes,
 	//the spawn point is where you spawn when you load into the map.
@@ -783,13 +785,13 @@ pub struct PhysicsModel{
 	//in this iteration, all it needs is extents.
 	mesh_id:usize,
 	attr_id:usize,
-	transform:crate::integer::Planar64Affine3,
-	normal_transform:crate::integer::Planar64Mat3,
+	transform:integer::Planar64Affine3,
+	normal_transform:integer::Planar64Mat3,
 	transform_det:Planar64,
 }
 
 impl PhysicsModel{
-	pub fn new(mesh_id:usize,attr_id:usize,transform:crate::integer::Planar64Affine3)->Self{
+	pub fn new(mesh_id:usize,attr_id:usize,transform:integer::Planar64Affine3)->Self{
 		Self{
 			mesh_id,
 			attr_id,
@@ -944,7 +946,7 @@ impl TouchingState{
 		self.constrain_acceleration(models,&style_mesh,&mut a);
 		(move_state,a)
 	}
-	fn predict_collision_end(&self,collector:&mut crate::instruction::InstructionCollector<PhysicsInstruction>,models:&PhysicsModels,style_mesh:&TransformedMesh,body:&Body,time:Time){
+	fn predict_collision_end(&self,collector:&mut instruction::InstructionCollector<PhysicsInstruction>,models:&PhysicsModels,style_mesh:&TransformedMesh,body:&Body,time:Time){
 		let relative_body=VirtualBody::relative(&Body::default(),body).body(time);
 		for contact in &self.contacts{
 			//detect face slide off
@@ -1008,7 +1010,7 @@ impl Body{
 			Some(self.velocity)
 		}
 	}
-	pub fn grow_aabb(&self,aabb:&mut crate::aabb::Aabb,t0:Time,t1:Time){
+	pub fn grow_aabb(&self,aabb:&mut aabb::Aabb,t0:Time,t1:Time){
 		aabb.grow(self.extrapolated_position(t0));
 		aabb.grow(self.extrapolated_position(t1));
 		//v+a*t==0
@@ -1076,7 +1078,7 @@ impl Default for PhysicsState{
 			style:StyleModifiers::default(),
 			touching:TouchingState::default(),
 			models:PhysicsModels::default(),
-			bvh:crate::bvh::BvhNode::default(),
+			bvh:bvh::BvhNode::default(),
 			move_state: MoveState::Air,
 			camera:PhysicsCamera::default(),
 			next_mouse:MouseState::default(),
@@ -1093,7 +1095,7 @@ impl PhysicsState {
 		self.models.clear();
 		self.modes.clear();
 		self.touching.clear();
-		self.bvh=crate::bvh::BvhNode::default();
+		self.bvh=bvh::BvhNode::default();
 	}
 
 	pub fn output(&self)->PhysicsOutputState{
@@ -1107,7 +1109,7 @@ impl PhysicsState {
 	pub fn spawn(&mut self,spawn_point:Planar64Vec3){
 		self.game.stage_id=0;
 		self.spawn_point=spawn_point;
-		self.process_instruction(crate::instruction::TimedInstruction{
+		self.process_instruction(instruction::TimedInstruction{
 			time:self.time,
 			instruction: PhysicsInstruction::Input(PhysicsInputInstruction::Reset),
 		});
@@ -1145,7 +1147,7 @@ impl PhysicsState {
 				self.models.push_mesh(PhysicsMesh::from(model));
 			}
 		}
-		self.bvh=crate::bvh::generate_bvh(self.models.aabb_list());
+		self.bvh=bvh::generate_bvh(self.models.aabb_list());
 		//I don't wanna write structs for temporary structures
 		//this code builds ModeDescriptions from the unsorted lists at the top of the function
 		starts.sort_by_key(|tup|tup.1.mode_id);
@@ -1281,11 +1283,11 @@ impl PhysicsState {
 	}
 }
 
-impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState{
+impl instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState{
 	//this little next instruction function can cache its return value and invalidate the cached value by watching the State.
 	fn next_instruction(&self,time_limit:Time)->Option<TimedInstruction<PhysicsInstruction>>{
 		//JUST POLLING!!! NO MUTATION
-		let mut collector = crate::instruction::InstructionCollector::new(time_limit);
+		let mut collector = instruction::InstructionCollector::new(time_limit);
 
 		collector.collect(self.next_move_instruction());
 
@@ -1293,7 +1295,7 @@ impl crate::instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState
 		//check for collision ends
 		self.touching.predict_collision_end(&mut collector,&self.models,&style_mesh,&self.body,self.time);
 		//check for collision starts
-		let mut aabb=crate::aabb::Aabb::default();
+		let mut aabb=aabb::Aabb::default();
 		self.body.grow_aabb(&mut aabb,self.time,collector.time());
 		aabb.inflate(self.style.hitbox.halfsize);
 		//common body
@@ -1464,7 +1466,7 @@ fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehav
 	}
 }
 
-impl crate::instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
+impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 	fn process_instruction(&mut self, ins:TimedInstruction<PhysicsInstruction>) {
 		match &ins.instruction{
 			PhysicsInstruction::Input(PhysicsInputInstruction::Idle)
@@ -1687,8 +1689,8 @@ fn test_collision_axis_aligned(relative_body:Body,expected_collision_time:Option
 #[allow(dead_code)]
 fn test_collision_rotated(relative_body:Body,expected_collision_time:Option<Time>){
 	let h0=Hitbox::new(PhysicsMesh::from(&crate::primitives::unit_cube()),
-		crate::integer::Planar64Affine3::new(
-			crate::integer::Planar64Mat3::from_cols(
+		integer::Planar64Affine3::new(
+			integer::Planar64Mat3::from_cols(
 				Planar64Vec3::int(5,0,1)/2,
 				Planar64Vec3::int(0,1,0)/2,
 				Planar64Vec3::int(-1,0,5)/2,

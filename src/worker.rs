@@ -183,8 +183,8 @@ fn test_worker() {
 
 	// Send tasks to the worker
 	for _ in 0..5 {
-		let task = crate::instruction::TimedInstruction{
-			time:crate::integer::Time::ZERO,
+		let task = strafesnet_common::instruction::TimedInstruction{
+			time:strafesnet_common::integer::Time::ZERO,
 			instruction:crate::physics::PhysicsInstruction::StrafeTick,
 		};
 		worker.send(task).unwrap();
@@ -197,8 +197,8 @@ fn test_worker() {
 	thread::sleep(std::time::Duration::from_millis(10));
 
 	// Send a new task
-	let task = crate::instruction::TimedInstruction{
-		time:crate::integer::Time::ZERO,
+	let task = strafesnet_common::instruction::TimedInstruction{
+		time:strafesnet_common::integer::Time::ZERO,
 		instruction:crate::physics::PhysicsInstruction::StrafeTick,
 	};
 	worker.send(task).unwrap();

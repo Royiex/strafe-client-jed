@@ -1,16 +1,13 @@
-mod bvh;
-mod aabb;
+use strafesnet_common::integer;
+
 mod model;
 mod setup;
 mod window;
 mod worker;
-mod zeroes;
-mod integer;
 mod physics;
 mod graphics;
 mod settings;
 mod primitives;
-mod instruction;
 mod load_bsp;
 mod load_roblox;
 mod face_crawler;

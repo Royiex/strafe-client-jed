@@ -1,5 +1,6 @@
-use crate::instruction::TimedInstruction;
 use crate::physics_worker::InputInstruction;
+use strafesnet_common::integer;
+use strafesnet_common::instruction::TimedInstruction;
 
 pub enum WindowInstruction{
 	Resize(winit::dpi::PhysicalSize<u32>),
@@ -23,7 +24,7 @@ impl WindowContext<'_>{
 	fn get_middle_of_screen(&self)->winit::dpi::PhysicalPosition<f32>{
 		winit::dpi::PhysicalPosition::new(self.screen_size.x as f32/2.0,self.screen_size.y as f32/2.0)
 	}
-	fn window_event(&mut self,time:crate::integer::Time,event: winit::event::WindowEvent) {
+	fn window_event(&mut self,time:integer::Time,event: winit::event::WindowEvent) {
 		match event {
 			winit::event::WindowEvent::DroppedFile(path)=>{
 				//blocking because it's simpler...
@@ -121,7 +122,7 @@ impl WindowContext<'_>{
 		}
 	}
 
-	fn device_event(&mut self,time:crate::integer::Time,event: winit::event::DeviceEvent) {
+	fn device_event(&mut self,time:integer::Time,event: winit::event::DeviceEvent) {
 		match event {
 			winit::event::DeviceEvent::MouseMotion {
 			    delta,//these (f64,f64) are integers on my machine

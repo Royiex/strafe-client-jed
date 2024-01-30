@@ -1,5 +1,5 @@
 use crate::primitives;
-use crate::integer::{Planar64,Planar64Vec3,Planar64Mat3,Planar64Affine3};
+use strafesnet_common::integer::{Planar64,Planar64Vec3,Planar64Mat3,Planar64Affine3};
 
 fn class_is_a(class: &str, superclass: &str) -> bool {
 	if class==superclass {

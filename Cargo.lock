@@ -1648,10 +1648,19 @@ dependencies = [
  "rbx_dom_weak",
  "rbx_reflection_database",
  "rbx_xml",
+ "strafesnet_common",
  "vbsp",
  "vmdl",
  "wgpu",
  "winit",
+]
+
+[[package]]
+name = "strafesnet_common"
+version = "0.1.0"
+source = "git+https://git.itzana.me/StrafesNET/common?rev=434ca29aef7e3015c9ca1ed45de8fef42e33fdfb#434ca29aef7e3015c9ca1ed45de8fef42e33fdfb"
+dependencies = [
+ "glam",
 ]
 
 [[package]]

@@ -18,6 +18,7 @@ rbx_binary = "0.7.1"
 rbx_dom_weak = "2.5.0"
 rbx_reflection_database = "0.2.7"
 rbx_xml = "0.13.1"
+strafesnet_common = { git = "https://git.itzana.me/StrafesNET/common", rev = "434ca29aef7e3015c9ca1ed45de8fef42e33fdfb" }
 vbsp = "0.5.0"
 vmdl = "0.1.1"
 wgpu = "0.19.0"

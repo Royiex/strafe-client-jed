@@ -1,6 +1,8 @@
+use strafesnet_common::integer;
+
 const VALVE_SCALE:f32=1.0/16.0;
-fn valve_transform(v:[f32;3])->crate::integer::Planar64Vec3{
-	crate::integer::Planar64Vec3::try_from([v[0]*VALVE_SCALE,v[2]*VALVE_SCALE,-v[1]*VALVE_SCALE]).unwrap()
+fn valve_transform(v:[f32;3])->integer::Planar64Vec3{
+	integer::Planar64Vec3::try_from([v[0]*VALVE_SCALE,v[2]*VALVE_SCALE,-v[1]*VALVE_SCALE]).unwrap()
 }
 pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Result<crate::model::IndexedModelInstances,vbsp::BspError>{
 	let mut s=Vec::new();
@@ -12,7 +14,7 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 
 	match vbsp::Bsp::read(s.as_slice()){
 		Ok(bsp)=>{
-			let mut spawn_point=crate::integer::Planar64Vec3::ZERO;
+			let mut spawn_point=integer::Planar64Vec3::ZERO;
 
 			let vertices: Vec<_> = bsp
 				.vertices
@@ -86,8 +88,8 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 					groups,
 					instances:vec![crate::model::ModelInstance{
 						attributes:crate::model::CollisionAttributes::Decoration,
-						transform:crate::integer::Planar64Affine3::new(
-							crate::integer::Planar64Mat3::default(),
+						transform:integer::Planar64Affine3::new(
+							integer::Planar64Mat3::default(),
 							valve_transform(<[f32;3]>::from(world_model.origin))
 						),
 						..Default::default()
@@ -196,8 +198,8 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 				let placement=prop.as_prop_placement();
 				if let Some(&model_index)=model_map.get(placement.model){
 					prop_models[model_index].instances.push(crate::model::ModelInstance{
-						transform:crate::integer::Planar64Affine3::new(
-							crate::integer::Planar64Mat3::try_from(
+						transform:integer::Planar64Affine3::new(
+							integer::Planar64Mat3::try_from(
 								glam::Mat3A::from_diagonal(glam::Vec3::splat(placement.scale))
 								//TODO: figure this out
 								*glam::Mat3A::from_quat(glam::Quat::from_xyzw(

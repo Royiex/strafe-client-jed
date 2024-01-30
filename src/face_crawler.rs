@@ -1,7 +1,7 @@
 use crate::physics::Body;
 use crate::model_physics::{FEV,MeshQuery,DirectedEdge};
-use crate::integer::{Time,Planar64};
-use crate::zeroes::zeroes2;
+use strafesnet_common::integer::{Time,Planar64};
+use strafesnet_common::zeroes::zeroes2;
 
 enum Transition<F,E:DirectedEdge,V>{
 	Miss,

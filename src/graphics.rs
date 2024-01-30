@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use strafesnet_common::integer;
 use wgpu::{util::DeviceExt,AstcBlock,AstcChannel};
 use crate::model_graphics::{GraphicsVertex,GraphicsModelColor4,GraphicsModelInstance,GraphicsModelSingleTexture,IndexedGraphicsModelSingleTexture,IndexedGroupFixedTexture};
 
@@ -833,7 +834,7 @@ impl GraphicsState{
 		});
 
 		let camera=GraphicsCamera::default();
-		let camera_uniforms = camera.to_uniform_data(crate::physics::PhysicsOutputState::default().extrapolate(glam::IVec2::ZERO,crate::integer::Time::ZERO));
+		let camera_uniforms = camera.to_uniform_data(crate::physics::PhysicsOutputState::default().extrapolate(glam::IVec2::ZERO,integer::Time::ZERO));
 		let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 			label: Some("Camera"),
 			contents: bytemuck::cast_slice(&camera_uniforms),
@@ -902,7 +903,7 @@ impl GraphicsState{
 		device:&wgpu::Device,
 		queue:&wgpu::Queue,
 		physics_output:crate::physics::PhysicsOutputState,
-		predicted_time:crate::integer::Time,
+		predicted_time:integer::Time,
 		mouse_pos:glam::IVec2,
 	) {
 		//TODO: use scheduled frame times to create beautiful smoothing simulation physics extrapolation assuming no input

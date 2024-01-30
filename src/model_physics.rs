@@ -1,5 +1,6 @@
-use crate::integer::{Planar64,Planar64Vec3};
 use std::borrow::{Borrow,Cow};
+use strafesnet_common::zeroes;
+use strafesnet_common::integer::{self,Planar64,Planar64Vec3};
 
 #[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
 pub struct VertId(usize);
@@ -236,15 +237,15 @@ impl MeshQuery<FaceId,DirectedEdgeId,VertId> for PhysicsMesh{
 
 pub struct TransformedMesh<'a>{
 	mesh:&'a PhysicsMesh,
-	transform:&'a crate::integer::Planar64Affine3,
-	normal_transform:&'a crate::integer::Planar64Mat3,
+	transform:&'a integer::Planar64Affine3,
+	normal_transform:&'a integer::Planar64Mat3,
 	transform_det:Planar64,
 }
 impl TransformedMesh<'_>{
 	pub fn new<'a>(
 		mesh:&'a PhysicsMesh,
-		transform:&'a crate::integer::Planar64Affine3,
-		normal_transform:&'a crate::integer::Planar64Mat3,
+		transform:&'a integer::Planar64Affine3,
+		normal_transform:&'a integer::Planar64Mat3,
 		transform_det:Planar64,
 		)->TransformedMesh<'a>{
 		TransformedMesh{
@@ -389,7 +390,7 @@ impl MinkowskiMesh<'_>{
 			let test_vert_id=edge_verts[directed_edge_id.parity() as usize];
 			//test if it's closer
 			let diff=point-self.vert(test_vert_id);
-			if crate::zeroes::zeroes1(edge_n.dot(diff),edge_n.dot(infinity_dir)).len()==0{
+			if zeroes::zeroes1(edge_n.dot(diff),edge_n.dot(infinity_dir)).len()==0{
 				let distance_squared=diff.dot(diff);
 				if distance_squared<*best_distance_squared{
 					best_transition=Transition::Vert(test_vert_id);
@@ -407,7 +408,7 @@ impl MinkowskiMesh<'_>{
 			//is boundary uncrossable by a crawl from infinity
 			//check if time of collision is outside Time::MIN..Time::MAX
 			let d=edge_n.dot(diff);
-			if crate::zeroes::zeroes1(d,edge_n.dot(infinity_dir)).len()==0{
+			if zeroes::zeroes1(d,edge_n.dot(infinity_dir)).len()==0{
 				//test the edge
 				let edge_nn=edge_n.dot(edge_n);
 				if Planar64::ZERO<=d&&d<=edge_nn{
@@ -459,7 +460,7 @@ impl MinkowskiMesh<'_>{
 					let boundary_d=boundary_n.dot(delta_pos);
 					//check if time of collision is outside Time::MIN..Time::MAX
 					//infinity_dir can always be treated as a velocity
-					if (boundary_d)<=Planar64::ZERO&&crate::zeroes::zeroes1(boundary_d,boundary_n.dot(infinity_dir)*2).len()==0{
+					if (boundary_d)<=Planar64::ZERO&&zeroes::zeroes1(boundary_d,boundary_n.dot(infinity_dir)*2).len()==0{
 						//both faces cannot pass this condition, return early if one does.
 						return FEV::<MinkowskiFace,MinkowskiDirectedEdge,MinkowskiVert>::Face(face_id);
 					}
@@ -475,13 +476,13 @@ impl MinkowskiMesh<'_>{
 			infinity_body.velocity=dir;
 			infinity_body.acceleration=Planar64Vec3::ZERO;
 			//crawl in from negative infinity along a tangent line to get the closest fev
-			match crate::face_crawler::crawl_fev(infinity_fev,self,&infinity_body,crate::integer::Time::MIN,infinity_body.time){
+			match crate::face_crawler::crawl_fev(infinity_fev,self,&infinity_body,integer::Time::MIN,infinity_body.time){
 				crate::face_crawler::CrawlResult::Miss(fev)=>Some(fev),
 				crate::face_crawler::CrawlResult::Hit(_,_)=>None,
 			}
 		})
 	}
-	pub fn predict_collision_in(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
+	pub fn predict_collision_in(&self,relative_body:&crate::physics::Body,time_limit:integer::Time)->Option<(MinkowskiFace,integer::Time)>{
 		self.closest_fev_not_inside(relative_body.clone()).map_or(None,|fev|{
 			//continue forwards along the body parabola
 			match crate::face_crawler::crawl_fev(fev,self,relative_body,relative_body.time,time_limit){
@@ -490,7 +491,7 @@ impl MinkowskiMesh<'_>{
 			}
 		})
 	}
-	pub fn predict_collision_out(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time)->Option<(MinkowskiFace,crate::integer::Time)>{
+	pub fn predict_collision_out(&self,relative_body:&crate::physics::Body,time_limit:integer::Time)->Option<(MinkowskiFace,integer::Time)>{
 		//create an extrapolated body at time_limit
 		let infinity_body=crate::physics::Body::new(
 			relative_body.extrapolated_position(time_limit),
@@ -506,7 +507,7 @@ impl MinkowskiMesh<'_>{
 			}
 		})
 	}
-	pub fn predict_collision_face_out(&self,relative_body:&crate::physics::Body,time_limit:crate::integer::Time,contact_face_id:MinkowskiFace)->Option<(MinkowskiEdge,crate::integer::Time)>{
+	pub fn predict_collision_face_out(&self,relative_body:&crate::physics::Body,time_limit:integer::Time,contact_face_id:MinkowskiFace)->Option<(MinkowskiEdge,integer::Time)>{
 		//no algorithm needed, there is only one state and two cases (Edge,None)
 		//determine when it passes an edge ("sliding off" case)
 		let mut best_time=time_limit;
@@ -519,8 +520,8 @@ impl MinkowskiMesh<'_>{
 			let verts=self.edge_verts(directed_edge_id.as_undirected());
 			let d=n.dot(self.vert(verts[0])+self.vert(verts[1]));
 			//WARNING! d outside of *2
-			for t in crate::zeroes::zeroes2((n.dot(relative_body.position))*2-d,n.dot(relative_body.velocity)*2,n.dot(relative_body.acceleration)){
-				let t=relative_body.time+crate::integer::Time::from(t);
+			for t in zeroes::zeroes2((n.dot(relative_body.position))*2-d,n.dot(relative_body.velocity)*2,n.dot(relative_body.acceleration)){
+				let t=relative_body.time+integer::Time::from(t);
 				if relative_body.time<t&&t<best_time&&n.dot(relative_body.extrapolated_velocity(t))<Planar64::ZERO{
 					best_time=t;
 					best_edge=Some(directed_edge_id);

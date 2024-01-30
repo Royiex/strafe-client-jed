@@ -1,5 +1,6 @@
-use crate::instruction::TimedInstruction;
 use crate::window::WindowInstruction;
+use strafesnet_common::instruction::TimedInstruction;
+use strafesnet_common::integer;
 
 fn optional_features()->wgpu::Features{
 	wgpu::Features::TEXTURE_COMPRESSION_ASTC
@@ -226,7 +227,7 @@ fn run_event_loop(
 	root_time:std::time::Instant
 	)->Result<(),winit::error::EventLoopError>{
 		event_loop.run(move |event,elwt|{
-			let time=crate::integer::Time::from_nanos(root_time.elapsed().as_nanos() as i64);
+			let time=integer::Time::from_nanos(root_time.elapsed().as_nanos() as i64);
 			// *control_flow=if cfg!(feature="metal-auto-capture"){
 			// 	winit::event_loop::ControlFlow::Exit
 			// }else{

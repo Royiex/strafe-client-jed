@@ -1,4 +1,4 @@
-use crate::integer::{Ratio64,Ratio64Vec2};
+use strafesnet_common::integer::{Ratio64,Ratio64Vec2};
 #[derive(Clone)]
 struct Ratio{
 	ratio:f64,
