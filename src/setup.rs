@@ -216,6 +216,15 @@ pub fn setup_and_start(title:String){
 	//the thread that spawns the physics thread
 	let window_thread=window.into_worker(setup_context);
 
+	let args:Vec<String>=std::env::args().collect();
+	let indexed_model_instances=if args.len()==2{
+		let path=std::path::PathBuf::from(&args[1]);
+		window_thread.send(TimedInstruction{
+			time:0,
+			instruction:WindowInstruction::WindowEvent(winit::event::WindowEvent::DroppedFile(path)),
+		});
+	};
+
 	println!("Entering event loop...");
 	let root_time=std::time::Instant::now();
 	run_event_loop(event_loop,window_thread,root_time).unwrap();

@@ -28,9 +28,20 @@ impl WindowContext<'_>{
 		match event {
 			winit::event::WindowEvent::DroppedFile(path)=>{
 				//blocking because it's simpler...
-				if let Some(indexed_model_instances)=crate::load_file(path){
-					self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::ClearModels}).unwrap();
-					self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::GenerateModels(indexed_model_instances)}).unwrap();
+				if let Ok(file)=std::fs::File::open(path){
+					match strafesnet_snf::read_snf(std::io::BufReader::new(file)){
+						Ok(strafesnet_snf::SNF::Map(streamable_map))=>{
+							if let Ok(indexed_model_instances)=streamable_map.load_all(){
+								self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::ClearModels}).unwrap();
+								self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::GenerateModels(indexed_model_instances)}).unwrap();
+							}
+						},
+						Ok(strafesnet_snf::SNF::Bot(streamable_map))=>println!("File type not yet supported"),
+						Ok(strafesnet_snf::SNF::Demo(streamable_map))=>println!("File type not yet supported"),
+						Err(e)=>println!("Error reading file: {e:?}"),
+					}
+				}else{
+					println!("Failed to open file {path:?}");
 				}
 			},
 			winit::event::WindowEvent::Focused(_state)=>{
@@ -168,24 +179,13 @@ pub struct WindowContextSetup<'a>{
 
 impl<'a> WindowContextSetup<'a>{
 	pub fn new(context:&crate::setup::SetupContext,window:&'a winit::window::Window)->Self{
-		//wee
 		let user_settings=crate::settings::read_user_settings();
-
-		let args:Vec<String>=std::env::args().collect();
-		let indexed_model_instances=if args.len()==2{
-			crate::load_file(std::path::PathBuf::from(&args[1]))
-		}else{
-			None
-		}.unwrap_or(crate::default_models());
 
 		let mut physics=crate::physics::PhysicsState::default();
 		physics.load_user_settings(&user_settings);
-		physics.generate_models(&indexed_model_instances);
-		physics.spawn(indexed_model_instances.spawn_point);
 
 		let mut graphics=crate::graphics::GraphicsState::new(&context.device,&context.queue,&context.config);
 		graphics.load_user_settings(&user_settings);
-		graphics.generate_models(&context.device,&context.queue,indexed_model_instances);
 
 		Self{
 			user_settings,
