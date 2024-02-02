@@ -1,9 +1,17 @@
-use crate::model_physics::{PhysicsMesh,TransformedMesh,MeshQuery};
+use std::collections::HashMap;
+use std::collections::HashSet;
+
+use crate::model_physics::{self,PhysicsMesh,TransformedMesh,MeshQuery};
 use strafesnet_common::bvh;
 use strafesnet_common::aabb;
-use strafesnet_common::game_mechanics::{self,StyleModifiers};
+use strafesnet_common::gameplay_attributes;
+use strafesnet_common::gameplay_modes;
+use strafesnet_common::map;
+use strafesnet_common::model;
+use strafesnet_common::gameplay_style::{self,StyleModifiers,StrafeSettings};
 use strafesnet_common::instruction::{self,InstructionEmitter,InstructionConsumer,TimedInstruction};
 use strafesnet_common::integer::{self,Time,Planar64,Planar64Vec3,Planar64Mat3,Angle32,Ratio64Vec2};
+use strafesnet_common::model::ModelId;
 
 #[derive(Debug)]
 pub enum PhysicsInstruction {
@@ -153,18 +161,16 @@ struct PhysicsModels{
 	//attributes can be split into contacting and intersecting (this also saves a bit of memory)
 	//can go even further and deduplicate General attributes separately, reconstructing it when queried
 	attributes:Vec<PhysicsCollisionAttributes>,
-	model_id_from_wormhole_id:std::collections::HashMap::<u32,usize>,
 }
 impl PhysicsModels{
 	fn clear(&mut self){
 		self.meshes.clear();
 		self.models.clear();
 		self.attributes.clear();
-		self.model_id_from_wormhole_id.clear();
 	}
 	//TODO: "statically" verify the maps don't refer to any nonexistant data, if they do delete the references.
 	//then I can make these getter functions unchecked.
-	fn mesh(&self,model_id:usize)->TransformedMesh{
+	fn mesh(&self,model_id:ModelId)->TransformedMesh{
 		TransformedMesh::new(
 			&self.meshes[self.models[model_id].mesh_id],
 			&self.models[model_id].transform,
@@ -172,24 +178,21 @@ impl PhysicsModels{
 			self.models[model_id].transform_det,
 		)
 	}
-	fn model(&self,model_id:usize)->&PhysicsModel{
+	fn model(&self,model_id:ModelId)->&PhysicsModel{
 		&self.models[model_id]
 	}
-	fn attr(&self,model_id:usize)->&PhysicsCollisionAttributes{
+	fn attr(&self,model_id:ModelId)->&PhysicsCollisionAttributes{
 		&self.attributes[self.models[model_id].attr_id]
-	}
-	fn get_wormhole_model(&self,wormhole_id:u32)->Option<&PhysicsModel>{
-		self.models.get(*self.model_id_from_wormhole_id.get(&wormhole_id)?)
 	}
 	fn push_mesh(&mut self,mesh:PhysicsMesh){
 		self.meshes.push(mesh);
 	}
-	fn push_model(&mut self,model:PhysicsModel)->usize{
+	fn push_model(&mut self,model:PhysicsModel)->ModelId{
 		let model_id=self.models.len();
 		self.models.push(model);
 		model_id
 	}
-	fn push_attr(&mut self,attr:PhysicsCollisionAttributes)->usize{
+	fn push_attr(&mut self,attr:PhysicsCollisionAttributes)->PhysicsAttributeId{
 		let attr_id=self.attributes.len();
 		self.attributes.push(attr);
 		attr_id
@@ -257,17 +260,17 @@ impl std::default::Default for PhysicsCamera{
 	}
 }
 
-pub struct GameMechanicsState{
-	stage_id:u32,
-	jump_counts:std::collections::HashMap<usize,u32>,//model_id -> jump count
-	next_ordered_checkpoint_id:u32,//which OrderedCheckpoint model_id you must pass next (if 0 you haven't passed OrderedCheckpoint0)
-	unordered_checkpoints:std::collections::HashSet<usize>,//hashset of UnorderedCheckpoint model ids
+pub struct ModeState{
+	stage_id:gameplay_modes::StageId,
+	jump_counts:HashMap<ModelId,u32>,//model_id -> jump count
+	next_ordered_checkpoint_id:gameplay_modes::CheckpointId,//which OrderedCheckpoint model_id you must pass next (if 0 you haven't passed OrderedCheckpoint0)
+	unordered_checkpoints:HashSet<ModelId>,
 }
-impl std::default::Default for GameMechanicsState{
+impl std::default::Default for ModeState{
 	fn default()->Self{
 		Self{
-			stage_id:0,
-			next_ordered_checkpoint_id:0,
+			stage_id:gameplay_modes::StageId::id(0),
+			next_ordered_checkpoint_id:gameplay_modes::CheckpointId::id(0),
 			unordered_checkpoints:std::collections::HashSet::new(),
 			jump_counts:std::collections::HashMap::new(),
 		}
@@ -280,7 +283,7 @@ trait HitboxMeshPresets{
 	fn roblox()->Self;
 	fn source()->Self;
 }
-impl HitboxMeshPresets for game_mechanics::Hitbox{
+impl HitboxMeshPresets for gameplay_style::Hitbox{
 	fn roblox()->Self{
 		Self::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cylinder()),Planar64Vec3::int(2,5,2)/2)
 	}
@@ -309,12 +312,7 @@ impl StyleHelper for StyleModifiers{
 
 	fn allow_strafe(&self,controls:u32)->bool{
 		//disable strafing according to strafe settings
-		match &self.strafe{
-			Some(StrafeSettings{enable:EnableStrafe::Always,air_accel_limit:_,tick_rate:_})=>true,
-			&Some(StrafeSettings{enable:EnableStrafe::MaskAny(mask),air_accel_limit:_,tick_rate:_})=>mask&controls!=0,
-			&Some(StrafeSettings{enable:EnableStrafe::MaskAll(mask),air_accel_limit:_,tick_rate:_})=>mask&controls==mask,
-			None=>false,
-		}
+		self.strafe.is_some_and(|s|s.mask(controls))
 	}
 
 	fn get_control_dir(&self,controls:u32)->Planar64Vec3{
@@ -429,21 +427,18 @@ pub struct PhysicsState{
 	time:Time,
 	body:Body,
 	world:WorldState,//currently there is only one state the world can be in
-	game:GameMechanicsState,
-	style:StyleModifiers,
+	mode_state:ModeState,
+	style:StyleModifiers,//mode style with custom style updates applied
 	touching:TouchingState,
 	//camera must exist in state because wormholes modify the camera, also camera punch
 	camera:PhysicsCamera,
 	pub next_mouse:MouseState,//Where is the mouse headed next
-	controls:u32,
+	controls:u32,//TODO this should be a struct
 	move_state:MoveState,
-	models:PhysicsModels,
-	bvh:bvh::BvhNode,
-	
-	modes:Modes,
-	//the spawn point is where you spawn when you load into the map.
-	//This is not the same as Reset which teleports you to Spawn0
-	spawn_point:Planar64Vec3,
+	//does not belong here
+	//bvh:bvh::BvhNode,
+	//models:PhysicsModels,
+	//modes:gameplay_modes::Modes,
 }
 #[derive(Clone,Default)]
 pub struct PhysicsOutputState{
@@ -460,38 +455,53 @@ impl PhysicsOutputState{
 #[derive(Clone,Hash,Eq,PartialEq)]
 enum PhysicsCollisionAttributes{
 	Contact{//track whether you are contacting the object
-		contacting:crate::model::ContactingAttributes,
-		general:crate::model::GameMechanicAttributes,
+		contacting:gameplay_attributes::ContactingAttributes,
+		general:gameplay_attributes::GeneralAttributes,
 	},
 	Intersect{//track whether you are intersecting the object
-		intersecting:crate::model::IntersectingAttributes,
-		general:crate::model::GameMechanicAttributes,
+		intersecting:gameplay_attributes::IntersectingAttributes,
+		general:gameplay_attributes::GeneralAttributes,
 	},
 }
 struct NonPhysicsError;
-impl TryFrom<&crate::model::CollisionAttributes> for PhysicsCollisionAttributes{
+impl TryFrom<&gameplay_attributes::CollisionAttributes> for PhysicsCollisionAttributes{
 	type Error=NonPhysicsError;
-	fn try_from(value:&crate::model::CollisionAttributes)->Result<Self,Self::Error>{
+	fn try_from(value:&gameplay_attributes::CollisionAttributes)->Result<Self,Self::Error>{
 		match value{
-			crate::model::CollisionAttributes::Decoration=>Err(NonPhysicsError),
-			crate::model::CollisionAttributes::Contact{contacting,general}=>Ok(Self::Contact{contacting:contacting.clone(),general:general.clone()}),
-			crate::model::CollisionAttributes::Intersect{intersecting,general}=>Ok(Self::Intersect{intersecting:intersecting.clone(),general:general.clone()}),
+			gameplay_attributes::CollisionAttributes::Decoration=>Err(NonPhysicsError),
+			gameplay_attributes::CollisionAttributes::Contact{contacting,general}=>Ok(Self::Contact{contacting:contacting.clone(),general:general.clone()}),
+			gameplay_attributes::CollisionAttributes::Intersect{intersecting,general}=>Ok(Self::Intersect{intersecting:intersecting.clone(),general:general.clone()}),
 		}
 	}
 }
 
+struct GeneralAttributesId(u32);
+struct ContactAttributesId(u32);
+struct IntersectAttributesId(u32);
+enum PhysicsAttributesId{
+	Contact(ContactAttributesId),
+	Intersect(IntersectAttributesId)
+}
+
+//unique physics meshes indexed by this
+struct MeshId{
+	model_id:ModelId,
+	group_id:GroupId,
+}
 pub struct PhysicsModel{
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
-	mesh_id:usize,
-	attr_id:usize,
+	mesh_id:MeshId,
+	//put these up on the Model (data normalization)
+	general_attributes:GeneralAttributesId,
+	collision_attributes:PhysicsAttributesId,
 	transform:integer::Planar64Affine3,
 	normal_transform:integer::Planar64Mat3,
 	transform_det:Planar64,
 }
 
 impl PhysicsModel{
-	pub fn new(mesh_id:usize,attr_id:usize,transform:integer::Planar64Affine3)->Self{
+	pub fn new(mesh_id:MeshId,attr_id:PhysicsAttributesId,transform:integer::Planar64Affine3)->Self{
 		Self{
 			mesh_id,
 			attr_id,
@@ -504,12 +514,12 @@ impl PhysicsModel{
 
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
 struct ContactCollision{
-	face_id:crate::model_physics::MinkowskiFace,
-	model_id:usize,//using id to avoid lifetimes
+	face_id:model_physics::MinkowskiFace,
+	model_id:ModelId,//using id to avoid lifetimes
 }
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
 struct IntersectCollision{
-	model_id:usize,
+	model_id:ModelId,
 }
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
 enum Collision{
@@ -517,13 +527,13 @@ enum Collision{
 	Intersect(IntersectCollision),
 }
 impl Collision{
-	fn model_id(&self)->usize{
+	fn model_id(&self)->ModelId{
 		match self{
 			&Collision::Contact(ContactCollision{model_id,face_id:_})
 			|&Collision::Intersect(IntersectCollision{model_id})=>model_id,
 		}
 	}
-	fn face_id(&self)->Option<crate::model_physics::MinkowskiFace>{
+	fn face_id(&self)->Option<model_physics::MinkowskiFace>{
 		match self{
 			&Collision::Contact(ContactCollision{model_id:_,face_id})=>Some(face_id),
 			&Collision::Intersect(IntersectCollision{model_id:_})=>None,
@@ -616,7 +626,7 @@ impl TouchingState{
 				PhysicsCollisionAttributes::Contact{contacting,general}=>{
 					let normal=contact_normal(models,&style_mesh,contact);
 					match &contacting.contact_behaviour{
-						Some(crate::model::ContactingBehaviour::Ladder(_))=>{
+						Some(model::ContactingBehaviour::Ladder(_))=>{
 							//ladder walkstate
 							let mut target_velocity=style.get_ladder_target_velocity(camera,controls,next_mouse,time,&normal);
 							self.constrain_velocity(models,&style_mesh,&mut target_velocity);
@@ -651,7 +661,7 @@ impl TouchingState{
 		for contact in &self.contacts{
 			//detect face slide off
 			let model_mesh=models.mesh(contact.model_id);
-			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
+			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
 			collector.collect(minkowski.predict_collision_face_out(&relative_body,collector.time(),contact.face_id).map(|(face,time)|{
 				TimedInstruction{
 					time,
@@ -664,7 +674,7 @@ impl TouchingState{
 		for intersect in &self.intersects{
 			//detect model collision in reverse
 			let model_mesh=models.mesh(intersect.model_id);
-			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
+			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
 			collector.collect(minkowski.predict_collision_out(&relative_body,collector.time()).map(|(face,time)|{
 				TimedInstruction{
 					time,
@@ -784,7 +794,7 @@ impl Default for PhysicsState{
 			next_mouse:MouseState::default(),
 			controls:0,
 			world:WorldState{},
-			game:GameMechanicsState::default(),
+			mode_state:ModeState::default(),
 			modes:Modes::default(),
 		}
 	}
@@ -807,7 +817,7 @@ impl PhysicsState {
 	}
 
 	pub fn spawn(&mut self,spawn_point:Planar64Vec3){
-		self.game.stage_id=0;
+		self.mode_state.stage_id=0;
 		self.spawn_point=spawn_point;
 		self.process_instruction(instruction::TimedInstruction{
 			time:self.time,
@@ -815,7 +825,7 @@ impl PhysicsState {
 		});
 	}
 
-	pub fn generate_models(&mut self,indexed_models:&crate::model::IndexedModelInstances){
+	pub fn generate_models(&mut self,indexed_models:&map::Map){
 		let mut starts=Vec::new();
 		let mut spawns=Vec::new();
 		let mut attr_hash=std::collections::HashMap::new();
@@ -833,14 +843,7 @@ impl PhysicsState {
 					};
 					let model_physics=PhysicsModel::new(mesh_id,attr_id,model_instance.transform);
 					make_mesh=true;
-					let model_id=self.models.push_model(model_physics);
-					for attr in &model_instance.temp_indexing{
-						match attr{
-							crate::model::TempIndexedAttributes::Start(s)=>starts.push((model_id,s.clone())),
-							crate::model::TempIndexedAttributes::Spawn(s)=>spawns.push((model_id,s.clone())),
-							crate::model::TempIndexedAttributes::Wormhole(s)=>{self.models.model_id_from_wormhole_id.insert(s.wormhole_id,model_id);},
-						}
-					}
+					self.models.push_model(model_physics);
 				}
 			}
 			if make_mesh{
@@ -848,32 +851,6 @@ impl PhysicsState {
 			}
 		}
 		self.bvh=bvh::generate_bvh(self.models.aabb_list());
-		//I don't wanna write structs for temporary structures
-		//this code builds ModeDescriptions from the unsorted lists at the top of the function
-		starts.sort_by_key(|tup|tup.1.mode_id);
-		let mut mode_id_from_map_mode_id=std::collections::HashMap::new();
-		let mut modedatas:Vec<(usize,Vec<(u32,usize)>,u32)>=starts.into_iter().enumerate().map(|(i,(model_id,s))|{
-			mode_id_from_map_mode_id.insert(s.mode_id,i);
-			(model_id,Vec::new(),s.mode_id)
-		}).collect();
-		for (model_id,s) in spawns{
-			if let Some(mode_id)=mode_id_from_map_mode_id.get(&s.mode_id){
-				if let Some(modedata)=modedatas.get_mut(*mode_id){
-					modedata.1.push((s.stage_id,model_id));
-				}
-			}
-		}
-		for mut tup in modedatas.into_iter(){
-			tup.1.sort_by_key(|tup|tup.0);
-			let mut eshmep1=std::collections::HashMap::new();
-			let mut eshmep2=std::collections::HashMap::new();
-			self.modes.insert(tup.2,crate::model::ModeDescription{
-				start:tup.0,
-				spawns:tup.1.into_iter().enumerate().map(|(i,tup)|{eshmep1.insert(tup.0,i);tup.1}).collect(),
-				spawn_from_stage_id:eshmep1,
-				ordered_checkpoint_from_checkpoint_id:eshmep2,
-			});
-		}
 		println!("Physics Objects: {}",self.models.models.len());
 	}
 
@@ -903,7 +880,7 @@ impl PhysicsState {
 	fn next_strafe_instruction(&self)->Option<TimedInstruction<PhysicsInstruction>>{
 		self.style.strafe.as_ref().map(|strafe|{
 			TimedInstruction{
-				time:Time::from_nanos(strafe.tick_rate.rhs_div_int(strafe.tick_rate.mul_int(self.time.nanos())+1)),
+				time:strafe.next_tick(self.time),
 				//only poll the physics if there is a before and after mouse event
 				instruction:PhysicsInstruction::StrafeTick
 			}
@@ -1003,7 +980,7 @@ impl instruction::InstructionEmitter<PhysicsInstruction> for PhysicsState{
 		self.bvh.the_tester(&aabb,&mut |id|{
 			//no checks are needed because of the time limits.
 			let model_mesh=self.models.mesh(id);
-			let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
+			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
 			collector.collect(minkowski.predict_collision_in(&relative_body,collector.time())
 				//temp (?) code to avoid collision loops
 				.map_or(None,|(face,time)|if time==self.time{None}else{Some((face,time))})
@@ -1035,7 +1012,7 @@ fn jumped_velocity(models:&PhysicsModels,style:&StyleModifiers,walk_state:&WalkS
 
 fn contact_normal(models:&PhysicsModels,style_mesh:&TransformedMesh,contact:&ContactCollision)->Planar64Vec3{
 	let model_mesh=models.mesh(contact.model_id);
-	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,style_mesh);
+	let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,style_mesh);
 	minkowski.face_nd(contact.face_id).0
 }
 
@@ -1095,75 +1072,75 @@ fn teleport(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,sty
 	set_acceleration(body,touching,models,&style.mesh(),style.gravity);
 	MoveState::Air
 }
-fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,mode:&crate::model::ModeDescription,models:&PhysicsModels,stage_id:u32)->Option<MoveState>{
-	let model=models.model(*mode.get_spawn_model_id(stage_id)? as usize);
+fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,mode:&gameplay_modes::Mode,models:&PhysicsModels,stage_id:StageId)->Option<MoveState>{
+	let model=models.model(mode.get_spawn_model_id(stage_id)?);
 	let point=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(style.hitbox.halfsize.y()+Planar64::ONE/16);
 	Some(teleport(body,touching,models,style,point))
 }
 
-fn run_teleport_behaviour(teleport_behaviour:&Option<crate::model::TeleportBehaviour>,game:&mut GameMechanicsState,models:&PhysicsModels,modes:&Modes,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body,model_id:usize)->Option<MoveState>{
+fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&mut ModeState,models:&PhysicsModels,mode:&gameplay_modes::Mode,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body,model_id:ModelId)->Option<MoveState>{
 	//TODO: jump count and checkpoints are always reset on teleport.
 	//Map makers are expected to use tools to prevent
 	//multi-boosting on JumpLimit boosters such as spawning into a SetVelocity
-	match teleport_behaviour{
-		Some(crate::model::TeleportBehaviour::StageElement(stage_element))=>{
-			if stage_element.force||game.stage_id<stage_element.stage_id{
-				//TODO: check if all checkpoints are complete up to destination stage id, otherwise set to checkpoint completion stage it
-				game.stage_id=stage_element.stage_id;
-			}
-			match &stage_element.behaviour{
-				crate::model::StageElementBehaviour::SpawnAt=>None,
-				crate::model::StageElementBehaviour::Trigger
-				|crate::model::StageElementBehaviour::Teleport=>{
-					//I guess this is correct behaviour when trying to teleport to a non-existent spawn but it's still weird
+	mode.get_element(model_id).map(|stage_element|{
+		if stage_element.force||game.stage_id<stage_element.stage_id{
+			//TODO: check if all checkpoints are complete up to destination stage id, otherwise set to checkpoint completion stage it
+			game.stage_id=stage_element.stage_id;
+		}
+		match &stage_element.behaviour{
+			model::StageElementBehaviour::SpawnAt=>None,
+			model::StageElementBehaviour::Trigger
+			|model::StageElementBehaviour::Teleport=>{
+				//I guess this is correct behaviour when trying to teleport to a non-existent spawn but it's still weird
+				teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
+			},
+			model::StageElementBehaviour::Platform=>None,
+			&model::StageElementBehaviour::Checkpoint=>{
+				// let mode=modes.get_mode(stage_element.mode_id)?;
+				// if mode.ordered_checkpoint_id.map_or(true,|id|id<game.next_ordered_checkpoint_id)
+				// 	&&mode.unordered_checkpoint_count<=game.unordered_checkpoints.len() as u32{
+				// 	//pass
+				 	None
+				// }else{
+				// 	//fail
+				// 	teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
+				// }
+			},
+			&model::StageElementBehaviour::Ordered{checkpoint_id}=>{
+				if checkpoint_id<game.next_ordered_checkpoint_id{
+					//if you hit a checkpoint you already hit, nothing happens
+					None
+				}else if game.next_ordered_checkpoint_id==checkpoint_id{
+					//if you hit the next number in a sequence of ordered checkpoints
+					//increment the current checkpoint id
+					game.next_ordered_checkpoint_id+=1;
+					None
+				}else{
+					//If you hit an ordered checkpoint after missing a previous one
 					teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
-				},
-				crate::model::StageElementBehaviour::Platform=>None,
-				&crate::model::StageElementBehaviour::Checkpoint=>{
-					// let mode=modes.get_mode(stage_element.mode_id)?;
-					// if mode.ordered_checkpoint_id.map_or(true,|id|id<game.next_ordered_checkpoint_id)
-					// 	&&mode.unordered_checkpoint_count<=game.unordered_checkpoints.len() as u32{
-					// 	//pass
-					 	None
-					// }else{
-					// 	//fail
-					// 	teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
-					// }
-				},
-				&crate::model::StageElementBehaviour::Ordered{checkpoint_id}=>{
-					if checkpoint_id<game.next_ordered_checkpoint_id{
-						//if you hit a checkpoint you already hit, nothing happens
-						None
-					}else if game.next_ordered_checkpoint_id==checkpoint_id{
-						//if you hit the next number in a sequence of ordered checkpoints
-						//increment the current checkpoint id
-						game.next_ordered_checkpoint_id+=1;
-						None
-					}else{
-						//If you hit an ordered checkpoint after missing a previous one
-						teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
-					}
-				},
-				crate::model::StageElementBehaviour::Unordered=>{
-					//count model id in accumulated unordered checkpoints
-					game.unordered_checkpoints.insert(model_id);
-					None
-				},
-				&crate::model::StageElementBehaviour::JumpLimit(jump_limit)=>{
-					//let count=game.jump_counts.get(&model.id);
-					//TODO
-					None
-				},
-			}
-		},
-		Some(crate::model::TeleportBehaviour::Wormhole(wormhole))=>{
+				}
+			},
+			model::StageElementBehaviour::Unordered=>{
+				//count model id in accumulated unordered checkpoints
+				game.unordered_checkpoints.insert(model_id);
+				None
+			},
+			&model::StageElementBehaviour::JumpLimit(jump_limit)=>{
+				//let count=game.jump_counts.get(&model.id);
+				//TODO
+				None
+			},
+		}
+	}).or_else(||
+	match wormhole{
+		Some(gameplay_attributes::Wormhole{destination_model})=>{
 			let origin_model=models.model(model_id);
-			let destination_model=models.get_wormhole_model(wormhole.destination_model_id)?;
+			let destination_model=models.get_wormhole_model(destination_model)?;
 			//ignore the transform for now
 			Some(teleport(body,touching,models,style,body.position-origin_model.transform.translation+destination_model.transform.translation))
 		}
 		None=>None,
-	}
+	})
 }
 
 impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
@@ -1193,14 +1170,14 @@ impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 						let mut v=self.body.velocity;
 						let normal=contact_normal(&self.models,&style_mesh,contact);
 						match &contacting.contact_behaviour{
-							Some(crate::model::ContactingBehaviour::Surf)=>println!("I'm surfing!"),
-							Some(crate::model::ContactingBehaviour::Cling)=>println!("Unimplemented!"),
-							&Some(crate::model::ContactingBehaviour::Elastic(elasticity))=>{
+							Some(gameplay_attributes::ContactingBehaviour::Surf)=>println!("I'm surfing!"),
+							Some(gameplay_attributes::ContactingBehaviour::Cling)=>println!("Unimplemented!"),
+							&Some(gameplay_attributes::ContactingBehaviour::Elastic(elasticity))=>{
 								//velocity and normal are facing opposite directions so this is inherently negative.
 								let d=normal.dot(v)*(Planar64::ONE+Planar64::raw(elasticity as i64+1));
 								v+=normal*(d/normal.dot(normal));
 							},
-							Some(crate::model::ContactingBehaviour::Ladder(contacting_ladder))=>{
+							Some(gameplay_attributes::ContactingBehaviour::Ladder(contacting_ladder))=>{
 								if contacting_ladder.sticky{
 									//kill v
 									//actually you could do this with a booster attribute :thinking:
@@ -1227,16 +1204,16 @@ impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 						//check ground
 						self.touching.insert(c);
 						//I love making functions with 10 arguments to dodge the borrow checker
-						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model_id);
+						run_teleport_behaviour(&general.teleport_behaviour,&mut self.mode_state,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model_id);
 						//flatten v
 						self.touching.constrain_velocity(&self.models,&style_mesh,&mut v);
 						match &general.booster{
 							Some(booster)=>{
 								//DELETE THIS when boosters get converted to height machines
 								match booster{
-									&crate::model::GameMechanicBooster::Affine(transform)=>v=transform.transform_point3(v),
-									&crate::model::GameMechanicBooster::Velocity(velocity)=>v+=velocity,
-									&crate::model::GameMechanicBooster::Energy{direction: _,energy: _}=>todo!(),
+									&gameplay_attributes::Booster::Affine(transform)=>v=transform.transform_point3(v),
+									&gameplay_attributes::Booster::Velocity(velocity)=>v+=velocity,
+									&gameplay_attributes::Booster::Energy{direction: _,energy: _}=>todo!(),
 								}
 							},
 							None=>(),
@@ -1250,12 +1227,12 @@ impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 						match &general.trajectory{
 							Some(trajectory)=>{
 								match trajectory{
-									crate::model::GameMechanicSetTrajectory::AirTime(_) => todo!(),
-									crate::model::GameMechanicSetTrajectory::Height(_) => todo!(),
-									crate::model::GameMechanicSetTrajectory::TargetPointTime { target_point: _, time: _ } => todo!(),
-									crate::model::GameMechanicSetTrajectory::TargetPointSpeed { target_point: _, speed: _, trajectory_choice: _ } => todo!(),
-									&crate::model::GameMechanicSetTrajectory::Velocity(velocity)=>v=velocity,
-									crate::model::GameMechanicSetTrajectory::DotVelocity { direction: _, dot: _ } => todo!(),
+									gameplay_attributes::SetTrajectory::AirTime(_) => todo!(),
+									gameplay_attributes::SetTrajectory::Height(_) => todo!(),
+									gameplay_attributes::SetTrajectory::TargetPointTime { target_point: _, time: _ } => todo!(),
+									gameplay_attributes::SetTrajectory::TargetPointSpeed { target_point: _, speed: _, trajectory_choice: _ } => todo!(),
+									&gameplay_attributes::SetTrajectory::Velocity(velocity)=>v=velocity,
+									gameplay_attributes::SetTrajectory::DotVelocity { direction: _, dot: _ } => todo!(),
 								}
 							},
 							None=>(),
@@ -1271,7 +1248,7 @@ impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 					(PhysicsCollisionAttributes::Intersect{intersecting: _,general},Collision::Intersect(intersect))=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
 						self.touching.insert(c);
-						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model_id);
+						run_teleport_behaviour(&general.teleport_behaviour,&mut self.mode_state,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model_id);
 					},
 					_=>panic!("invalid pair"),
 				}
@@ -1378,17 +1355,17 @@ impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 
 #[allow(dead_code)]
 fn test_collision_axis_aligned(relative_body:Body,expected_collision_time:Option<Time>){
-	let h0=Hitbox::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cube()),Planar64Vec3::int(5,1,5)/2);
-	let h1=Hitbox::roblox();
+	let h0=gameplay_style::Hitbox::from_mesh_scale(PhysicsMesh::from(&crate::primitives::unit_cube()),Planar64Vec3::int(5,1,5)/2);
+	let h1=gameplay_style::Hitbox::roblox();
 	let hitbox_mesh=h1.transformed_mesh();
 	let platform_mesh=h0.transformed_mesh();
-	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
+	let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
 	let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
 	assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
 }
 #[allow(dead_code)]
 fn test_collision_rotated(relative_body:Body,expected_collision_time:Option<Time>){
-	let h0=Hitbox::new(PhysicsMesh::from(&crate::primitives::unit_cube()),
+	let h0=gameplay_style::Hitbox::new(PhysicsMesh::from(&crate::primitives::unit_cube()),
 		integer::Planar64Affine3::new(
 			integer::Planar64Mat3::from_cols(
 				Planar64Vec3::int(5,0,1)/2,
@@ -1398,10 +1375,10 @@ fn test_collision_rotated(relative_body:Body,expected_collision_time:Option<Time
 			Planar64Vec3::ZERO,
 		)
 	);
-	let h1=Hitbox::roblox();
+	let h1=gameplay_style::Hitbox::roblox();
 	let hitbox_mesh=h1.transformed_mesh();
 	let platform_mesh=h0.transformed_mesh();
-	let minkowski=crate::model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
+	let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
 	let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
 	assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
 }
