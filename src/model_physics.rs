@@ -144,14 +144,14 @@ impl From<&model::IndexedModel> for PhysicsMesh{
 		let mut face_i=0;
 		let mut faces=Vec::new();
 		let mut face_ref_guys=Vec::new();
-		for group in indexed_model.polygon_groups.iter(){for poly in group.polys(){
+		for group in &indexed_model.polygon_groups{for poly_vertices in group.polys(){
 			let face_id=FaceId(face_i);
 			//one face per poly
 			let mut normal=Planar64Vec3::ZERO;
-			let len=poly.vertices.len();
-			let face_edges=poly.vertices.iter().enumerate().map(|(i,&vert_id)|{
-				let vert0_id=indexed_model.unique_vertices[vert_id as usize].pos.get() as usize;
-				let vert1_id=indexed_model.unique_vertices[poly.vertices[(i+1)%len] as usize].pos.get() as usize;
+			let len=poly_vertices.len();
+			let face_edges=poly_vertices.iter().enumerate().map(|(i,&vert_id)|{
+				let vert0_id=indexed_model.unique_vertices[vert_id.get() as usize].pos.get() as usize;
+				let vert1_id=indexed_model.unique_vertices[poly_vertices[(i+1)%len].get() as usize].pos.get() as usize;
 				//https://www.khronos.org/opengl/wiki/Calculating_a_Surface_Normal (Newell's Method)
 				let v0=indexed_model.unique_pos[vert0_id];
 				let v1=indexed_model.unique_pos[vert1_id];
@@ -179,8 +179,8 @@ impl From<&model::IndexedModel> for PhysicsMesh{
 			//choose precision loss randomly idk
 			normal=normal/len as i64;
 			let mut dot=Planar64::ZERO;
-			for &v in poly.vertices.iter(){
-				dot+=normal.dot(indexed_model.unique_pos[indexed_model.unique_vertices[v as usize].pos.get() as usize]);
+			for &v in poly_vertices{
+				dot+=normal.dot(indexed_model.unique_pos[indexed_model.unique_vertices[v.get() as usize].pos.get() as usize]);
 			}
 			faces.push(Face{normal,dot:dot/len as i64});
 			face_ref_guys.push(FaceRefEdges(face_edges));
