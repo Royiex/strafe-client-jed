@@ -8,7 +8,7 @@ use strafesnet_common::gameplay_attributes;
 use strafesnet_common::gameplay_modes;
 use strafesnet_common::map;
 use strafesnet_common::model;
-use strafesnet_common::gameplay_style::{self,StyleModifiers,StrafeSettings};
+use strafesnet_common::gameplay_style::{self,StyleModifiers};
 use strafesnet_common::instruction::{self,InstructionEmitter,InstructionConsumer,TimedInstruction};
 use strafesnet_common::integer::{self,Time,Planar64,Planar64Vec3,Planar64Mat3,Angle32,Ratio64Vec2};
 use strafesnet_common::model::ModelId;
@@ -346,10 +346,10 @@ impl StyleHelper for StyleModifiers{
 	//fn get_jump_energy(&self)->Planar64
 	fn get_jump_deltav(&self)->Planar64{
 		match &self.jump_impulse{
-			&JumpImpulse::FromTime(time)=>self.gravity.length()*(time/2),
-			&JumpImpulse::FromHeight(height)=>(self.gravity.length()*height*2).sqrt(),
-			&JumpImpulse::FromDeltaV(deltav)=>deltav,
-			&JumpImpulse::FromEnergy(energy)=>(energy*2/self.mass).sqrt(),
+			&gameplay_style::JumpImpulse::FromTime(time)=>self.gravity.length()*(time/2),
+			&gameplay_style::JumpImpulse::FromHeight(height)=>(self.gravity.length()*height*2).sqrt(),
+			&gameplay_style::JumpImpulse::FromDeltaV(deltav)=>deltav,
+			&gameplay_style::JumpImpulse::FromEnergy(energy)=>(energy*2/self.mass).sqrt(),
 		}
 	}
 
@@ -423,23 +423,6 @@ enum MoveState{
 	Ladder(WalkState),
 }
 
-pub struct PhysicsState{
-	time:Time,
-	body:Body,
-	world:WorldState,//currently there is only one state the world can be in
-	mode_state:ModeState,
-	style:StyleModifiers,//mode style with custom style updates applied
-	touching:TouchingState,
-	//camera must exist in state because wormholes modify the camera, also camera punch
-	camera:PhysicsCamera,
-	pub next_mouse:MouseState,//Where is the mouse headed next
-	controls:u32,//TODO this should be a struct
-	move_state:MoveState,
-	//does not belong here
-	//bvh:bvh::BvhNode,
-	//models:PhysicsModels,
-	//modes:gameplay_modes::Modes,
-}
 #[derive(Clone,Default)]
 pub struct PhysicsOutputState{
 	body:Body,
@@ -483,15 +466,18 @@ enum PhysicsAttributesId{
 	Intersect(IntersectAttributesId)
 }
 
+//id assigned to deindexed IndexedPhysicsGroup
+struct PhysicsModelId(u32);
+struct PhysicsGroupId(u32);
 //unique physics meshes indexed by this
-struct MeshId{
-	model_id:ModelId,
-	group_id:GroupId,
+struct ConvexMeshId{
+	model_id:PhysicsModelId,// = IndexedModelId
+	group_id:PhysicsGroupId,// group in model
 }
 pub struct PhysicsModel{
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
-	mesh_id:MeshId,
+	mesh_id:ConvexMeshId,
 	//put these up on the Model (data normalization)
 	general_attributes:GeneralAttributesId,
 	collision_attributes:PhysicsAttributesId,
@@ -501,7 +487,7 @@ pub struct PhysicsModel{
 }
 
 impl PhysicsModel{
-	pub fn new(mesh_id:MeshId,attr_id:PhysicsAttributesId,transform:integer::Planar64Affine3)->Self{
+	pub fn new(mesh_id:ConvexMeshId,attr_id:PhysicsAttributesId,transform:integer::Planar64Affine3)->Self{
 		Self{
 			mesh_id,
 			attr_id,
@@ -626,7 +612,7 @@ impl TouchingState{
 				PhysicsCollisionAttributes::Contact{contacting,general}=>{
 					let normal=contact_normal(models,&style_mesh,contact);
 					match &contacting.contact_behaviour{
-						Some(model::ContactingBehaviour::Ladder(_))=>{
+						Some(gameplay_attributes::ContactingBehaviour::Ladder(_))=>{
 							//ladder walkstate
 							let mut target_velocity=style.get_ladder_target_velocity(camera,controls,next_mouse,time,&normal);
 							self.constrain_velocity(models,&style_mesh,&mut target_velocity);
@@ -779,23 +765,39 @@ impl VirtualBody<'_>{
 	}
 }
 
+pub struct PhysicsState{
+	time:Time,
+	body:Body,
+	world:WorldState,//currently there is only one state the world can be in
+	mode_state:ModeState,
+	style:StyleModifiers,//mode style with custom style updates applied
+	touching:TouchingState,
+	//camera must exist in state because wormholes modify the camera, also camera punch
+	camera:PhysicsCamera,
+	pub next_mouse:MouseState,//Where is the mouse headed next
+	controls:u32,//TODO this should be a struct
+	move_state:MoveState,
+	//does not belong here
+	//bvh:bvh::BvhNode,
+	//models:PhysicsModels,
+	//modes:gameplay_modes::Modes,
+}
 impl Default for PhysicsState{
 	fn default()->Self{
  		Self{
-			spawn_point:Planar64Vec3::int(0,50,0),
 			body:Body::new(Planar64Vec3::int(0,50,0),Planar64Vec3::int(0,0,0),Planar64Vec3::int(0,-100,0),Time::ZERO),
 			time:Time::ZERO,
 			style:StyleModifiers::default(),
 			touching:TouchingState::default(),
-			models:PhysicsModels::default(),
-			bvh:bvh::BvhNode::default(),
 			move_state: MoveState::Air,
 			camera:PhysicsCamera::default(),
 			next_mouse:MouseState::default(),
 			controls:0,
 			world:WorldState{},
 			mode_state:ModeState::default(),
-			modes:Modes::default(),
+			//modes:Modes::default(),
+			//bvh:bvh::BvhNode::default(),
+			//models:PhysicsModels::default(),
 		}
 	}
 }
@@ -1072,7 +1074,7 @@ fn teleport(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,sty
 	set_acceleration(body,touching,models,&style.mesh(),style.gravity);
 	MoveState::Air
 }
-fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,mode:&gameplay_modes::Mode,models:&PhysicsModels,stage_id:StageId)->Option<MoveState>{
+fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,mode:&gameplay_modes::Mode,models:&PhysicsModels,stage_id:gameplay_modes::StageId)->Option<MoveState>{
 	let model=models.model(mode.get_spawn_model_id(stage_id)?);
 	let point=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(style.hitbox.halfsize.y()+Planar64::ONE/16);
 	Some(teleport(body,touching,models,style,point))
@@ -1082,20 +1084,21 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 	//TODO: jump count and checkpoints are always reset on teleport.
 	//Map makers are expected to use tools to prevent
 	//multi-boosting on JumpLimit boosters such as spawning into a SetVelocity
-	mode.get_element(model_id).map(|stage_element|{
+	let stage_element=mode.get_element(model_id)?;
+	{
 		if stage_element.force||game.stage_id<stage_element.stage_id{
 			//TODO: check if all checkpoints are complete up to destination stage id, otherwise set to checkpoint completion stage it
 			game.stage_id=stage_element.stage_id;
 		}
 		match &stage_element.behaviour{
-			model::StageElementBehaviour::SpawnAt=>None,
-			model::StageElementBehaviour::Trigger
-			|model::StageElementBehaviour::Teleport=>{
+			gameplay_modes::StageElementBehaviour::SpawnAt=>None,
+			gameplay_modes::StageElementBehaviour::Trigger
+			|gameplay_modes::StageElementBehaviour::Teleport=>{
 				//I guess this is correct behaviour when trying to teleport to a non-existent spawn but it's still weird
-				teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
+				teleport_to_spawn(body,touching,style,mode,models,game.stage_id)
 			},
-			model::StageElementBehaviour::Platform=>None,
-			&model::StageElementBehaviour::Checkpoint=>{
+			gameplay_modes::StageElementBehaviour::Platform=>None,
+			&gameplay_modes::StageElementBehaviour::Checkpoint=>{
 				// let mode=modes.get_mode(stage_element.mode_id)?;
 				// if mode.ordered_checkpoint_id.map_or(true,|id|id<game.next_ordered_checkpoint_id)
 				// 	&&mode.unordered_checkpoint_count<=game.unordered_checkpoints.len() as u32{
@@ -1106,7 +1109,7 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 				// 	teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
 				// }
 			},
-			&model::StageElementBehaviour::Ordered{checkpoint_id}=>{
+			&gameplay_modes::StageElementBehaviour::Ordered{checkpoint_id}=>{
 				if checkpoint_id<game.next_ordered_checkpoint_id{
 					//if you hit a checkpoint you already hit, nothing happens
 					None
@@ -1117,30 +1120,31 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 					None
 				}else{
 					//If you hit an ordered checkpoint after missing a previous one
-					teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
+					teleport_to_spawn(body,touching,style,mode,models,game.stage_id)
 				}
 			},
-			model::StageElementBehaviour::Unordered=>{
+			gameplay_modes::StageElementBehaviour::Unordered=>{
 				//count model id in accumulated unordered checkpoints
 				game.unordered_checkpoints.insert(model_id);
 				None
 			},
-			&model::StageElementBehaviour::JumpLimit(jump_limit)=>{
+			&gameplay_modes::StageElementBehaviour::JumpLimit(jump_limit)=>{
 				//let count=game.jump_counts.get(&model.id);
 				//TODO
 				None
 			},
 		}
-	}).or_else(||
-	match wormhole{
-		Some(gameplay_attributes::Wormhole{destination_model})=>{
-			let origin_model=models.model(model_id);
-			let destination_model=models.get_wormhole_model(destination_model)?;
-			//ignore the transform for now
-			Some(teleport(body,touching,models,style,body.position-origin_model.transform.translation+destination_model.transform.translation))
+	}.or_else(||
+		match wormhole{
+			Some(gameplay_attributes::Wormhole{destination_model})=>{
+				let origin_model=models.model(model_id);
+				let destination_model=models.get_wormhole_model(destination_model)?;
+				//ignore the transform for now
+				Some(teleport(body,touching,models,style,body.position-origin_model.transform.translation+destination_model.transform.translation))
+			}
+			None=>None,
 		}
-		None=>None,
-	})
+	)
 }
 
 impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {

@@ -1,4 +1,5 @@
 use std::borrow::{Borrow,Cow};
+use strafesnet_common::model;
 use strafesnet_common::zeroes;
 use strafesnet_common::integer::{self,Planar64,Planar64Vec3};
 
@@ -134,8 +135,8 @@ impl EdgePool{
 		(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,EdgeId(edge_id))
 	}
 }
-impl From<&crate::model::IndexedModel> for PhysicsMesh{
-	fn from(indexed_model:&crate::model::IndexedModel)->Self{
+impl From<&model::IndexedModel> for PhysicsMesh{
+	fn from(indexed_model:&model::IndexedModel)->Self{
 		assert!(indexed_model.unique_pos.len()!=0,"Mesh cannot have 0 vertices");
 		let verts=indexed_model.unique_pos.iter().map(|v|Vert(v.clone())).collect();
 		let mut vert_ref_guys=vec![VertRefGuy::default();indexed_model.unique_pos.len()];

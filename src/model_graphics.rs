@@ -1,24 +1,24 @@
 use bytemuck::{Pod, Zeroable};
-use crate::model::{IndexedVertex,IndexedPolygon};
-#[derive(Clone, Copy, Pod, Zeroable)]
+use strafesnet_common::model::{IndexedVertex,IndexedPolygon};
+#[derive(Clone,Copy,Pod,Zeroable)]
 #[repr(C)]
-pub struct GraphicsVertex {
-	pub pos: [f32; 3],
-	pub tex: [f32; 2],
-	pub normal: [f32; 3],
-	pub color: [f32; 4],
+pub struct GraphicsVertex{
+	pub pos:[f32;3],
+	pub tex:[f32;2],
+	pub normal:[f32;3],
+	pub color:[f32;4],
 }
 pub struct IndexedGroupFixedTexture{
 	pub polys:Vec<IndexedPolygon>,
 }
 pub struct IndexedGraphicsModelSingleTexture{
-	pub unique_pos:Vec<[f32; 3]>,
-	pub unique_tex:Vec<[f32; 2]>,
-	pub unique_normal:Vec<[f32; 3]>,
-	pub unique_color:Vec<[f32; 4]>,
+	pub unique_pos:Vec<[f32;3]>,
+	pub unique_tex:Vec<[f32;2]>,
+	pub unique_normal:Vec<[f32;3]>,
+	pub unique_color:Vec<[f32;4]>,
 	pub unique_vertices:Vec<IndexedVertex>,
 	pub texture:Option<u32>,//RenderPattern? material/texture/shader/flat color
-	pub groups: Vec<IndexedGroupFixedTexture>,
+	pub groups:Vec<IndexedGroupFixedTexture>,
 	pub instances:Vec<GraphicsModelInstance>,
 }
 pub enum Entities{

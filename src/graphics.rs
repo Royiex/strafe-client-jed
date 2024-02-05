@@ -1,4 +1,6 @@
 use std::borrow::Cow;
+use strafesnet_common::map;
+use strafesnet_common::model;
 use strafesnet_common::integer;
 use wgpu::{util::DeviceExt,AstcBlock,AstcChannel};
 use crate::model_graphics::{GraphicsVertex,GraphicsModelColor4,GraphicsModelInstance,GraphicsModelSingleTexture,IndexedGraphicsModelSingleTexture,IndexedGroupFixedTexture};
@@ -145,14 +147,14 @@ impl GraphicsState{
 	pub fn load_user_settings(&mut self,user_settings:&crate::settings::UserSettings){
 		self.camera.fov=user_settings.calculate_fov(1.0,&self.camera.screen_size).as_vec2();
 	}
-	pub fn generate_models(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,indexed_models:crate::model::IndexedModelInstances){
+	pub fn generate_models(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,map:map::Map){
 		//generate texture view per texture
 
 		//idk how to do this gooder lol
 		let mut double_map=std::collections::HashMap::<u32,u32>::new();
 		let mut texture_loading_threads=Vec::new();
-		let num_textures=indexed_models.textures.len();
-		for (i,texture_id) in indexed_models.textures.into_iter().enumerate(){
+		let num_textures=map.textures.len();
+		for (i,texture_id) in map.textures.into_iter().enumerate(){
 			let path=std::path::PathBuf::from(format!("textures/{}.dds",texture_id));
 			if let Ok(mut file) = std::fs::File::open(path.clone()){
 				double_map.insert(i as u32, texture_loading_threads.len() as u32);
@@ -216,9 +218,9 @@ impl GraphicsState{
 
 		//split groups with different textures into separate models
 		//the models received here are supposed to be tightly packed, i.e. no code needs to check if two models are using the same groups.
-		let indexed_models_len=indexed_models.models.len();
+		let indexed_models_len=map.models.len();
 		let mut unique_texture_models=Vec::with_capacity(indexed_models_len);
-		for model in indexed_models.models.into_iter(){
+		for model in map.models.into_iter(){
 			//convert ModelInstance into GraphicsModelInstance
 			let instances:Vec<GraphicsModelInstance>=model.instances.into_iter().filter_map(|instance|{
 				if instance.color.w==0.0{
@@ -379,7 +381,7 @@ impl GraphicsState{
 						//map the indexed vertices onto new indices
 						//creating the vertex map is slightly different because the vertices are directly hashable
 						let map_vertex_id:Vec<u32>=model.unique_vertices.iter().map(|unmapped_vertex|{
-							let vertex=crate::model::IndexedVertex{
+							let vertex=model::IndexedVertex{
 								pos:map_pos_id[unmapped_vertex.pos as usize],
 								tex:map_tex_id[unmapped_vertex.tex as usize],
 								normal:map_normal_id[unmapped_vertex.normal as usize],
@@ -396,7 +398,7 @@ impl GraphicsState{
 						}).collect();
 						for group in &model.groups{
 							for poly in &group.polys{
-								polys.push(crate::model::IndexedPolygon{vertices:poly.vertices.iter().map(|&vertex_id|map_vertex_id[vertex_id as usize]).collect()});
+								polys.push(model::IndexedPolygon{vertices:poly.vertices.iter().map(|&vertex_id|map_vertex_id[vertex_id as usize]).collect()});
 							}
 						}
 					}
