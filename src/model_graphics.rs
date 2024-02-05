@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use strafesnet_common::model::{IndexedVertex,IndexedPolygon};
+use strafesnet_common::model::{IndexedVertex,IndexedVertexList};
 #[derive(Clone,Copy,Pod,Zeroable)]
 #[repr(C)]
 pub struct GraphicsVertex{
@@ -9,7 +9,7 @@ pub struct GraphicsVertex{
 	pub color:[f32;4],
 }
 pub struct IndexedGroupFixedTexture{
-	pub polys:Vec<IndexedPolygon>,
+	pub polys:Vec<IndexedVertexList>,
 }
 pub struct IndexedGraphicsModelSingleTexture{
 	pub unique_pos:Vec<[f32;3]>,

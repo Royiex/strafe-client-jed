@@ -120,7 +120,7 @@ pub enum Instruction{
 				},
 				Instruction::GenerateModels(indexed_model_instances)=>{
 					physics.generate_models(&indexed_model_instances);
-					physics.spawn(indexed_model_instances.spawn_point);
+					physics.spawn();
 					graphics_worker.send(crate::graphics_worker::Instruction::GenerateModels(indexed_model_instances)).unwrap();
 				},
 				Instruction::ClearModels=>{

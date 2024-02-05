@@ -171,11 +171,13 @@ impl PhysicsModels{
 	//TODO: "statically" verify the maps don't refer to any nonexistant data, if they do delete the references.
 	//then I can make these getter functions unchecked.
 	fn mesh(&self,model_id:ModelId)->TransformedMesh{
+		let idx=model_id.get() as usize;
+		let mesh_id=self.models[idx].mesh_id;
 		TransformedMesh::new(
-			&self.meshes[self.models[model_id].mesh_id],
-			&self.models[model_id].transform,
-			&self.models[model_id].normal_transform,
-			self.models[model_id].transform_det,
+			&self.meshes[mesh_id.model_id.get() as usize].groups[mesh_id.group_id.get() as usize],
+			&self.models[idx].transform,
+			&self.models[idx].normal_transform,
+			self.models[idx].transform_det,
 		)
 	}
 	fn model(&self,model_id:ModelId)->&PhysicsModel{
@@ -192,7 +194,7 @@ impl PhysicsModels{
 		self.models.push(model);
 		model_id
 	}
-	fn push_attr(&mut self,attr:PhysicsCollisionAttributes)->PhysicsAttributeId{
+	fn push_attr(&mut self,attr:PhysicsCollisionAttributes)->PhysicsAttributesId{
 		let attr_id=self.attributes.len();
 		self.attributes.push(attr);
 		attr_id
@@ -271,8 +273,8 @@ impl std::default::Default for ModeState{
 		Self{
 			stage_id:gameplay_modes::StageId::id(0),
 			next_ordered_checkpoint_id:gameplay_modes::CheckpointId::id(0),
-			unordered_checkpoints:std::collections::HashSet::new(),
-			jump_counts:std::collections::HashMap::new(),
+			unordered_checkpoints:HashSet::new(),
+			jump_counts:HashMap::new(),
 		}
 	}
 }
@@ -528,8 +530,8 @@ impl Collision{
 }
 #[derive(Default)]
 struct TouchingState{
-	contacts:std::collections::HashSet::<ContactCollision>,
-	intersects:std::collections::HashSet::<IntersectCollision>,
+	contacts:HashSet::<ContactCollision>,
+	intersects:HashSet::<IntersectCollision>,
 }
 impl TouchingState{
 	fn clear(&mut self){
@@ -778,9 +780,9 @@ pub struct PhysicsState{
 	controls:u32,//TODO this should be a struct
 	move_state:MoveState,
 	//does not belong here
-	//bvh:bvh::BvhNode,
-	//models:PhysicsModels,
-	//modes:gameplay_modes::Modes,
+	bvh:bvh::BvhNode,
+	models:PhysicsModels,
+	modes:gameplay_modes::Modes,
 }
 impl Default for PhysicsState{
 	fn default()->Self{
@@ -795,19 +797,16 @@ impl Default for PhysicsState{
 			controls:0,
 			world:WorldState{},
 			mode_state:ModeState::default(),
-			//modes:Modes::default(),
-			//bvh:bvh::BvhNode::default(),
-			//models:PhysicsModels::default(),
+			modes:Modes::default(),
+			bvh:bvh::BvhNode::default(),
+			models:PhysicsModels::default(),
 		}
 	}
 }
 
 impl PhysicsState {
 	pub fn clear(&mut self){
-		self.models.clear();
-		self.modes.clear();
 		self.touching.clear();
-		self.bvh=bvh::BvhNode::default();
 	}
 
 	pub fn output(&self)->PhysicsOutputState{
@@ -818,20 +817,19 @@ impl PhysicsState {
 		}
 	}
 
-	pub fn spawn(&mut self,spawn_point:Planar64Vec3){
-		self.mode_state.stage_id=0;
-		self.spawn_point=spawn_point;
+	pub fn spawn(&mut self){
+		self.mode_state.stage_id=gameplay_modes::StageId::id(0);
 		self.process_instruction(instruction::TimedInstruction{
 			time:self.time,
 			instruction: PhysicsInstruction::Input(PhysicsInputInstruction::Reset),
 		});
 	}
 
-	pub fn generate_models(&mut self,indexed_models:&map::Map){
+	pub fn generate_models(&mut self,map:&map::Map){
 		let mut starts=Vec::new();
 		let mut spawns=Vec::new();
-		let mut attr_hash=std::collections::HashMap::new();
-		for model in &indexed_models.models{
+		let mut attr_hash=HashMap::new();
+		for model in &map.models{
 			let mesh_id=self.models.meshes.len();
 			let mut make_mesh=false;
 			for model_instance in &model.instances{
@@ -1084,67 +1082,53 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 	//TODO: jump count and checkpoints are always reset on teleport.
 	//Map makers are expected to use tools to prevent
 	//multi-boosting on JumpLimit boosters such as spawning into a SetVelocity
-	let stage_element=mode.get_element(model_id)?;
-	{
+	if let Some(stage_element)=mode.get_element(model_id){
+		let stage=mode.get_stage(stage_element.stage_id)?;
 		if stage_element.force||game.stage_id<stage_element.stage_id{
 			//TODO: check if all checkpoints are complete up to destination stage id, otherwise set to checkpoint completion stage it
 			game.stage_id=stage_element.stage_id;
 		}
 		match &stage_element.behaviour{
-			gameplay_modes::StageElementBehaviour::SpawnAt=>None,
+			gameplay_modes::StageElementBehaviour::SpawnAt=>(),
 			gameplay_modes::StageElementBehaviour::Trigger
 			|gameplay_modes::StageElementBehaviour::Teleport=>{
 				//I guess this is correct behaviour when trying to teleport to a non-existent spawn but it's still weird
-				teleport_to_spawn(body,touching,style,mode,models,game.stage_id)
+				return teleport_to_spawn(body,touching,style,mode,models,game.stage_id);
 			},
-			gameplay_modes::StageElementBehaviour::Platform=>None,
+			gameplay_modes::StageElementBehaviour::Platform=>(),
 			&gameplay_modes::StageElementBehaviour::Checkpoint=>{
-				// let mode=modes.get_mode(stage_element.mode_id)?;
-				// if mode.ordered_checkpoint_id.map_or(true,|id|id<game.next_ordered_checkpoint_id)
-				// 	&&mode.unordered_checkpoint_count<=game.unordered_checkpoints.len() as u32{
-				// 	//pass
-				 	None
-				// }else{
-				// 	//fail
-				// 	teleport_to_spawn(body,touching,style,modes.get_mode(stage_element.mode_id)?,models,game.stage_id)
-				// }
-			},
-			&gameplay_modes::StageElementBehaviour::Ordered{checkpoint_id}=>{
-				if checkpoint_id<game.next_ordered_checkpoint_id{
-					//if you hit a checkpoint you already hit, nothing happens
-					None
-				}else if game.next_ordered_checkpoint_id==checkpoint_id{
-					//if you hit the next number in a sequence of ordered checkpoints
-					//increment the current checkpoint id
-					game.next_ordered_checkpoint_id+=1;
-					None
+				//checkpoint check
+				//TODO: need to check all stages
+				if stage.ordered_checkpoint_id.map_or(true,|id|id<game.next_ordered_checkpoint_id)
+					&&stage.unordered_checkpoint_count<=game.unordered_checkpoints.len() as u32{
+					//pass
 				}else{
-					//If you hit an ordered checkpoint after missing a previous one
-					teleport_to_spawn(body,touching,style,mode,models,game.stage_id)
+					//fail
+					return teleport_to_spawn(body,touching,style,mode,models,game.stage_id);
 				}
 			},
-			gameplay_modes::StageElementBehaviour::Unordered=>{
-				//count model id in accumulated unordered checkpoints
-				game.unordered_checkpoints.insert(model_id);
-				None
-			},
-			&gameplay_modes::StageElementBehaviour::JumpLimit(jump_limit)=>{
-				//let count=game.jump_counts.get(&model.id);
-				//TODO
-				None
-			},
 		}
-	}.or_else(||
-		match wormhole{
-			Some(gameplay_attributes::Wormhole{destination_model})=>{
-				let origin_model=models.model(model_id);
-				let destination_model=models.get_wormhole_model(destination_model)?;
-				//ignore the transform for now
-				Some(teleport(body,touching,models,style,body.position-origin_model.transform.translation+destination_model.transform.translation))
+		if let Some(next_checkpoint)=stage.ordered_checkpoints.get(&game.next_ordered_checkpoint_id){
+			if model_id==next_checkpoint{
+				//if you hit the next number in a sequence of ordered checkpoints
+				//increment the current checkpoint id
+				game.next_ordered_checkpoint_id=gameplay_modes::CheckpointId::id(game.next_ordered_checkpoint_id.get()+1);
 			}
-			None=>None,
 		}
-	)
+		if stage.unordered_checkpoints.contains(&model_id){
+			//count model id in accumulated unordered checkpoints
+			game.unordered_checkpoints.insert(model_id);
+		}
+	}
+	match wormhole{
+		&Some(gameplay_attributes::Wormhole{destination_model})=>{
+			let origin_model=models.model(model_id);
+			let destination_model=models.model(destination_model);
+			//ignore the transform for now
+			Some(teleport(body,touching,models,style,body.position-origin_model.transform.translation+destination_model.transform.translation))
+		}
+		None=>None,
+	}
 }
 
 impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
@@ -1208,14 +1192,14 @@ impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 						//check ground
 						self.touching.insert(c);
 						//I love making functions with 10 arguments to dodge the borrow checker
-						run_teleport_behaviour(&general.teleport_behaviour,&mut self.mode_state,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model_id);
+						run_teleport_behaviour(&general.wormhole,&mut self.mode_state,&self.models,&self.modes.get_mode(self.mode).unwrap(),&self.style,&mut self.touching,&mut self.body,model_id);
 						//flatten v
 						self.touching.constrain_velocity(&self.models,&style_mesh,&mut v);
 						match &general.booster{
 							Some(booster)=>{
 								//DELETE THIS when boosters get converted to height machines
 								match booster{
-									&gameplay_attributes::Booster::Affine(transform)=>v=transform.transform_point3(v),
+									//&gameplay_attributes::Booster::Affine(transform)=>v=transform.transform_point3(v),
 									&gameplay_attributes::Booster::Velocity(velocity)=>v+=velocity,
 									&gameplay_attributes::Booster::Energy{direction: _,energy: _}=>todo!(),
 								}
@@ -1252,7 +1236,7 @@ impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 					(PhysicsCollisionAttributes::Intersect{intersecting: _,general},Collision::Intersect(intersect))=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
 						self.touching.insert(c);
-						run_teleport_behaviour(&general.teleport_behaviour,&mut self.mode_state,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model_id);
+						run_teleport_behaviour(&general.wormhole,&mut self.mode_state,&self.models,&self.modes.get_mode(self.mode).unwrap(),&self.style,&mut self.touching,&mut self.body,model_id);
 					},
 					_=>panic!("invalid pair"),
 				}
@@ -1339,7 +1323,12 @@ impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 					},
 					PhysicsInputInstruction::Reset => {
 						//it matters which of these runs first, but I have not thought it through yet as it doesn't matter yet
-						set_position(&mut self.body,&mut self.touching,self.spawn_point);
+						let spawn_point={
+							let mode=self.modes.get_mode(self.mode).unwrap();
+							let stage=mode.get_stage(gameplay_modes::StageId::FIRST).unwrap();
+							self.models.model(stage.spawn()).transform.translation
+						};
+						set_position(&mut self.body,&mut self.touching,spawn_point);
 						set_velocity(&mut self.body,&self.touching,&self.models,&self.style.mesh(),Planar64Vec3::ZERO);
 						(self.move_state,self.body.acceleration)=self.touching.get_move_state(&self.body,&self.models,&self.style,&self.camera,self.controls,&self.next_mouse,self.time);
 						refresh_walk_target=false;

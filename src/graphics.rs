@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use strafesnet_common::map;
-use strafesnet_common::model;
 use strafesnet_common::integer;
+use strafesnet_common::model::{self,ColorId,NormalId,PositionId,TextureCoordinateId,VertexId};
 use wgpu::{util::DeviceExt,AstcBlock,AstcChannel};
 use crate::model_graphics::{GraphicsVertex,GraphicsModelColor4,GraphicsModelInstance,GraphicsModelSingleTexture,IndexedGraphicsModelSingleTexture,IndexedGroupFixedTexture};
 
@@ -332,73 +332,73 @@ impl GraphicsState{
 						let model=&unique_texture_models[model_id];
 						let instance=&model.instances[instance_id];
 						//just hash word slices LOL
-						let map_pos_id:Vec<u32>=model.unique_pos.iter().map(|untransformed_pos|{
+						let map_pos_id:Vec<PositionId>=model.unique_pos.iter().map(|untransformed_pos|{
 							let pos=instance.transform.transform_point3(glam::Vec3::from_array(untransformed_pos.clone())).to_array();
-							let h=pos.map(|v|bytemuck::cast::<f32,u32>(v));
-							(if let Some(&pos_id)=pos_id_from.get(&h){
+							let h=bytemuck::cast::<[f32;3],[u32;3]>(pos);
+							PositionId::id((if let Some(&pos_id)=pos_id_from.get(&h){
 								pos_id
 							}else{
 								let pos_id=unique_pos.len();
-								unique_pos.push(pos.clone());
+								unique_pos.push(pos);
 								pos_id_from.insert(h,pos_id);
 								pos_id
-							}) as u32
+							}) as u32)
 						}).collect();
-						let map_tex_id:Vec<u32>=model.unique_tex.iter().map(|tex|{
-							let h=tex.map(|v|bytemuck::cast::<f32,u32>(v));
-							(if let Some(&tex_id)=tex_id_from.get(&h){
+						let map_tex_id:Vec<TextureCoordinateId>=model.unique_tex.iter().map(|&tex|{
+							let h=bytemuck::cast::<[f32;2],[u32;2]>(tex);
+							TextureCoordinateId::id((if let Some(&tex_id)=tex_id_from.get(&h){
 								tex_id
 							}else{
 								let tex_id=unique_tex.len();
-								unique_tex.push(tex.clone());
+								unique_tex.push(tex);
 								tex_id_from.insert(h,tex_id);
 								tex_id
-							}) as u32
+							}) as u32)
 						}).collect();
-						let map_normal_id:Vec<u32>=model.unique_normal.iter().map(|untransformed_normal|{
+						let map_normal_id:Vec<NormalId>=model.unique_normal.iter().map(|untransformed_normal|{
 							let normal=(instance.normal_transform*glam::Vec3::from_array(untransformed_normal.clone())).to_array();
-							let h=normal.map(|v|bytemuck::cast::<f32,u32>(v));
-							(if let Some(&normal_id)=normal_id_from.get(&h){
+							let h=bytemuck::cast::<[f32;3],[u32;3]>(normal);
+							NormalId::id((if let Some(&normal_id)=normal_id_from.get(&h){
 								normal_id
 							}else{
 								let normal_id=unique_normal.len();
-								unique_normal.push(normal.clone());
+								unique_normal.push(normal);
 								normal_id_from.insert(h,normal_id);
 								normal_id
-							}) as u32
+							}) as u32)
 						}).collect();
-						let map_color_id:Vec<u32>=model.unique_color.iter().map(|color|{
-							let h=color.map(|v|bytemuck::cast::<f32,u32>(v));
-							(if let Some(&color_id)=color_id_from.get(&h){
+						let map_color_id:Vec<ColorId>=model.unique_color.iter().map(|&color|{
+							let h=bytemuck::cast::<[f32;4],[u32;4]>(color);
+							ColorId::id((if let Some(&color_id)=color_id_from.get(&h){
 								color_id
 							}else{
 								let color_id=unique_color.len();
-								unique_color.push(color.clone());
+								unique_color.push(color);
 								color_id_from.insert(h,color_id);
 								color_id
-							}) as u32
+							}) as u32)
 						}).collect();
 						//map the indexed vertices onto new indices
 						//creating the vertex map is slightly different because the vertices are directly hashable
-						let map_vertex_id:Vec<u32>=model.unique_vertices.iter().map(|unmapped_vertex|{
+						let map_vertex_id:Vec<VertexId>=model.unique_vertices.iter().map(|unmapped_vertex|{
 							let vertex=model::IndexedVertex{
-								pos:map_pos_id[unmapped_vertex.pos as usize],
-								tex:map_tex_id[unmapped_vertex.tex as usize],
-								normal:map_normal_id[unmapped_vertex.normal as usize],
-								color:map_color_id[unmapped_vertex.color as usize],
+								pos:map_pos_id[unmapped_vertex.pos.get() as usize],
+								tex:map_tex_id[unmapped_vertex.tex.get() as usize],
+								normal:map_normal_id[unmapped_vertex.normal.get() as usize],
+								color:map_color_id[unmapped_vertex.color.get() as usize],
 							};
-							(if let Some(&vertex_id)=vertex_id_from.get(&vertex){
+							VertexId::id((if let Some(&vertex_id)=vertex_id_from.get(&vertex){
 								vertex_id
 							}else{
 								let vertex_id=unique_vertices.len();
 								unique_vertices.push(vertex.clone());
 								vertex_id_from.insert(vertex,vertex_id);
 								vertex_id
-							}) as u32
+							}) as u32)
 						}).collect();
 						for group in &model.groups{
 							for poly in &group.polys{
-								polys.push(model::IndexedPolygon{vertices:poly.vertices.iter().map(|&vertex_id|map_vertex_id[vertex_id as usize]).collect()});
+								polys.push(model::PolygonGroup::PolygonList(poly.vertices.iter().map(|&vertex_id|map_vertex_id[vertex_id.get() as usize]).collect()));
 							}
 						}
 					}
@@ -445,12 +445,12 @@ impl GraphicsState{
 								indices.push(i);
 							}else{
 								let i=vertices.len();
-								let vertex=&model.unique_vertices[vertex_index as usize];
+								let vertex=&model.unique_vertices[vertex_index.get() as usize];
 								vertices.push(GraphicsVertex{
-									pos: model.unique_pos[vertex.pos as usize],
-									tex: model.unique_tex[vertex.tex as usize],
-									normal: model.unique_normal[vertex.normal as usize],
-									color:model.unique_color[vertex.color as usize],
+									pos: model.unique_pos[vertex.pos.get() as usize],
+									tex: model.unique_tex[vertex.tex.get() as usize],
+									normal: model.unique_normal[vertex.normal.get() as usize],
+									color:model.unique_color[vertex.color.get() as usize],
 								});
 								index_from_vertex.insert(vertex_index,i);
 								indices.push(i);
