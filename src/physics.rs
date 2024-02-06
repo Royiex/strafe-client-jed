@@ -545,7 +545,7 @@ impl From<ModelId> for PhysicsModelId{
 pub struct PhysicsModel{
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
-	convex_mesh_id:ConvexMeshId,
+	mesh_id:PhysicsMeshId,
 	//put these up on the Model (data normalization)
 	attr_id:PhysicsAttributesId,
 	transform:integer::Planar64Affine3,
@@ -554,9 +554,9 @@ pub struct PhysicsModel{
 }
 
 impl PhysicsModel{
-	pub fn new(convex_mesh_id:ConvexMeshId,attr_id:PhysicsAttributesId,transform:integer::Planar64Affine3)->Self{
+	pub fn new(mesh_id:PhysicsMeshId,attr_id:PhysicsAttributesId,transform:integer::Planar64Affine3)->Self{
 		Self{
-			convex_mesh_id,
+			mesh_id,
 			attr_id,
 			transform,
 			normal_transform:transform.matrix3.inverse_times_det().transpose(),
