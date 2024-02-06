@@ -23,9 +23,9 @@ pub enum Instruction{
 	//Graphics(crate::graphics_worker::Instruction),
 }
 
-	pub fn new(mut physics:crate::physics::PhysicsState,mut graphics_worker:crate::compat_worker::INWorker<crate::graphics_worker::Instruction>)->crate::compat_worker::QNWorker<TimedInstruction<Instruction>>{
+	pub fn new(mut physics:crate::physics::PhysicsContext,mut graphics_worker:crate::compat_worker::INWorker<crate::graphics_worker::Instruction>)->crate::compat_worker::QNWorker<TimedInstruction<Instruction>>{
 		let mut mouse_blocking=true;
-		let mut last_mouse_time=physics.next_mouse.time;
+		let mut last_mouse_time=physics.state.next_mouse.time;
 		let mut timeline=std::collections::VecDeque::new();
 		crate::compat_worker::QNWorker::new(move |ins:TimedInstruction<Instruction>|{
 			if if let Some(phys_input)=match &ins.instruction{
@@ -43,7 +43,7 @@ pub enum Instruction{
 							timeline.push_front(TimedInstruction{
 								time:last_mouse_time,
 								instruction:PhysicsInputInstruction::ReplaceMouse(
-									MouseState{time:last_mouse_time,pos:physics.next_mouse.pos},
+									MouseState{time:last_mouse_time,pos:physics.state.next_mouse.pos},
 									MouseState{time:ins.time,pos:m}
 								),
 							});
@@ -79,11 +79,11 @@ pub enum Instruction{
 					//shitty mice are 125Hz which is 8ms so this should cover that.
 					//setting this to 100us still doesn't print even though it's 10x lower than the polling rate,
 					//so mouse events are probably not handled separately from drawing and fire right before it :(
-					if Time::from_millis(10)<ins.time-physics.next_mouse.time{
+					if Time::from_millis(10)<ins.time-physics.state.next_mouse.time{
 						//push an event to extrapolate no movement from
 						timeline.push_front(TimedInstruction{
 							time:last_mouse_time,
-							instruction:PhysicsInputInstruction::SetNextMouse(MouseState{time:ins.time,pos:physics.next_mouse.pos}),
+							instruction:PhysicsInputInstruction::SetNextMouse(MouseState{time:ins.time,pos:physics.state.next_mouse.pos}),
 						});
 						last_mouse_time=ins.time;
 						//stop blocking. the mouse is not moving so the physics does not need to live in the past and wait for interpolation targets.
@@ -113,7 +113,7 @@ pub enum Instruction{
 			}
 			match ins.instruction{
 				Instruction::Render=>{
-					graphics_worker.send(crate::graphics_worker::Instruction::Render(physics.output(),ins.time,physics.next_mouse.pos)).unwrap();
+					graphics_worker.send(crate::graphics_worker::Instruction::Render(physics.state.output(),ins.time,physics.state.next_mouse.pos)).unwrap();
 				},
 				Instruction::Resize(size,user_settings)=>{
 					graphics_worker.send(crate::graphics_worker::Instruction::Resize(size,user_settings)).unwrap();
@@ -124,7 +124,7 @@ pub enum Instruction{
 					graphics_worker.send(crate::graphics_worker::Instruction::GenerateModels(indexed_model_instances)).unwrap();
 				},
 				Instruction::ClearModels=>{
-					physics.clear();
+					physics.state.clear();
 					graphics_worker.send(crate::graphics_worker::Instruction::ClearModels).unwrap();
 				},
 				_=>(),
