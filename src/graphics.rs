@@ -147,7 +147,7 @@ impl GraphicsState{
 	pub fn load_user_settings(&mut self,user_settings:&crate::settings::UserSettings){
 		self.camera.fov=user_settings.calculate_fov(1.0,&self.camera.screen_size).as_vec2();
 	}
-	pub fn generate_models(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,map:map::Map){
+	pub fn generate_models(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,map:&map::Map){
 		//generate texture view per texture
 
 		//idk how to do this gooder lol
@@ -396,9 +396,9 @@ impl GraphicsState{
 								vertex_id
 							}) as u32)
 						}).collect();
-						for group in &model.groups{
-							for poly in &group.polys{
-								polys.push(model::PolygonGroup::PolygonList(poly.vertices.iter().map(|&vertex_id|map_vertex_id[vertex_id.get() as usize]).collect()));
+						for group in model.groups{
+							for poly in group.polys{
+								polys.push(poly.map_vertex_id(|vertex_id|map_vertex_id[vertex_id.get() as usize]));
 							}
 						}
 					}
