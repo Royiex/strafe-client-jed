@@ -532,6 +532,11 @@ impl PhysicsModelId{
 		self.0
 	}
 }
+impl Into<ModelId> for PhysicsModelId{
+	fn into(self)->ModelId{
+		ModelId::id(self.0)
+	}
+}
 impl From<ModelId> for PhysicsModelId{
 	fn from(value:ModelId)->Self{
 		Self::id(value.get())
@@ -641,7 +646,7 @@ impl TouchingState{
 		//add water../?
 		a
 	}
-	fn constrain_velocity(&self,models:&PhysicsModels,style_mesh:&TransformedMesh,velocity:&mut Planar64Vec3){
+	fn constrain_velocity(&self,models:&PhysicsModels,hitbox_mesh:&HitboxMesh,velocity:&mut Planar64Vec3){
 		//TODO: trey push solve
 		for contact in &self.contacts{
 			let n=contact_normal(models,style_mesh,contact);
@@ -651,7 +656,7 @@ impl TouchingState{
 			}
 		}
 	}
-	fn constrain_acceleration(&self,models:&PhysicsModels,style_mesh:&TransformedMesh,acceleration:&mut Planar64Vec3){
+	fn constrain_acceleration(&self,models:&PhysicsModels,hitbox_mesh:&HitboxMesh,acceleration:&mut Planar64Vec3){
 		//TODO: trey push solve
 		for contact in &self.contacts{
 			let n=contact_normal(models,style_mesh,contact);
@@ -661,7 +666,7 @@ impl TouchingState{
 			}
 		}
 	}
-	fn get_move_state(&self,body:&Body,models:&PhysicsModels,style:&StyleModifiers,hitbox_mesh:&TransformedMesh,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->(MoveState,Planar64Vec3){
+	fn get_move_state(&self,body:&Body,models:&PhysicsModels,style:&StyleModifiers,hitbox_mesh:&HitboxMesh,camera:&PhysicsCamera,controls:u32,next_mouse:&MouseState,time:Time)->(MoveState,Planar64Vec3){
 		//check current move conditions and use heuristics to determine
 		//which ladder to climb on, which ground to walk on, etc
 		//collect move state affecting objects from contacts (accelerator,water,ladder,ground)
@@ -703,7 +708,7 @@ impl TouchingState{
 		self.constrain_acceleration(models,hitbox_mesh,&mut a);
 		(move_state,a)
 	}
-	fn predict_collision_end(&self,collector:&mut instruction::InstructionCollector<PhysicsInstruction>,models:&PhysicsModels,hitbox_mesh:&TransformedMesh,body:&Body,time:Time){
+	fn predict_collision_end(&self,collector:&mut instruction::InstructionCollector<PhysicsInstruction>,models:&PhysicsModels,hitbox_mesh:&HitboxMesh,body:&Body,time:Time){
 		let relative_body=VirtualBody::relative(&Body::default(),body).body(time);
 		for contact in &self.contacts{
 			//detect face slide off
@@ -1016,23 +1021,21 @@ impl PhysicsContext{
 		match &mut self.state.move_state{
 			MoveState::Air|MoveState::Water=>self.state.touching.base_acceleration(&self.data.models,&self.state.style,&self.state.camera,self.state.controls,&self.state.next_mouse,self.state.time),
 			MoveState::Walk(WalkState{state,contact,jump_direction:_})=>{
-				let style_mesh=self.data.hitbox_mesh.transformed_mesh();
-				let n=contact_normal(&self.data.models,&style_mesh,contact);
+				let n=contact_normal(&self.data.models,&self.data.hitbox_mesh,contact);
 				let gravity=self.state.touching.base_acceleration(&self.data.models,&self.state.style,&self.state.camera,self.state.controls,&self.state.next_mouse,self.state.time);
 				let mut a;
 				let mut v=self.state.style.get_walk_target_velocity(&self.state.camera,self.state.controls,&self.state.next_mouse,self.state.time,&n);
-				self.state.touching.constrain_velocity(&self.data.models,&style_mesh,&mut v);
+				self.state.touching.constrain_velocity(&self.data.models,&self.data.hitbox_mesh,&mut v);
 				let normal_accel=-n.dot(gravity)/n.length();
 				(*state,a)=WalkEnum::with_target_velocity(&self.state.body,&self.state.style,v,&n,self.state.style.walk_speed,normal_accel);
 				a
 			},
 			MoveState::Ladder(WalkState{state,contact,jump_direction:_})=>{
-				let style_mesh=self.data.hitbox_mesh.transformed_mesh();
-				let n=contact_normal(&self.data.models,&style_mesh,contact);
+				let n=contact_normal(&self.data.models,&self.data.hitbox_mesh,contact);
 				let gravity=self.state.touching.base_acceleration(&self.data.models,&self.state.style,&self.state.camera,self.state.controls,&self.state.next_mouse,self.state.time);
 				let mut a;
 				let mut v=self.state.style.get_ladder_target_velocity(&self.state.camera,self.state.controls,&self.state.next_mouse,self.state.time,&n);
-				self.state.touching.constrain_velocity(&self.data.models,&style_mesh,&mut v);
+				self.state.touching.constrain_velocity(&self.data.models,&self.data.hitbox_mesh,&mut v);
 				(*state,a)=WalkEnum::with_target_velocity(&self.state.body,&self.state.style,v,&n,self.state.style.ladder_speed,self.state.style.ladder_accel);
 				a
 			},
@@ -1046,19 +1049,19 @@ impl PhysicsContext{
 
 		collector.collect(state.next_move_instruction());
 
-		let style_mesh=data.hitbox_mesh.transformed_mesh();
 		//check for collision ends
-		state.touching.predict_collision_end(&mut collector,&data.models,&style_mesh,&state.body,state.time);
+		state.touching.predict_collision_end(&mut collector,&data.models,&data.hitbox_mesh,&state.body,state.time);
 		//check for collision starts
 		let mut aabb=aabb::Aabb::default();
 		state.body.grow_aabb(&mut aabb,state.time,collector.time());
 		aabb.inflate(state.style.hitbox.halfsize);
 		//common body
 		let relative_body=VirtualBody::relative(&Body::default(),&state.body).body(state.time);
+		let hitbox_mesh=data.hitbox_mesh.transformed_mesh();
 		data.bvh.the_tester(&aabb,&mut |id|{
 			//no checks are needed because of the time limits.
 			let model_mesh=data.models.mesh(id);
-			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&style_mesh);
+			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&hitbox_mesh);
 			collector.collect(minkowski.predict_collision_in(&relative_body,collector.time())
 				//temp (?) code to avoid collision loops
 				.map_or(None,|(face,time)|if time==state.time{None}else{Some((face,time))})
@@ -1079,17 +1082,17 @@ fn get_walk_state(move_state:&MoveState)->Option<&WalkState>{
 	}
 }
 
-fn jumped_velocity(models:&PhysicsModels,style:&StyleModifiers,style_mesh:&TransformedMesh,walk_state:&WalkState,v:&mut Planar64Vec3){
+fn jumped_velocity(models:&PhysicsModels,style:&StyleModifiers,hitbox_mesh:&HitboxMesh,walk_state:&WalkState,v:&mut Planar64Vec3){
 	let jump_dir=match &walk_state.jump_direction{
-		JumpDirection::FromContactNormal=>contact_normal(models,style_mesh,&walk_state.contact),
+		JumpDirection::FromContactNormal=>contact_normal(models,hitbox_mesh,&walk_state.contact),
 		&JumpDirection::Exactly(dir)=>dir,
 	};
 	*v=*v+jump_dir*(style.get_jump_deltav()/jump_dir.length());
 }
 
-fn contact_normal(models:&PhysicsModels,style_mesh:&TransformedMesh,contact:&ContactCollision)->Planar64Vec3{
+fn contact_normal(models:&PhysicsModels,hitbox_mesh:&HitboxMesh,contact:&ContactCollision)->Planar64Vec3{
 	let model_mesh=models.mesh(contact.model_id);
-	let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,style_mesh);
+	let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&hitbox_mesh.transformed_mesh());
 	minkowski.face_nd(contact.face_id).0
 }
 
@@ -1103,11 +1106,11 @@ fn set_position(body:&mut Body,touching:&mut TouchingState,point:Planar64Vec3)->
 	//touching.recalculate(body);
 	point
 }
-fn set_velocity_cull(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,style_mesh:&TransformedMesh,v:Planar64Vec3)->bool{
+fn set_velocity_cull(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,hitbox_mesh:&HitboxMesh,v:Planar64Vec3)->bool{
 	//This is not correct but is better than what I have
 	let mut culled=false;
 	touching.contacts.retain(|contact|{
-		let n=contact_normal(models,style_mesh,contact);
+		let n=contact_normal(models,hitbox_mesh,contact);
 		let r=n.dot(v)<=Planar64::ZERO;
 		if !r{
 			culled=true;
@@ -1115,19 +1118,19 @@ fn set_velocity_cull(body:&mut Body,touching:&mut TouchingState,models:&PhysicsM
 		}
 		r
 	});
-	set_velocity(body,touching,models,style_mesh,v);
+	set_velocity(body,touching,models,hitbox_mesh,v);
 	culled
 }
-fn set_velocity(body:&mut Body,touching:&TouchingState,models:&PhysicsModels,style_mesh:&TransformedMesh,mut v:Planar64Vec3)->Planar64Vec3{
-	touching.constrain_velocity(models,style_mesh,&mut v);
+fn set_velocity(body:&mut Body,touching:&TouchingState,models:&PhysicsModels,hitbox_mesh:&HitboxMesh,mut v:Planar64Vec3)->Planar64Vec3{
+	touching.constrain_velocity(models,hitbox_mesh,&mut v);
 	body.velocity=v;
 	v
 }
-fn set_acceleration_cull(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,style_mesh:&TransformedMesh,a:Planar64Vec3)->bool{
+fn set_acceleration_cull(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,hitbox_mesh:&HitboxMesh,a:Planar64Vec3)->bool{
 	//This is not correct but is better than what I have
 	let mut culled=false;
 	touching.contacts.retain(|contact|{
-		let n=contact_normal(models,style_mesh,contact);
+		let n=contact_normal(models,hitbox_mesh,contact);
 		let r=n.dot(a)<=Planar64::ZERO;
 		if !r{
 			culled=true;
@@ -1135,31 +1138,31 @@ fn set_acceleration_cull(body:&mut Body,touching:&mut TouchingState,models:&Phys
 		}
 		r
 	});
-	set_acceleration(body,touching,models,style_mesh,a);
+	set_acceleration(body,touching,models,hitbox_mesh,a);
 	culled
 }
-fn set_acceleration(body:&mut Body,touching:&TouchingState,models:&PhysicsModels,style_mesh:&TransformedMesh,mut a:Planar64Vec3)->Planar64Vec3{
-	touching.constrain_acceleration(models,style_mesh,&mut a);
+fn set_acceleration(body:&mut Body,touching:&TouchingState,models:&PhysicsModels,hitbox_mesh:&HitboxMesh,mut a:Planar64Vec3)->Planar64Vec3{
+	touching.constrain_acceleration(models,hitbox_mesh,&mut a);
 	body.acceleration=a;
 	a
 }
 
-fn teleport(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,style:&StyleModifiers,point:Planar64Vec3)->MoveState{
+fn teleport(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,style:&StyleModifiers,hitbox_mesh:&HitboxMesh,point:Planar64Vec3)->MoveState{
 	set_position(body,touching,point);
-	set_acceleration(body,touching,models,&style.mesh(),style.gravity);
+	set_acceleration(body,touching,models,hitbox_mesh,style.gravity);
 	MoveState::Air
 }
-fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,mode:&gameplay_modes::Mode,models:&PhysicsModels,stage_id:gameplay_modes::StageId)->Option<MoveState>{
+fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,hitbox_mesh:&HitboxMesh,mode:&gameplay_modes::Mode,models:&PhysicsModels,stage_id:gameplay_modes::StageId)->Option<MoveState>{
 	let model=models.model(mode.get_spawn_model_id(stage_id)?.into());
 	let point=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(style.hitbox.halfsize.y()+Planar64::ONE/16);
-	Some(teleport(body,touching,models,style,point))
+	Some(teleport(body,touching,models,style,hitbox_mesh,point))
 }
 
-fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&mut ModeState,models:&PhysicsModels,mode:&gameplay_modes::Mode,style:&StyleModifiers,touching:&mut TouchingState,body:&mut Body,model_id:ModelId)->Option<MoveState>{
+fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&mut ModeState,models:&PhysicsModels,mode:&gameplay_modes::Mode,style:&StyleModifiers,hitbox_mesh:&HitboxMesh,touching:&mut TouchingState,body:&mut Body,model_id:PhysicsModelId)->Option<MoveState>{
 	//TODO: jump count and checkpoints are always reset on teleport.
 	//Map makers are expected to use tools to prevent
 	//multi-boosting on JumpLimit boosters such as spawning into a SetVelocity
-	if let Some(stage_element)=mode.get_element(model_id){
+	if let Some(stage_element)=mode.get_element(model_id.into()){
 		let stage=mode.get_stage(stage_element.stage_id)?;
 		if stage_element.force||game.stage_id<stage_element.stage_id{
 			//TODO: check if all checkpoints are complete up to destination stage id, otherwise set to checkpoint completion stage it
@@ -1170,7 +1173,7 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 			gameplay_modes::StageElementBehaviour::Trigger
 			|gameplay_modes::StageElementBehaviour::Teleport=>{
 				//I guess this is correct behaviour when trying to teleport to a non-existent spawn but it's still weird
-				return teleport_to_spawn(body,touching,style,mode,models,game.stage_id);
+				return teleport_to_spawn(body,touching,style,hitbox_mesh,mode,models,game.stage_id);
 			},
 			gameplay_modes::StageElementBehaviour::Platform=>(),
 			&gameplay_modes::StageElementBehaviour::Checkpoint=>{
@@ -1181,7 +1184,7 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 					//pass
 				}else{
 					//fail
-					return teleport_to_spawn(body,touching,style,mode,models,game.stage_id);
+					return teleport_to_spawn(body,touching,style,hitbox_mesh,mode,models,game.stage_id);
 				}
 			},
 		}
@@ -1192,17 +1195,17 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 				game.next_ordered_checkpoint_id=gameplay_modes::CheckpointId::id(game.next_ordered_checkpoint_id.get()+1);
 			}
 		}
-		if stage.unordered_checkpoints.contains(&model_id){
+		if stage.unordered_checkpoints.contains(model_id.into()){
 			//count model id in accumulated unordered checkpoints
-			game.unordered_checkpoints.insert(model_id);
+			game.unordered_checkpoints.insert(model_id.into());
 		}
 	}
 	match wormhole{
 		&Some(gameplay_attributes::Wormhole{destination_model})=>{
 			let origin_model=models.model(model_id);
-			let destination_model=models.model(destination_model);
+			let destination_model=models.model(destination_model.into());
 			//ignore the transform for now
-			Some(teleport(body,touching,models,style,body.position-origin_model.transform.translation+destination_model.transform.translation))
+			Some(teleport(body,touching,models,style,hitbox_mesh,body.position-origin_model.transform.translation+destination_model.transform.translation))
 		}
 		None=>None,
 	}
@@ -1227,12 +1230,11 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 		}
 		match ins.instruction{
 			PhysicsInstruction::CollisionStart(c)=>{
-				let style_mesh=data.hitbox_mesh.transformed_mesh();
 				let model_id=c.model_id();
 				match (data.models.attr(model_id),&c){
 					(PhysicsCollisionAttributes::Contact{contacting,general},Collision::Contact(contact))=>{
 						let mut v=state.body.velocity;
-						let normal=contact_normal(&data.models,&style_mesh,contact);
+						let normal=contact_normal(&data.models,&data.hitbox_mesh,contact);
 						match &contacting.contact_behaviour{
 							Some(gameplay_attributes::ContactingBehaviour::Surf)=>println!("I'm surfing!"),
 							Some(gameplay_attributes::ContactingBehaviour::Cling)=>println!("Unimplemented!"),
@@ -1250,27 +1252,27 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 								//ladder walkstate
 								let gravity=state.touching.base_acceleration(&data.models,&state.style,&state.camera,state.controls,&state.next_mouse,state.time);
 								let mut target_velocity=state.style.get_ladder_target_velocity(&state.camera,state.controls,&state.next_mouse,state.time,&normal);
-								state.touching.constrain_velocity(&data.models,&style_mesh,&mut target_velocity);
+								state.touching.constrain_velocity(&data.models,&data.hitbox_mesh,&mut target_velocity);
 								let (walk_state,a)=WalkState::ladder(&state.body,&state.style,gravity,target_velocity,contact.clone(),&normal);
 								state.move_state=MoveState::Ladder(walk_state);
-								set_acceleration(&mut state.body,&state.touching,&data.models,&style_mesh,a);
+								set_acceleration(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh,a);
 							}
-							None=>if state.style.surf_slope.map_or(true,|s|contact_normal(&data.models,&style_mesh,contact).walkable(s,Planar64Vec3::Y)){
+							None=>if state.style.surf_slope.map_or(true,|s|contact_normal(&data.models,&data.hitbox_mesh,contact).walkable(s,Planar64Vec3::Y)){
 								//ground
 								let gravity=state.touching.base_acceleration(&data.models,&state.style,&state.camera,state.controls,&state.next_mouse,state.time);
 								let mut target_velocity=state.style.get_walk_target_velocity(&state.camera,state.controls,&state.next_mouse,state.time,&normal);
-								state.touching.constrain_velocity(&data.models,&style_mesh,&mut target_velocity);
+								state.touching.constrain_velocity(&data.models,&data.hitbox_mesh,&mut target_velocity);
 								let (walk_state,a)=WalkState::ground(&state.body,&state.style,gravity,target_velocity,contact.clone(),&normal);
 								state.move_state=MoveState::Walk(walk_state);
-								set_acceleration(&mut state.body,&state.touching,&data.models,&style_mesh,a);
+								set_acceleration(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh,a);
 							},
 						}
 						//check ground
 						state.touching.insert(c);
 						//I love making functions with 10 arguments to dodge the borrow checker
-						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode).unwrap(),&state.style,&mut state.touching,&mut state.body,model_id);
+						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode_state.mode_id).unwrap(),&state.style,&data.hitbox_mesh,&mut state.touching,&mut state.body,model_id);
 						//flatten v
-						state.touching.constrain_velocity(&data.models,&style_mesh,&mut v);
+						state.touching.constrain_velocity(&data.models,&data.hitbox_mesh,&mut v);
 						match &general.booster{
 							Some(booster)=>{
 								//DELETE THIS when boosters get converted to height machines
@@ -1284,8 +1286,8 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 						}
 						let calc_move=if state.style.get_control(StyleModifiers::CONTROL_JUMP,state.controls){
 							if let Some(walk_state)=get_walk_state(&state.move_state){
-								jumped_velocity(&data.models,&state.style,&data.hitbox_mesh.transformed_mesh(),walk_state,&mut v);
-								set_velocity_cull(&mut state.body,&mut state.touching,&data.models,&style_mesh,v)
+								jumped_velocity(&data.models,&state.style,&data.hitbox_mesh,walk_state,&mut v);
+								set_velocity_cull(&mut state.body,&mut state.touching,&data.models,&data.hitbox_mesh,v)
 							}else{false}
 						}else{false};
 						match &general.trajectory{
@@ -1301,18 +1303,18 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 							},
 							None=>(),
 						}
-						set_velocity(&mut state.body,&state.touching,&data.models,&style_mesh,v);
+						set_velocity(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh,v);
 						//not sure if or is correct here
 						if calc_move||Planar64::ZERO<normal.dot(v){
-							(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&state.camera,state.controls,&state.next_mouse,state.time);
+							(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&data.hitbox_mesh,&state.camera,state.controls,&state.next_mouse,state.time);
 						}
 						let a=state.refresh_walk_target();
-						set_acceleration(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh.transformed_mesh(),a);
+						set_acceleration(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh,a);
 					},
 					(PhysicsCollisionAttributes::Intersect{intersecting: _,general},Collision::Intersect(intersect))=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
 						state.touching.insert(c);
-						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&state.modes.get_mode(state.mode).unwrap(),&state.style,&mut state.touching,&mut state.body,model_id);
+						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode_state.mode_id).unwrap(),&state.style,&data.hitbox_mesh,&mut state.touching,&mut state.body,model_id);
 					},
 					_=>panic!("invalid pair"),
 				}
@@ -1322,7 +1324,7 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>{
 						state.touching.remove(&c);//remove contact before calling contact_constrain_acceleration
 						//check ground
-						(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&state.camera,state.controls,&state.next_mouse,state.time);
+						(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&data.hitbox_mesh,&state.camera,state.controls,&state.next_mouse,state.time);
 					},
 					PhysicsCollisionAttributes::Intersect{intersecting:_,general:_}=>{
 						state.touching.remove(&c);
@@ -1340,8 +1342,8 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 						let v=state.body.velocity+control_dir*(state.style.mv-d);
 						//this is wrong but will work ig
 						//need to note which push planes activate in push solve and keep those
-						if set_velocity_cull(&mut state.body,&mut state.touching,&data.models,&data.hitbox_mesh.transformed_mesh(),v){
-							(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&state.camera,state.controls,&state.next_mouse,state.time);
+						if set_velocity_cull(&mut state.body,&mut state.touching,&data.models,&data.hitbox_mesh,v){
+							(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&data.hitbox_mesh,&state.camera,state.controls,&state.next_mouse,state.time);
 						}
 					}
 				}
@@ -1353,12 +1355,11 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 						match &mut walk_state.state{
 							WalkEnum::Reached=>(),
 							WalkEnum::Transient(walk_target)=>{
-								let style_mesh=data.hitbox_mesh.transformed_mesh();
 								//precisely set velocity
 								let a=Planar64Vec3::ZERO;//ignore gravity for now.
-								set_acceleration(&mut state.body,&state.touching,&data.models,&style_mesh,a);
+								set_acceleration(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh,a);
 								let v=walk_target.velocity;
-								set_velocity(&mut state.body,&state.touching,&data.models,&style_mesh,v);
+								set_velocity(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh,v);
 								walk_state.state=WalkEnum::Reached;
 							},
 						}
@@ -1386,9 +1387,9 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 						state.set_control(StyleModifiers::CONTROL_JUMP,s);
 						if let Some(walk_state)=get_walk_state(&state.move_state){
 							let mut v=state.body.velocity;
-							jumped_velocity(&data.models,&state.style,&data.hitbox_mesh.transformed_mesh(),walk_state,&mut v);
-							if set_velocity_cull(&mut state.body,&mut state.touching,&data.models,&data.hitbox_mesh.transformed_mesh(),v){
-								(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&state.camera,state.controls,&state.next_mouse,state.time);
+							jumped_velocity(&data.models,&state.style,&data.hitbox_mesh,walk_state,&mut v);
+							if set_velocity_cull(&mut state.body,&mut state.touching,&data.models,&data.hitbox_mesh,v){
+								(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&data.hitbox_mesh,&state.camera,state.controls,&state.next_mouse,state.time);
 							}
 						}
 						refresh_walk_target=false;
@@ -1400,21 +1401,21 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 					PhysicsInputInstruction::Reset => {
 						//it matters which of these runs first, but I have not thought it through yet as it doesn't matter yet
 						let spawn_point={
-							let mode=data.modes.get_mode(state.mode).unwrap();
+							let mode=data.modes.get_mode(state.mode_state.mode_id).unwrap();
 							let stage=mode.get_stage(gameplay_modes::StageId::FIRST).unwrap();
 							data.models.model(stage.spawn().into()).transform.translation
 						};
 						set_position(&mut state.body,&mut state.touching,spawn_point);
-						set_velocity(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh.transformed_mesh(),Planar64Vec3::ZERO);
-						(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&state.camera,state.controls,&state.next_mouse,state.time);
+						set_velocity(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh,Planar64Vec3::ZERO);
+						(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&data.hitbox_mesh,&state.camera,state.controls,&state.next_mouse,state.time);
 						refresh_walk_target=false;
 					},
 					PhysicsInputInstruction::Idle => {refresh_walk_target=false;},//literally idle!
 				}
 				if refresh_walk_target{
 					let a=state.refresh_walk_target();
-					if set_acceleration_cull(&mut state.body,&mut state.touching,&data.models,&data.hitbox_mesh.transformed_mesh(),a){
-						(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&state.camera,state.controls,&state.next_mouse,state.time);
+					if set_acceleration_cull(&mut state.body,&mut state.touching,&data.models,&data.hitbox_mesh,a){
+						(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&data.hitbox_mesh,&state.camera,state.controls,&state.next_mouse,state.time);
 					}
 				}
 			},
