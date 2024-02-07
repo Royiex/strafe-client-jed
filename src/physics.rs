@@ -204,8 +204,6 @@ pub struct PhysicsCamera{
 	sensitivity:Ratio64Vec2,//dots to Angle32 ratios
 	mouse:MouseState,//last seen absolute mouse pos
 	clamped_mouse_pos:glam::IVec2,//angles are calculated from this cumulative value
-	angle_pitch_lower_limit:Angle32,
-	angle_pitch_upper_limit:Angle32,
 	//angle limits could be an enum + struct that defines whether it's limited and selects clamp or wrap depending
 	// enum AngleLimit{
 	// 	Unlimited,
@@ -216,11 +214,13 @@ pub struct PhysicsCamera{
 }
 
 impl PhysicsCamera {
+	const ANGLE_PITCH_LOWER_LIMIT:Angle32=-Angle32::FRAC_PI_2;
+	const ANGLE_PITCH_UPPER_LIMIT:Angle32=Angle32::FRAC_PI_2;
 	pub fn move_mouse(&mut self,mouse_pos:glam::IVec2){
 		let mut unclamped_mouse_pos=self.clamped_mouse_pos+mouse_pos-self.mouse.pos;
 		unclamped_mouse_pos.y=unclamped_mouse_pos.y.clamp(
-			self.sensitivity.y.rhs_div_int(self.angle_pitch_lower_limit.get() as i64) as i32,
-			self.sensitivity.y.rhs_div_int(self.angle_pitch_upper_limit.get() as i64) as i32,
+			self.sensitivity.y.rhs_div_int(Self::ANGLE_PITCH_LOWER_LIMIT.get() as i64) as i32,
+			self.sensitivity.y.rhs_div_int(Self::ANGLE_PITCH_UPPER_LIMIT.get() as i64) as i32,
 		);
 		self.clamped_mouse_pos=unclamped_mouse_pos;
 	}
@@ -229,7 +229,7 @@ impl PhysicsCamera {
 		let ax=Angle32::wrap_from_i64(a.x);
 		let ay=Angle32::clamp_from_i64(a.y)
 		//clamp to actual vertical cam limit
-		.clamp(self.angle_pitch_lower_limit,self.angle_pitch_upper_limit);
+		.clamp(Self::ANGLE_PITCH_LOWER_LIMIT,Self::ANGLE_PITCH_UPPER_LIMIT);
 		return glam::vec2(ax.into(),ay.into());
 	}
 	fn simulate_move_rotation(&self,mouse_pos:glam::IVec2)->Planar64Mat3{
@@ -237,7 +237,7 @@ impl PhysicsCamera {
 		let ax=Angle32::wrap_from_i64(a.x);
 		let ay=Angle32::clamp_from_i64(a.y)
 		//clamp to actual vertical cam limit
-		.clamp(self.angle_pitch_lower_limit,self.angle_pitch_upper_limit);
+		.clamp(Self::ANGLE_PITCH_LOWER_LIMIT,Self::ANGLE_PITCH_UPPER_LIMIT);
 		Planar64Mat3::from_rotation_yx(ax,ay)
 	}
 	fn simulate_move_rotation_y(&self,mouse_pos_x:i32)->Planar64Mat3{
@@ -252,8 +252,6 @@ impl std::default::Default for PhysicsCamera{
 			sensitivity:Ratio64Vec2::ONE*200_000,
 			mouse:MouseState::default(),//t=0 does not cause divide by zero because it's immediately replaced
 			clamped_mouse_pos:glam::IVec2::ZERO,
-			angle_pitch_lower_limit:-Angle32::FRAC_PI_2,
-			angle_pitch_upper_limit:Angle32::FRAC_PI_2,
 		}
 	}
 }
