@@ -335,7 +335,7 @@ impl GraphicsState{
 						let map_pos_id:Vec<PositionId>=model.unique_pos.iter().map(|untransformed_pos|{
 							let pos=instance.transform.transform_point3(glam::Vec3::from_array(untransformed_pos.clone())).to_array();
 							let h=bytemuck::cast::<[f32;3],[u32;3]>(pos);
-							PositionId::id((if let Some(&pos_id)=pos_id_from.get(&h){
+							PositionId::new((if let Some(&pos_id)=pos_id_from.get(&h){
 								pos_id
 							}else{
 								let pos_id=unique_pos.len();
@@ -346,7 +346,7 @@ impl GraphicsState{
 						}).collect();
 						let map_tex_id:Vec<TextureCoordinateId>=model.unique_tex.iter().map(|&tex|{
 							let h=bytemuck::cast::<[f32;2],[u32;2]>(tex);
-							TextureCoordinateId::id((if let Some(&tex_id)=tex_id_from.get(&h){
+							TextureCoordinateId::new((if let Some(&tex_id)=tex_id_from.get(&h){
 								tex_id
 							}else{
 								let tex_id=unique_tex.len();
@@ -358,7 +358,7 @@ impl GraphicsState{
 						let map_normal_id:Vec<NormalId>=model.unique_normal.iter().map(|untransformed_normal|{
 							let normal=(instance.normal_transform*glam::Vec3::from_array(untransformed_normal.clone())).to_array();
 							let h=bytemuck::cast::<[f32;3],[u32;3]>(normal);
-							NormalId::id((if let Some(&normal_id)=normal_id_from.get(&h){
+							NormalId::new((if let Some(&normal_id)=normal_id_from.get(&h){
 								normal_id
 							}else{
 								let normal_id=unique_normal.len();
@@ -369,7 +369,7 @@ impl GraphicsState{
 						}).collect();
 						let map_color_id:Vec<ColorId>=model.unique_color.iter().map(|&color|{
 							let h=bytemuck::cast::<[f32;4],[u32;4]>(color);
-							ColorId::id((if let Some(&color_id)=color_id_from.get(&h){
+							ColorId::new((if let Some(&color_id)=color_id_from.get(&h){
 								color_id
 							}else{
 								let color_id=unique_color.len();
@@ -387,7 +387,7 @@ impl GraphicsState{
 								normal:map_normal_id[unmapped_vertex.normal.get() as usize],
 								color:map_color_id[unmapped_vertex.color.get() as usize],
 							};
-							VertexId::id((if let Some(&vertex_id)=vertex_id_from.get(&vertex){
+							VertexId::new((if let Some(&vertex_id)=vertex_id_from.get(&vertex){
 								vertex_id
 							}else{
 								let vertex_id=unique_vertices.len();

@@ -189,12 +189,12 @@ impl PhysicsModels{
 		self.meshes.push(mesh);
 	}
 	fn push_model(&mut self,model:PhysicsModel)->PhysicsModelId{
-		let model_id=PhysicsModelId::id(self.models.len() as u32);
+		let model_id=PhysicsModelId::new(self.models.len() as u32);
 		self.models.push(model);
 		model_id
 	}
 	fn push_attr(&mut self,attr:PhysicsCollisionAttributes)->PhysicsAttributesId{
-		let attr_id=PhysicsAttributesId::id(self.attributes.len() as u32);
+		let attr_id=PhysicsAttributesId::new(self.attributes.len() as u32);
 		self.attributes.push(attr);
 		attr_id
 	}
@@ -271,9 +271,9 @@ pub struct ModeState{
 impl std::default::Default for ModeState{
 	fn default()->Self{
 		Self{
-			mode_id:gameplay_modes::ModeId::id(0),
-			stage_id:gameplay_modes::StageId::id(0),
-			next_ordered_checkpoint_id:gameplay_modes::CheckpointId::id(0),
+			mode_id:gameplay_modes::ModeId::new(0),
+			stage_id:gameplay_modes::StageId::new(0),
+			next_ordered_checkpoint_id:gameplay_modes::CheckpointId::new(0),
 			unordered_checkpoints:HashSet::new(),
 			jump_counts:HashMap::new(),
 		}
@@ -479,67 +479,29 @@ impl TryFrom<&gameplay_attributes::CollisionAttributes> for PhysicsCollisionAttr
 		}
 	}
 }
-
+#[derive(id::Id)]
 struct PhysicsAttributesId(u32);
-impl PhysicsAttributesId{
-	#[inline]
-	pub const fn id(id:u32)->Self{
-		Self(id)
-	}
-	#[inline]
-	pub const fn get(self)->u32{
-		self.0
-	}
-}
 
 //id assigned to deindexed IndexedPhysicsGroup
+#[derive(id::Id)]
 struct PhysicsMeshId(u32);
-impl PhysicsMeshId{
-	#[inline]
-	pub const fn id(id:u32)->Self{
-		Self(id)
-	}
-	#[inline]
-	pub const fn get(self)->u32{
-		self.0
-	}
-}
+#[derive(id::Id)]
 struct PhysicsGroupId(u32);
-impl PhysicsGroupId{
-	#[inline]
-	pub const fn id(id:u32)->Self{
-		Self(id)
-	}
-	#[inline]
-	pub const fn get(self)->u32{
-		self.0
-	}
-}
 //unique physics meshes indexed by this
 struct ConvexMeshId{
 	model_id:PhysicsModelId,// 1:1 with IndexedModelId
 	group_id:PhysicsGroupId,// group in model
 }
-#[derive(Debug,Clone,Copy,Eq,Hash,PartialEq)]
+#[derive(Debug,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
 struct PhysicsModelId(u32);
-impl PhysicsModelId{
-	#[inline]
-	pub const fn id(id:u32)->Self{
-		Self(id)
-	}
-	#[inline]
-	pub const fn get(self)->u32{
-		self.0
-	}
-}
 impl Into<ModelId> for PhysicsModelId{
 	fn into(self)->ModelId{
-		ModelId::id(self.0)
+		ModelId::new(self.0)
 	}
 }
 impl From<ModelId> for PhysicsModelId{
 	fn from(value:ModelId)->Self{
-		Self::id(value.get())
+		Self::new(value.get())
 	}
 }
 pub struct PhysicsModel{
@@ -649,7 +611,7 @@ impl TouchingState{
 	fn constrain_velocity(&self,models:&PhysicsModels,hitbox_mesh:&HitboxMesh,velocity:&mut Planar64Vec3){
 		//TODO: trey push solve
 		for contact in &self.contacts{
-			let n=contact_normal(models,style_mesh,contact);
+			let n=contact_normal(models,hitbox_mesh,contact);
 			let d=n.dot128(*velocity);
 			if d<0{
 				*velocity-=n*Planar64::raw(((d<<32)/n.dot128(n)) as i64);
@@ -659,7 +621,7 @@ impl TouchingState{
 	fn constrain_acceleration(&self,models:&PhysicsModels,hitbox_mesh:&HitboxMesh,acceleration:&mut Planar64Vec3){
 		//TODO: trey push solve
 		for contact in &self.contacts{
-			let n=contact_normal(models,style_mesh,contact);
+			let n=contact_normal(models,hitbox_mesh,contact);
 			let d=n.dot128(*acceleration);
 			if d<0{
 				*acceleration-=n*Planar64::raw(((d<<32)/n.dot128(n)) as i64);
@@ -970,7 +932,7 @@ impl instruction::InstructionEmitter<PhysicsInstruction> for PhysicsContext{
 }
 impl PhysicsContext{
 	pub fn spawn(&mut self){
-		self.state.mode_state.stage_id=gameplay_modes::StageId::id(0);
+		self.state.mode_state.stage_id=gameplay_modes::StageId::new(0);
 		self.process_instruction(instruction::TimedInstruction{
 			time:self.state.time,
 			instruction: PhysicsInstruction::Input(PhysicsInputInstruction::Reset),
@@ -1002,7 +964,7 @@ impl PhysicsContext{
 				self.models.push_mesh(PhysicsMesh::from(model));
 			}
 		}
-		self.bvh=bvh::generate_bvh(self.models.aabb_list(),|i|PhysicsModelId::id(i as u32));
+		self.bvh=bvh::generate_bvh(self.models.aabb_list(),|i|PhysicsModelId::new(i as u32));
 		println!("Physics Objects: {}",self.models.models.len());
 	}
 
@@ -1192,7 +1154,7 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 			if model_id==next_checkpoint{
 				//if you hit the next number in a sequence of ordered checkpoints
 				//increment the current checkpoint id
-				game.next_ordered_checkpoint_id=gameplay_modes::CheckpointId::id(game.next_ordered_checkpoint_id.get()+1);
+				game.next_ordered_checkpoint_id=gameplay_modes::CheckpointId::new(game.next_ordered_checkpoint_id.get()+1);
 			}
 		}
 		if stage.unordered_checkpoints.contains(model_id.into()){
