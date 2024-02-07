@@ -261,9 +261,9 @@ impl std::default::Default for PhysicsCamera{
 pub struct ModeState{
 	mode_id:gameplay_modes::ModeId,
 	stage_id:gameplay_modes::StageId,
-	jump_counts:HashMap<ModelId,u32>,//model_id -> jump count
 	next_ordered_checkpoint_id:gameplay_modes::CheckpointId,//which OrderedCheckpoint model_id you must pass next (if 0 you haven't passed OrderedCheckpoint0)
 	unordered_checkpoints:HashSet<ModelId>,
+	jump_counts:HashMap<ModelId,u32>,//model_id -> jump count
 }
 impl std::default::Default for ModeState{
 	fn default()->Self{
