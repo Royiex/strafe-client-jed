@@ -662,6 +662,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "id"
+version = "0.1.0"
+source = "git+https://git.itzana.me/Quaternions/id?rev=faca9fb6a8eb0c7f0e2796fbfad9eac16875cbd6#faca9fb6a8eb0c7f0e2796fbfad9eac16875cbd6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.48",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1282,6 +1292,7 @@ dependencies = [
  "configparser",
  "ddsfile",
  "glam",
+ "id",
  "parking_lot",
  "pollster",
  "strafesnet_common",

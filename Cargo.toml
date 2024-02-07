@@ -10,6 +10,7 @@ bytemuck = { version = "1.13.1", features = ["derive"] }
 configparser = "3.0.2"
 ddsfile = "0.5.1"
 glam = "0.25.0"
+id = { git = "https://git.itzana.me/Quaternions/id", rev = "faca9fb6a8eb0c7f0e2796fbfad9eac16875cbd6" }
 parking_lot = "0.12.1"
 pollster = "0.3.0"
 strafesnet_common = { git = "https://git.itzana.me/StrafesNET/common", rev = "434ca29aef7e3015c9ca1ed45de8fef42e33fdfb" }
