@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use crate::model_physics::{self,PhysicsMesh,TransformedMesh,MeshQuery,PhysicsMeshId,PhysicsSubmeshId};
+use crate::model_physics::{self,PhysicsMesh,PhysicsMeshTransform,TransformedMesh,MeshQuery,PhysicsMeshId,PhysicsSubmeshId};
 use strafesnet_common::bvh;
 use strafesnet_common::map;
 use strafesnet_common::aabb;
@@ -172,10 +172,8 @@ impl PhysicsModels{
 	fn mesh(&self,convex_mesh_id:ConvexMeshId)->TransformedMesh{
 		let model_idx=convex_mesh_id.model_id.get() as usize;
 		TransformedMesh::new(
-			&self.meshes[model_idx].submesh_view(convex_mesh_id.submesh_id),
-			&self.models[idx].transform,
-			&self.models[idx].normal_transform,
-			self.models[idx].transform_det,
+			self.meshes[model_idx].submesh_view(convex_mesh_id.submesh_id),
+			&self.models[model_idx].transform
 		)
 	}
 	fn model(&self,model_id:PhysicsModelId)->&PhysicsModel{
@@ -284,24 +282,24 @@ struct WorldState{}
 struct HitboxMesh{
 	halfsize:Planar64Vec3,
 	mesh:PhysicsMesh,
-	transform:PhysicsModelTransform,
+	transform:PhysicsMeshTransform,
 }
 impl HitboxMesh{
-	fn new(mesh:PhysicsMesh,vertex_transform:integer::Planar64Affine3)->Self{
+	fn new(mesh:PhysicsMesh,transform:integer::Planar64Affine3)->Self{
 		//calculate extents
 		let mut aabb=aabb::Aabb::default();
 		for vert in mesh.complete_mesh_view().verts(){
-			aabb.grow(vertex_transform.transform_point3(vert));
+			aabb.grow(transform.transform_point3(vert));
 		}
 		Self{
 			halfsize:aabb.size()/2,
 			mesh,
-			transform:PhysicsModelTransform::new(vertex_transform)
+			transform:PhysicsMeshTransform::new(transform)
 		}
 	}
 	#[inline]
 	fn transformed_mesh(&self)->TransformedMesh{
-		TransformedMesh::new(&self.mesh,&self.transform,&self.normal_transform,self.transform_det)
+		TransformedMesh::new(&self.mesh.complete_mesh_view(),&self.transform)
 	}
 }
 
@@ -495,38 +493,24 @@ impl From<ModelId> for PhysicsModelId{
 		Self::new(value.get())
 	}
 }
-pub struct PhysicsModelTransform{
-	vertex:integer::Planar64Affine3,
-	normal:integer::Planar64Mat3,
-	det:Planar64,
-}
-impl PhysicsModelTransform{
-	pub const fn new(vertex_transform:integer::Planar64Affine3)->Self{
-		Self{
-			normal:vertex_transform.matrix3.inverse_times_det().transpose(),
-			det:vertex_transform.matrix3.determinant(),
-			vertex:vertex_transform,
-		}
-	}
-}
 pub struct PhysicsModel{
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
 	mesh_id:PhysicsMeshId,
 	//put these up on the Model (data normalization)
 	attr_id:PhysicsAttributesId,
-	transform:PhysicsModelTransform,
+	transform:PhysicsMeshTransform,
 }
 
 impl PhysicsModel{
-	pub const fn new(mesh_id:PhysicsMeshId,attr_id:PhysicsAttributesId,transform:PhysicsModelTransform)->Self{
+	pub const fn new(mesh_id:PhysicsMeshId,attr_id:PhysicsAttributesId,transform:PhysicsMeshTransform)->Self{
 		Self{
 			mesh_id,
 			attr_id,
 			transform,
 		}
 	}
-	const fn transform(&self)->&PhysicsModelTransform{
+	const fn transform(&self)->&PhysicsMeshTransform{
 		&self.transform
 	}
 }

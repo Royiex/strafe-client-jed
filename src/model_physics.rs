@@ -368,46 +368,33 @@ impl MeshQuery<SubmeshFaceId,SubmeshDirectedEdgeId,SubmeshVertId> for PhysicsMes
 	}
 }
 
-pub struct PhysicsMeshTransform<'a>{
-	vertex:&'a integer::Planar64Affine3,
-	normal:&'a integer::Planar64Mat3,
+pub struct PhysicsMeshTransform{
+	vertex:integer::Planar64Affine3,
+	normal:integer::Planar64Mat3,
 	det:Planar64,
 }
-impl PhysicsMeshTransform<'_>{
-	pub fn new<'a>(
-	vertex:&'a integer::Planar64Affine3,
-	normal:&'a integer::Planar64Mat3,
-	det:Planar64
-	)->PhysicsMeshTransform<'a>{
-		PhysicsMeshTransform{
-			vertex,
-			normal,
-			det,
+impl PhysicsMeshTransform{
+	pub const fn new(transform:integer::Planar64Affine3)->Self{
+		Self{
+			normal:transform.matrix3.inverse_times_det().transpose(),
+			det:transform.matrix3.determinant(),
+			vertex:transform,
 		}
 	}
 }
+
 pub struct TransformedMesh<'a>{
 	view:PhysicsMeshView<'a>,
-	transform:PhysicsMeshTransform<'a>,
+	transform:&'a PhysicsMeshTransform,
 }
 impl TransformedMesh<'_>{
 	pub fn new<'a>(
-		mesh_data:&'a PhysicsMeshData,
-		topology:&'a PhysicsMeshTopology,
-		vertex:&'a integer::Planar64Affine3,
-		normal:&'a integer::Planar64Mat3,
-		det:Planar64,
-		)->TransformedMesh<'a>{
+		view:PhysicsMeshView<'a>,
+		transform:&'a PhysicsMeshTransform,
+	)->TransformedMesh<'a>{
 		TransformedMesh{
-			view:PhysicsMeshView{
-				data: mesh_data,
-				topology,
-			},
-			transform:PhysicsMeshTransform{
-				vertex,
-				normal,
-				det,
-			}
+			view,
+			transform,
 		}
 	}
 	fn farthest_vert(&self,dir:Planar64Vec3)->SubmeshVertId{
@@ -429,7 +416,7 @@ impl TransformedMesh<'_>{
 impl MeshQuery<SubmeshFaceId,SubmeshDirectedEdgeId,SubmeshVertId> for TransformedMesh<'_>{
 	fn face_nd(&self,face_id:SubmeshFaceId)->(Planar64Vec3,Planar64){
 		let (n,d)=self.view.face_nd(face_id);
-		let transformed_n=*self.transform.normal*n;
+		let transformed_n=self.transform.normal*n;
 		let transformed_d=d+transformed_n.dot(self.transform.vertex.translation)/self.transform.det;
 		(transformed_n/self.transform.det,transformed_d)
 	}
