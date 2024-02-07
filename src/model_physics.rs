@@ -17,26 +17,31 @@ pub trait DirectedEdge{
 	}
 }
 
-#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
-pub struct VertId(u32);
-#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
-pub struct EdgeId(u32);
-/// DirectedEdgeId refers to an EdgeId when undirected.
-#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
-pub struct DirectedEdgeId(u32);
-#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
-pub struct FaceId(u32);
+#[derive(Debug,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
+pub struct MeshVertId(u32);
+#[derive(Debug,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
+pub struct MeshFaceId(u32);
 
-impl UndirectedEdge for EdgeId{
-	type DirectedEdge=DirectedEdgeId;
-	fn as_directed(&self,parity:bool)->DirectedEdgeId{
-		DirectedEdgeId(self.0|((parity as u32)<<(u32::BITS-1)))
+#[derive(Debug,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
+pub struct SubmeshVertId(u32);
+#[derive(Debug,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
+pub struct SubmeshEdgeId(u32);
+/// DirectedEdgeId refers to an EdgeId when undirected.
+#[derive(Debug,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
+pub struct SubmeshDirectedEdgeId(u32);
+#[derive(Debug,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
+pub struct SubmeshFaceId(u32);
+
+impl UndirectedEdge for SubmeshEdgeId{
+	type DirectedEdge=SubmeshDirectedEdgeId;
+	fn as_directed(&self,parity:bool)->SubmeshDirectedEdgeId{
+		SubmeshDirectedEdgeId(self.0|((parity as u32)<<(u32::BITS-1)))
 	}
 }
-impl DirectedEdge for DirectedEdgeId{
-	type UndirectedEdge=EdgeId;
-	fn as_undirected(&self)->EdgeId{
-		EdgeId(self.0&!(1<<(u32::BITS-1)))
+impl DirectedEdge for SubmeshDirectedEdgeId{
+	type UndirectedEdge=SubmeshEdgeId;
+	fn as_undirected(&self)->SubmeshEdgeId{
+		SubmeshEdgeId(self.0&!(1<<(u32::BITS-1)))
 	}
 	fn parity(&self)->bool{
 		self.0&(1<<(u32::BITS-1))!=0
@@ -74,16 +79,16 @@ pub trait MeshQuery<FACE:Clone,EDGE:Clone+DirectedEdge,VERT:Clone>{
 	fn vert_faces(&self,vert_id:VERT)->Cow<Vec<FACE>>;
 }
 struct FaceRefs{
-	edges:Vec<DirectedEdgeId>,
+	edges:Vec<SubmeshDirectedEdgeId>,
 	//verts:Vec<VertId>,
 }
 struct EdgeRefs{
-	faces:[FaceId;2],//left, right
-	verts:[VertId;2],//bottom, top
+	faces:[SubmeshFaceId;2],//left, right
+	verts:[SubmeshVertId;2],//bottom, top
 }
 struct VertRefs{
-	faces:Vec<FaceId>,
-	edges:Vec<DirectedEdgeId>,
+	faces:Vec<SubmeshFaceId>,
+	edges:Vec<SubmeshDirectedEdgeId>,
 }
 struct PhysicsMeshData{
 	//this contains all real and virtual faces used in both the complete mesh and convex submeshes
@@ -91,20 +96,24 @@ struct PhysicsMeshData{
 	//all remaining faces are virtual to operate internal logic of the face crawler
 	//and cannot be part of a physics collision
 	//virtual faces are only used in convex submeshes.
-	faces:Vec<Face>,
-	verts:Vec<Vert>,
+	faces:Vec<Face>,//MeshFaceId indexes this list
+	verts:Vec<Vert>,//MeshVertId indexes this list
 }
 struct PhysicsMeshTopology{
 	//mapping of local ids to PhysicsMeshData ids
-	faces:Vec<FaceId>,
-	verts:Vec<VertId>,
+	faces:Vec<MeshFaceId>,//SubmeshFaceId indexes this list
+	verts:Vec<MeshVertId>,//SubmeshVertId indexes this list
 	//all ids here are local to this object
 	face_topology:Vec<FaceRefs>,
 	edge_topology:Vec<EdgeRefs>,
 	vert_topology:Vec<VertRefs>,
 }
+#[derive(id::Id)]
+pub struct PhysicsMeshId(u32);
+#[derive(Debug,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
+pub struct PhysicsSubmeshId(u32);
 pub struct PhysicsMesh{
-	mesh_data:PhysicsMeshData,
+	data:PhysicsMeshData,
 	//index 0 is the complete mesh.
 	//index 1-2+ is convex submeshes.
 	//Most objects in roblox maps are already convex, so the list length is 1
@@ -115,7 +124,7 @@ pub struct PhysicsMesh{
 impl PhysicsMesh{
 	pub fn unit_cube()->Self{
 		//go go gadget debug print mesh
-		let mesh_data=PhysicsMeshData{
+		let data=PhysicsMeshData{
 			faces:vec![
 				Face{normal:Planar64Vec3::raw( 4294967296, 0, 0),dot:Planar64::raw(4294967296)},
 				Face{normal:Planar64Vec3::raw( 0, 4294967296, 0),dot:Planar64::raw(4294967296)},
@@ -136,43 +145,43 @@ impl PhysicsMesh{
 			]
 		};
 		let mesh_topology=PhysicsMeshTopology{
-			faces:(0..mesh_data.faces.len()).map(FaceId).collect(),
-			verts:(0..mesh_data.verts.len()).map(VertId).collect(),
+			faces:(0..data.faces.len() as u32).map(MeshFaceId::new).collect(),
+			verts:(0..data.verts.len() as u32).map(MeshVertId::new).collect(),
 			face_topology:vec![
-				FaceRefs{edges:vec![DirectedEdgeId(9223372036854775808),DirectedEdgeId(9223372036854775809),DirectedEdgeId(9223372036854775810),DirectedEdgeId(3)]},
-				FaceRefs{edges:vec![DirectedEdgeId(9223372036854775812),DirectedEdgeId(9223372036854775813),DirectedEdgeId(6),DirectedEdgeId(1)]},
-				FaceRefs{edges:vec![DirectedEdgeId(7),DirectedEdgeId(2),DirectedEdgeId(9223372036854775814),DirectedEdgeId(9223372036854775816)]},
-				FaceRefs{edges:vec![DirectedEdgeId(8),DirectedEdgeId(5),DirectedEdgeId(9223372036854775817),DirectedEdgeId(10)]},
-				FaceRefs{edges:vec![DirectedEdgeId(9223372036854775815),DirectedEdgeId(9223372036854775818),DirectedEdgeId(11),DirectedEdgeId(9223372036854775811)]},
-				FaceRefs{edges:vec![DirectedEdgeId(4),DirectedEdgeId(0),DirectedEdgeId(9223372036854775819),DirectedEdgeId(9)]}
+				FaceRefs{edges:vec![SubmeshDirectedEdgeId(9223372036854775808),SubmeshDirectedEdgeId(9223372036854775809),SubmeshDirectedEdgeId(9223372036854775810),SubmeshDirectedEdgeId(3)]},
+				FaceRefs{edges:vec![SubmeshDirectedEdgeId(9223372036854775812),SubmeshDirectedEdgeId(9223372036854775813),SubmeshDirectedEdgeId(6),SubmeshDirectedEdgeId(1)]},
+				FaceRefs{edges:vec![SubmeshDirectedEdgeId(7),SubmeshDirectedEdgeId(2),SubmeshDirectedEdgeId(9223372036854775814),SubmeshDirectedEdgeId(9223372036854775816)]},
+				FaceRefs{edges:vec![SubmeshDirectedEdgeId(8),SubmeshDirectedEdgeId(5),SubmeshDirectedEdgeId(9223372036854775817),SubmeshDirectedEdgeId(10)]},
+				FaceRefs{edges:vec![SubmeshDirectedEdgeId(9223372036854775815),SubmeshDirectedEdgeId(9223372036854775818),SubmeshDirectedEdgeId(11),SubmeshDirectedEdgeId(9223372036854775811)]},
+				FaceRefs{edges:vec![SubmeshDirectedEdgeId(4),SubmeshDirectedEdgeId(0),SubmeshDirectedEdgeId(9223372036854775819),SubmeshDirectedEdgeId(9)]}
 			],
 			edge_topology:vec![
-				EdgeRefs{faces:[FaceId(0),FaceId(5)],verts:[VertId(0),VertId(1)]}, 
-				EdgeRefs{faces:[FaceId(0),FaceId(1)],verts:[VertId(1),VertId(2)]}, 
-				EdgeRefs{faces:[FaceId(0),FaceId(2)],verts:[VertId(2),VertId(3)]}, 
-				EdgeRefs{faces:[FaceId(4),FaceId(0)],verts:[VertId(0),VertId(3)]}, 
-				EdgeRefs{faces:[FaceId(1),FaceId(5)],verts:[VertId(1),VertId(4)]}, 
-				EdgeRefs{faces:[FaceId(1),FaceId(3)],verts:[VertId(4),VertId(5)]}, 
-				EdgeRefs{faces:[FaceId(2),FaceId(1)],verts:[VertId(2),VertId(5)]}, 
-				EdgeRefs{faces:[FaceId(4),FaceId(2)],verts:[VertId(3),VertId(6)]}, 
-				EdgeRefs{faces:[FaceId(2),FaceId(3)],verts:[VertId(5),VertId(6)]}, 
-				EdgeRefs{faces:[FaceId(3),FaceId(5)],verts:[VertId(4),VertId(7)]}, 
-				EdgeRefs{faces:[FaceId(4),FaceId(3)],verts:[VertId(6),VertId(7)]}, 
-				EdgeRefs{faces:[FaceId(5),FaceId(4)],verts:[VertId(0),VertId(7)]}
+				EdgeRefs{faces:[SubmeshFaceId(0),SubmeshFaceId(5)],verts:[SubmeshVertId(0),SubmeshVertId(1)]}, 
+				EdgeRefs{faces:[SubmeshFaceId(0),SubmeshFaceId(1)],verts:[SubmeshVertId(1),SubmeshVertId(2)]}, 
+				EdgeRefs{faces:[SubmeshFaceId(0),SubmeshFaceId(2)],verts:[SubmeshVertId(2),SubmeshVertId(3)]}, 
+				EdgeRefs{faces:[SubmeshFaceId(4),SubmeshFaceId(0)],verts:[SubmeshVertId(0),SubmeshVertId(3)]}, 
+				EdgeRefs{faces:[SubmeshFaceId(1),SubmeshFaceId(5)],verts:[SubmeshVertId(1),SubmeshVertId(4)]}, 
+				EdgeRefs{faces:[SubmeshFaceId(1),SubmeshFaceId(3)],verts:[SubmeshVertId(4),SubmeshVertId(5)]}, 
+				EdgeRefs{faces:[SubmeshFaceId(2),SubmeshFaceId(1)],verts:[SubmeshVertId(2),SubmeshVertId(5)]}, 
+				EdgeRefs{faces:[SubmeshFaceId(4),SubmeshFaceId(2)],verts:[SubmeshVertId(3),SubmeshVertId(6)]}, 
+				EdgeRefs{faces:[SubmeshFaceId(2),SubmeshFaceId(3)],verts:[SubmeshVertId(5),SubmeshVertId(6)]}, 
+				EdgeRefs{faces:[SubmeshFaceId(3),SubmeshFaceId(5)],verts:[SubmeshVertId(4),SubmeshVertId(7)]}, 
+				EdgeRefs{faces:[SubmeshFaceId(4),SubmeshFaceId(3)],verts:[SubmeshVertId(6),SubmeshVertId(7)]}, 
+				EdgeRefs{faces:[SubmeshFaceId(5),SubmeshFaceId(4)],verts:[SubmeshVertId(0),SubmeshVertId(7)]}
 			],
 			vert_topology:vec![
-				VertRefs{faces:vec![FaceId(0),FaceId(4),FaceId(5)],edges:vec![DirectedEdgeId(9223372036854775811),DirectedEdgeId(9223372036854775819),DirectedEdgeId(9223372036854775808)]},
-				VertRefs{faces:vec![FaceId(0),FaceId(5),FaceId(1)],edges:vec![DirectedEdgeId(9223372036854775812),DirectedEdgeId(0),DirectedEdgeId(9223372036854775809)]},
-				VertRefs{faces:vec![FaceId(0),FaceId(2),FaceId(1)],edges:vec![DirectedEdgeId(1),DirectedEdgeId(9223372036854775810),DirectedEdgeId(9223372036854775814)]},
-				VertRefs{faces:vec![FaceId(0),FaceId(2),FaceId(4)],edges:vec![DirectedEdgeId(2),DirectedEdgeId(3),DirectedEdgeId(9223372036854775815)]},
-				VertRefs{faces:vec![FaceId(3),FaceId(5),FaceId(1)],edges:vec![DirectedEdgeId(4),DirectedEdgeId(9223372036854775817),DirectedEdgeId(9223372036854775813)]},
-				VertRefs{faces:vec![FaceId(2),FaceId(3),FaceId(1)],edges:vec![DirectedEdgeId(5),DirectedEdgeId(6),DirectedEdgeId(9223372036854775816)]},
-				VertRefs{faces:vec![FaceId(2),FaceId(3),FaceId(4)],edges:vec![DirectedEdgeId(7),DirectedEdgeId(8),DirectedEdgeId(9223372036854775818)]},
-				VertRefs{faces:vec![FaceId(4),FaceId(3),FaceId(5)],edges:vec![DirectedEdgeId(10),DirectedEdgeId(11),DirectedEdgeId(9)]}
+				VertRefs{faces:vec![SubmeshFaceId(0),SubmeshFaceId(4),SubmeshFaceId(5)],edges:vec![SubmeshDirectedEdgeId(9223372036854775811),SubmeshDirectedEdgeId(9223372036854775819),SubmeshDirectedEdgeId(9223372036854775808)]},
+				VertRefs{faces:vec![SubmeshFaceId(0),SubmeshFaceId(5),SubmeshFaceId(1)],edges:vec![SubmeshDirectedEdgeId(9223372036854775812),SubmeshDirectedEdgeId(0),SubmeshDirectedEdgeId(9223372036854775809)]},
+				VertRefs{faces:vec![SubmeshFaceId(0),SubmeshFaceId(2),SubmeshFaceId(1)],edges:vec![SubmeshDirectedEdgeId(1),SubmeshDirectedEdgeId(9223372036854775810),SubmeshDirectedEdgeId(9223372036854775814)]},
+				VertRefs{faces:vec![SubmeshFaceId(0),SubmeshFaceId(2),SubmeshFaceId(4)],edges:vec![SubmeshDirectedEdgeId(2),SubmeshDirectedEdgeId(3),SubmeshDirectedEdgeId(9223372036854775815)]},
+				VertRefs{faces:vec![SubmeshFaceId(3),SubmeshFaceId(5),SubmeshFaceId(1)],edges:vec![SubmeshDirectedEdgeId(4),SubmeshDirectedEdgeId(9223372036854775817),SubmeshDirectedEdgeId(9223372036854775813)]},
+				VertRefs{faces:vec![SubmeshFaceId(2),SubmeshFaceId(3),SubmeshFaceId(1)],edges:vec![SubmeshDirectedEdgeId(5),SubmeshDirectedEdgeId(6),SubmeshDirectedEdgeId(9223372036854775816)]},
+				VertRefs{faces:vec![SubmeshFaceId(2),SubmeshFaceId(3),SubmeshFaceId(4)],edges:vec![SubmeshDirectedEdgeId(7),SubmeshDirectedEdgeId(8),SubmeshDirectedEdgeId(9223372036854775818)]},
+				VertRefs{faces:vec![SubmeshFaceId(4),SubmeshFaceId(3),SubmeshFaceId(5)],edges:vec![SubmeshDirectedEdgeId(10),SubmeshDirectedEdgeId(11),SubmeshDirectedEdgeId(9)]}
 			]
 		};
 		Self{
-			mesh_data,
+			data,
 			submeshes:vec![mesh_topology],
 		}
 	}
@@ -180,12 +189,12 @@ impl PhysicsMesh{
 		Self::unit_cube()
 	}
 	pub fn mesh_data(&self)->&PhysicsMeshData{
-		&self.mesh_data
+		&self.data
 	}
 	pub fn complete_mesh(&self)->&PhysicsMeshTopology{
 		&self.submeshes[0]
 	}
-	pub fn convex_submeshes(&self)->&[PhysicsMeshTopology]{
+	pub fn submeshes(&self)->&[PhysicsMeshTopology]{
 		if self.submeshes.len()==1{
 			//the complete mesh is already a convex mesh
 			&self.submeshes[0..0]
@@ -193,18 +202,30 @@ impl PhysicsMesh{
 			&self.submeshes[1..]
 		}
 	}
+	pub fn submesh_view(&self,submesh_id:PhysicsSubmeshId)->PhysicsMeshView{
+		PhysicsMeshView{
+			data:&self.data,
+			topology:&self.submeshes()[submesh_id.get() as usize],
+		}
+	}
+	pub fn submesh_views(&self)->impl Iterator<Item=PhysicsMeshView>{
+		self.submeshes().iter().map(|topology|PhysicsMeshView{
+			data:&self.data,
+			topology,
+		})
+	}
 }
 
 //mesh builder code
 #[derive(Default,Clone)]
 struct VertRefGuy{
-	edges:std::collections::HashSet<DirectedEdgeId>,
-	faces:std::collections::HashSet<FaceId>,
+	edges:std::collections::HashSet<SubmeshDirectedEdgeId>,
+	faces:std::collections::HashSet<SubmeshFaceId>,
 }
 #[derive(Clone,Hash,Eq,PartialEq)]
-struct EdgeRefVerts([VertId;2]);
+struct EdgeRefVerts([SubmeshVertId;2]);
 impl EdgeRefVerts{
-	fn new(v0:VertId,v1:VertId)->(Self,bool){
+	fn new(v0:SubmeshVertId,v1:SubmeshVertId)->(Self,bool){
 		(if v0.0<v1.0{
 			Self([v0,v1])
 		}else{
@@ -212,23 +233,23 @@ impl EdgeRefVerts{
 		},v0.0<v1.0)
 	}
 }
-struct EdgeRefFaces([FaceId;2]);
+struct EdgeRefFaces([SubmeshFaceId;2]);
 impl EdgeRefFaces{
 	fn new()->Self{
-		Self([FaceId(0);2])
+		Self([SubmeshFaceId(0);2])
 	}
-	fn push(&mut self,i:usize,face_id:FaceId){
+	fn push(&mut self,i:usize,face_id:SubmeshFaceId){
 		self.0[i]=face_id;
 	}
 }
-struct FaceRefEdges(Vec<DirectedEdgeId>);
+struct FaceRefEdges(Vec<SubmeshDirectedEdgeId>);
 #[derive(Default)]
 struct EdgePool{
 	edge_guys:Vec<(EdgeRefVerts,EdgeRefFaces)>,
 	edge_id_from_guy:std::collections::HashMap<EdgeRefVerts,usize>,
 }
 impl EdgePool{
-	fn push(&mut self,edge_ref_verts:EdgeRefVerts)->(&mut EdgeRefFaces,EdgeId){
+	fn push(&mut self,edge_ref_verts:EdgeRefVerts)->(&mut EdgeRefFaces,SubmeshEdgeId){
 		let edge_id=if let Some(&edge_id)=self.edge_id_from_guy.get(&edge_ref_verts){
 			edge_id
 		}else{
@@ -237,7 +258,7 @@ impl EdgePool{
 			self.edge_id_from_guy.insert(edge_ref_verts,edge_id);
 			edge_id
 		};
-		(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,EdgeId(edge_id))
+		(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,SubmeshEdgeId::new(edge_id as u32))
 	}
 }
 impl From<&model::IndexedModel> for PhysicsMesh{
@@ -250,7 +271,7 @@ impl From<&model::IndexedModel> for PhysicsMesh{
 		let mut faces=Vec::new();
 		let mut face_ref_guys=Vec::new();
 		for group in &indexed_model.polygon_groups{for poly_vertices in group.polys(){
-			let face_id=FaceId(face_i);
+			let face_id=SubmeshFaceId::new(face_i);
 			//one face per poly
 			let mut normal=Planar64Vec3::ZERO;
 			let len=poly_vertices.len();
@@ -266,7 +287,7 @@ impl From<&model::IndexedModel> for PhysicsMesh{
 					(v0.x()-v1.x())*(v0.y()+v1.y()),
 				);
 				//get/create edge and push face into it
-				let (edge_ref_verts,is_sorted)=EdgeRefVerts::new(VertId(vert0_id),VertId(vert1_id));
+				let (edge_ref_verts,is_sorted)=EdgeRefVerts::new(SubmeshVertId::new(vert0_id as u32),SubmeshVertId::new(vert1_id as u32));
 				let (edge_ref_faces,edge_id)=edge_pool.push(edge_ref_verts);
 				//polygon vertices as assumed to be listed clockwise
 				//populate the edge face on the left or right depending on how the edge vertices got sorted
@@ -311,108 +332,129 @@ impl From<&model::IndexedModel> for PhysicsMesh{
 	}
 }
 
+struct PhysicsMeshView<'a>{
+	data:&'a PhysicsMeshData,
+	topology:&'a PhysicsMeshTopology,
+}
 impl PhysicsMeshView<'_>{
 	pub fn verts<'a>(&'a self)->impl Iterator<Item=Planar64Vec3>+'a{
-		self.mesh_data.verts.iter().map(|Vert(pos)|*pos)
+		self.data.verts.iter().map(|Vert(pos)|*pos)
 	}
 }
-impl MeshQuery<FaceId,DirectedEdgeId,VertId> for PhysicsMesh{
-	fn face_nd(&self,face_id:FaceId)->(Planar64Vec3,Planar64){
-		(self.faces[face_id.0].normal,self.faces[face_id.0].dot)
+impl MeshQuery<SubmeshFaceId,SubmeshDirectedEdgeId,SubmeshVertId> for PhysicsMeshView<'_>{
+	fn face_nd(&self,face_id:SubmeshFaceId)->(Planar64Vec3,Planar64){
+		let face_idx=self.topology.faces[face_id.get() as usize].get() as usize;
+		(self.data.faces[face_idx].normal,self.data.faces[face_idx].dot)
 	}
 	//ideally I never calculate the vertex position, but I have to for the graphical meshes...
-	fn vert(&self,vert_id:VertId)->Planar64Vec3{
-		self.verts[vert_id.0].0
+	fn vert(&self,vert_id:SubmeshVertId)->Planar64Vec3{
+		let vert_idx=self.topology.verts[vert_id.get() as usize].get() as usize;
+		self.data.verts[vert_idx].0
 	}
-	fn face_edges(&self,face_id:FaceId)->Cow<Vec<DirectedEdgeId>>{
-		Cow::Borrowed(&self.face_topology[face_id.0].edges)
+	fn face_edges(&self,face_id:SubmeshFaceId)->Cow<Vec<SubmeshDirectedEdgeId>>{
+		Cow::Borrowed(&self.topology.face_topology[face_id.get() as usize].edges)
 	}
-	fn edge_faces(&self,edge_id:EdgeId)->Cow<[FaceId;2]>{
-		Cow::Borrowed(&self.edge_topology[edge_id.0].faces)
+	fn edge_faces(&self,edge_id:SubmeshEdgeId)->Cow<[SubmeshFaceId;2]>{
+		Cow::Borrowed(&self.topology.edge_topology[edge_id.get() as usize].faces)
 	}
-	fn edge_verts(&self,edge_id:EdgeId)->Cow<[VertId;2]>{
-		Cow::Borrowed(&self.edge_topology[edge_id.0].verts)
+	fn edge_verts(&self,edge_id:SubmeshEdgeId)->Cow<[SubmeshVertId;2]>{
+		Cow::Borrowed(&self.topology.edge_topology[edge_id.get() as usize].verts)
 	}
-	fn vert_edges(&self,vert_id:VertId)->Cow<Vec<DirectedEdgeId>>{
-		Cow::Borrowed(&self.vert_topology[vert_id.0].edges)
+	fn vert_edges(&self,vert_id:SubmeshVertId)->Cow<Vec<SubmeshDirectedEdgeId>>{
+		Cow::Borrowed(&self.topology.vert_topology[vert_id.get() as usize].edges)
 	}
-	fn vert_faces(&self,vert_id:VertId)->Cow<Vec<FaceId>>{
-		Cow::Borrowed(&self.vert_topology[vert_id.0].faces)
+	fn vert_faces(&self,vert_id:SubmeshVertId)->Cow<Vec<SubmeshFaceId>>{
+		Cow::Borrowed(&self.topology.vert_topology[vert_id.get() as usize].faces)
 	}
 }
 
-struct PhysicsMeshView<'a>{
-	mesh_data:&'a PhysicsMeshData,
-	topology:&'a PhysicsMeshTopology,
+pub struct PhysicsMeshTransform<'a>{
+	vertex:&'a integer::Planar64Affine3,
+	normal:&'a integer::Planar64Mat3,
+	det:Planar64,
 }
-struct PhysicsMeshTransform<'a>{
-	transform:&'a integer::Planar64Affine3,
-	normal_transform:&'a integer::Planar64Mat3,
-	transform_det:Planar64,
+impl PhysicsMeshTransform<'_>{
+	pub fn new<'a>(
+	vertex:&'a integer::Planar64Affine3,
+	normal:&'a integer::Planar64Mat3,
+	det:Planar64
+	)->PhysicsMeshTransform<'a>{
+		PhysicsMeshTransform{
+			vertex,
+			normal,
+			det,
+		}
+	}
 }
 pub struct TransformedMesh<'a>{
-	mesh:PhysicsMeshView<'a>,
+	view:PhysicsMeshView<'a>,
 	transform:PhysicsMeshTransform<'a>,
 }
 impl TransformedMesh<'_>{
 	pub fn new<'a>(
 		mesh_data:&'a PhysicsMeshData,
 		topology:&'a PhysicsMeshTopology,
-		transform:&'a integer::Planar64Affine3,
-		normal_transform:&'a integer::Planar64Mat3,
-		transform_det:Planar64,
+		vertex:&'a integer::Planar64Affine3,
+		normal:&'a integer::Planar64Mat3,
+		det:Planar64,
 		)->TransformedMesh<'a>{
 		TransformedMesh{
-			mesh_data,
-			topology,
-			transform,
-			normal_transform,
-			transform_det,
+			view:PhysicsMeshView{
+				data: mesh_data,
+				topology,
+			},
+			transform:PhysicsMeshTransform{
+				vertex,
+				normal,
+				det,
+			}
 		}
 	}
-	fn farthest_vert(&self,dir:Planar64Vec3)->VertId{
+	fn farthest_vert(&self,dir:Planar64Vec3)->SubmeshVertId{
 		let mut best_dot=Planar64::MIN;
-		let mut best_vert=VertId(0);
-		for (i,vert) in self.mesh.verts.iter().enumerate(){
-			let p=self.transform.transform_point3(vert.0);
+		let mut best_vert=SubmeshVertId(0);
+		//this happens to be well-defined.  there are no virtual virtices
+		for (i,vert_id) in self.view.topology.verts.iter().enumerate(){
+			let vert=self.view.data.verts[vert_id.get() as usize];
+			let p=self.transform.vertex.transform_point3(vert.0);
 			let d=dir.dot(p);
 			if best_dot<d{
 				best_dot=d;
-				best_vert=VertId(i);
+				best_vert=SubmeshVertId::new(i as u32);
 			}
 		}
 		best_vert
 	}
 }
-impl MeshQuery<FaceId,DirectedEdgeId,VertId> for TransformedMesh<'_>{
-	fn face_nd(&self,face_id:FaceId)->(Planar64Vec3,Planar64){
-		let (n,d)=self.mesh.face_nd(face_id);
-		let transformed_n=*self.normal_transform*n;
-		let transformed_d=d+transformed_n.dot(self.transform.translation)/self.transform_det;
-		(transformed_n/self.transform_det,transformed_d)
+impl MeshQuery<SubmeshFaceId,SubmeshDirectedEdgeId,SubmeshVertId> for TransformedMesh<'_>{
+	fn face_nd(&self,face_id:SubmeshFaceId)->(Planar64Vec3,Planar64){
+		let (n,d)=self.view.face_nd(face_id);
+		let transformed_n=*self.transform.normal*n;
+		let transformed_d=d+transformed_n.dot(self.transform.vertex.translation)/self.transform.det;
+		(transformed_n/self.transform.det,transformed_d)
 	}
-	fn vert(&self,vert_id:VertId)->Planar64Vec3{
-		self.transform.transform_point3(self.mesh.vert(vert_id))
-	}
-	#[inline]
-	fn face_edges(&self,face_id:FaceId)->Cow<Vec<DirectedEdgeId>>{
-		self.mesh.face_edges(face_id)
+	fn vert(&self,vert_id:SubmeshVertId)->Planar64Vec3{
+		self.transform.vertex.transform_point3(self.view.vert(vert_id))
 	}
 	#[inline]
-	fn edge_faces(&self,edge_id:EdgeId)->Cow<[FaceId;2]>{
-		self.mesh.edge_faces(edge_id)
+	fn face_edges(&self,face_id:SubmeshFaceId)->Cow<Vec<SubmeshDirectedEdgeId>>{
+		self.view.face_edges(face_id)
 	}
 	#[inline]
-	fn edge_verts(&self,edge_id:EdgeId)->Cow<[VertId;2]>{
-		self.mesh.edge_verts(edge_id)
+	fn edge_faces(&self,edge_id:SubmeshEdgeId)->Cow<[SubmeshFaceId;2]>{
+		self.view.edge_faces(edge_id)
 	}
 	#[inline]
-	fn vert_edges(&self,vert_id:VertId)->Cow<Vec<DirectedEdgeId>>{
-		self.mesh.vert_edges(vert_id)
+	fn edge_verts(&self,edge_id:SubmeshEdgeId)->Cow<[SubmeshVertId;2]>{
+		self.view.edge_verts(edge_id)
 	}
 	#[inline]
-	fn vert_faces(&self,vert_id:VertId)->Cow<Vec<FaceId>>{
-		self.mesh.vert_faces(vert_id)
+	fn vert_edges(&self,vert_id:SubmeshVertId)->Cow<Vec<SubmeshDirectedEdgeId>>{
+		self.view.vert_edges(vert_id)
+	}
+	#[inline]
+	fn vert_faces(&self,vert_id:SubmeshVertId)->Cow<Vec<SubmeshFaceId>>{
+		self.view.vert_faces(vert_id)
 	}
 }
 
@@ -422,12 +464,12 @@ impl MeshQuery<FaceId,DirectedEdgeId,VertId> for TransformedMesh<'_>{
 //(vertex,face)
 #[derive(Clone,Copy)]
 pub enum MinkowskiVert{
-	VertVert(VertId,VertId),
+	VertVert(SubmeshVertId,SubmeshVertId),
 }
 #[derive(Clone,Copy)]
 pub enum MinkowskiEdge{
-	VertEdge(VertId,EdgeId),
-	EdgeVert(EdgeId,VertId),
+	VertEdge(SubmeshVertId,SubmeshEdgeId),
+	EdgeVert(SubmeshEdgeId,SubmeshVertId),
 	//EdgeEdge when edges are parallel
 }
 impl UndirectedEdge for MinkowskiEdge{
@@ -441,8 +483,8 @@ impl UndirectedEdge for MinkowskiEdge{
 }
 #[derive(Clone,Copy)]
 pub enum MinkowskiDirectedEdge{
-	VertEdge(VertId,DirectedEdgeId),
-	EdgeVert(DirectedEdgeId,VertId),
+	VertEdge(SubmeshVertId,SubmeshDirectedEdgeId),
+	EdgeVert(SubmeshDirectedEdgeId,SubmeshVertId),
 	//EdgeEdge when edges are parallel
 }
 impl DirectedEdge for MinkowskiDirectedEdge{
@@ -462,9 +504,9 @@ impl DirectedEdge for MinkowskiDirectedEdge{
 }
 #[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
 pub enum MinkowskiFace{
-	VertFace(VertId,FaceId),
-	EdgeEdge(EdgeId,EdgeId,bool),
-	FaceVert(FaceId,VertId),
+	VertFace(SubmeshVertId,SubmeshFaceId),
+	EdgeEdge(SubmeshEdgeId,SubmeshEdgeId,bool),
+	FaceVert(SubmeshFaceId,SubmeshVertId),
 	//EdgeFace
 	//FaceEdge
 	//FaceFace

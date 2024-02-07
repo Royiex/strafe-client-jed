@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use crate::model_physics::{self,PhysicsMesh,TransformedMesh,MeshQuery};
+use crate::model_physics::{self,PhysicsMesh,TransformedMesh,MeshQuery,PhysicsMeshId,PhysicsSubmeshId};
 use strafesnet_common::bvh;
 use strafesnet_common::map;
 use strafesnet_common::aabb;
@@ -169,11 +169,10 @@ impl PhysicsModels{
 	}
 	//TODO: "statically" verify the maps don't refer to any nonexistant data, if they do delete the references.
 	//then I can make these getter functions unchecked.
-	fn mesh(&self,model_id:PhysicsModelId)->TransformedMesh{
-		let idx=model_id.get() as usize;
-		let convex_mesh_id=self.models[idx].convex_mesh_id;
+	fn mesh(&self,convex_mesh_id:ConvexMeshId)->TransformedMesh{
+		let model_idx=convex_mesh_id.model_id.get() as usize;
 		TransformedMesh::new(
-			&self.meshes[convex_mesh_id.mesh_id.get() as usize].groups[convex_mesh_id.group_id.get() as usize],
+			&self.meshes[model_idx].submesh_view(convex_mesh_id.submesh_id),
 			&self.models[idx].transform,
 			&self.models[idx].normal_transform,
 			self.models[idx].transform_det,
@@ -285,23 +284,19 @@ struct WorldState{}
 struct HitboxMesh{
 	halfsize:Planar64Vec3,
 	mesh:PhysicsMesh,
-	transform:integer::Planar64Affine3,
-	normal_transform:Planar64Mat3,
-	transform_det:Planar64,
+	transform:PhysicsModelTransform,
 }
 impl HitboxMesh{
-	fn new(mesh:PhysicsMesh,transform:integer::Planar64Affine3)->Self{
+	fn new(mesh:PhysicsMesh,vertex_transform:integer::Planar64Affine3)->Self{
 		//calculate extents
 		let mut aabb=aabb::Aabb::default();
-		for vert in mesh.verts(){
-			aabb.grow(transform.transform_point3(vert));
+		for vert in mesh.complete_mesh_view().verts(){
+			aabb.grow(vertex_transform.transform_point3(vert));
 		}
 		Self{
 			halfsize:aabb.size()/2,
 			mesh,
-			transform,
-			normal_transform:transform.matrix3.inverse_times_det().transpose(),
-			transform_det:transform.matrix3.determinant(),
+			transform:PhysicsModelTransform::new(vertex_transform)
 		}
 	}
 	#[inline]
@@ -482,15 +477,11 @@ impl TryFrom<&gameplay_attributes::CollisionAttributes> for PhysicsCollisionAttr
 #[derive(id::Id)]
 struct PhysicsAttributesId(u32);
 
-//id assigned to deindexed IndexedPhysicsGroup
-#[derive(id::Id)]
-struct PhysicsMeshId(u32);
-#[derive(id::Id)]
-struct PhysicsGroupId(u32);
 //unique physics meshes indexed by this
+#[derive(Debug,Clone,Copy,Eq,Hash,PartialEq)]
 struct ConvexMeshId{
-	model_id:PhysicsModelId,// 1:1 with IndexedModelId
-	group_id:PhysicsGroupId,// group in model
+	model_id:PhysicsModelId,
+	submesh_id:PhysicsSubmeshId,
 }
 #[derive(Debug,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
 struct PhysicsModelId(u32);
@@ -504,37 +495,50 @@ impl From<ModelId> for PhysicsModelId{
 		Self::new(value.get())
 	}
 }
+pub struct PhysicsModelTransform{
+	vertex:integer::Planar64Affine3,
+	normal:integer::Planar64Mat3,
+	det:Planar64,
+}
+impl PhysicsModelTransform{
+	pub const fn new(vertex_transform:integer::Planar64Affine3)->Self{
+		Self{
+			normal:vertex_transform.matrix3.inverse_times_det().transpose(),
+			det:vertex_transform.matrix3.determinant(),
+			vertex:vertex_transform,
+		}
+	}
+}
 pub struct PhysicsModel{
 	//A model is a thing that has a hitbox. can be represented by a list of TreyMesh-es
 	//in this iteration, all it needs is extents.
 	mesh_id:PhysicsMeshId,
 	//put these up on the Model (data normalization)
 	attr_id:PhysicsAttributesId,
-	transform:integer::Planar64Affine3,
-	normal_transform:integer::Planar64Mat3,
-	transform_det:Planar64,
+	transform:PhysicsModelTransform,
 }
 
 impl PhysicsModel{
-	pub fn new(mesh_id:PhysicsMeshId,attr_id:PhysicsAttributesId,transform:integer::Planar64Affine3)->Self{
+	pub const fn new(mesh_id:PhysicsMeshId,attr_id:PhysicsAttributesId,transform:PhysicsModelTransform)->Self{
 		Self{
 			mesh_id,
 			attr_id,
 			transform,
-			normal_transform:transform.matrix3.inverse_times_det().transpose(),
-			transform_det:transform.matrix3.determinant(),
 		}
+	}
+	const fn transform(&self)->&PhysicsModelTransform{
+		&self.transform
 	}
 }
 
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
 struct ContactCollision{
 	face_id:model_physics::MinkowskiFace,
-	model_id:PhysicsModelId,//using id to avoid lifetimes
+	convex_mesh_id:ConvexMeshId,
 }
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
 struct IntersectCollision{
-	model_id:PhysicsModelId,
+	convex_mesh_id:ConvexMeshId,
 }
 #[derive(Debug,Clone,Eq,Hash,PartialEq)]
 enum Collision{
@@ -542,16 +546,16 @@ enum Collision{
 	Intersect(IntersectCollision),
 }
 impl Collision{
-	fn model_id(&self)->PhysicsModelId{
+	fn convex_mesh_id(&self)->ConvexMeshId{
 		match self{
-			&Collision::Contact(ContactCollision{model_id,face_id:_})
-			|&Collision::Intersect(IntersectCollision{model_id})=>model_id,
+			&Collision::Contact(ContactCollision{convex_mesh_id,face_id:_})
+			|&Collision::Intersect(IntersectCollision{convex_mesh_id})=>convex_mesh_id,
 		}
 	}
 	fn face_id(&self)->Option<model_physics::MinkowskiFace>{
 		match self{
-			&Collision::Contact(ContactCollision{model_id:_,face_id})=>Some(face_id),
-			&Collision::Intersect(IntersectCollision{model_id:_})=>None,
+			&Collision::Contact(ContactCollision{convex_mesh_id:_,face_id})=>Some(face_id),
+			&Collision::Intersect(IntersectCollision{convex_mesh_id:_})=>None,
 		}
 	}
 }
@@ -584,7 +588,7 @@ impl TouchingState{
 		}
 		//add accelerators
 		for contact in &self.contacts{
-			match models.attr(contact.model_id){
+			match models.attr(contact.convex_mesh_id.model_id){
 				PhysicsCollisionAttributes::Contact{contacting,general}=>{
 					match &general.accelerator{
 						Some(accelerator)=>a+=accelerator.acceleration,
@@ -595,7 +599,7 @@ impl TouchingState{
 			}
 		}
 		for intersect in &self.intersects{
-			match models.attr(intersect.model_id){
+			match models.attr(intersect.convex_mesh_id.model_id){
 				PhysicsCollisionAttributes::Intersect{intersecting,general}=>{
 					match &general.accelerator{
 						Some(accelerator)=>a+=accelerator.acceleration,
@@ -636,7 +640,7 @@ impl TouchingState{
 		let mut move_state=MoveState::Air;
 		let mut a=gravity;
 		for contact in &self.contacts{
-			match models.attr(contact.model_id){
+			match models.attr(contact.convex_mesh_id.model_id){
 				PhysicsCollisionAttributes::Contact{contacting,general}=>{
 					let normal=contact_normal(models,hitbox_mesh,contact);
 					match &contacting.contact_behaviour{
@@ -674,26 +678,26 @@ impl TouchingState{
 		let relative_body=VirtualBody::relative(&Body::default(),body).body(time);
 		for contact in &self.contacts{
 			//detect face slide off
-			let model_mesh=models.mesh(contact.model_id);
-			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,hitbox_mesh);
+			let model_mesh=models.mesh(contact.convex_mesh_id);
+			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(model_mesh,hitbox_mesh.transformed_mesh());
 			collector.collect(minkowski.predict_collision_face_out(&relative_body,collector.time(),contact.face_id).map(|(face,time)|{
 				TimedInstruction{
 					time,
 					instruction:PhysicsInstruction::CollisionEnd(
-						Collision::Contact(ContactCollision{model_id:contact.model_id,face_id:contact.face_id})
+						Collision::Contact(ContactCollision{convex_mesh_id:contact.convex_mesh_id,face_id:contact.face_id})
 					),
 				}
 			}));
 		}
 		for intersect in &self.intersects{
 			//detect model collision in reverse
-			let model_mesh=models.mesh(intersect.model_id);
-			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,hitbox_mesh);
+			let model_mesh=models.mesh(intersect.convex_mesh_id);
+			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(model_mesh,hitbox_mesh.transformed_mesh());
 			collector.collect(minkowski.predict_collision_out(&relative_body,collector.time()).map(|(face,time)|{
 				TimedInstruction{
 					time,
 					instruction:PhysicsInstruction::CollisionEnd(
-						Collision::Intersect(IntersectCollision{model_id:intersect.model_id})
+						Collision::Intersect(IntersectCollision{convex_mesh_id:intersect.convex_mesh_id})
 					),
 				}
 			}));
@@ -809,7 +813,7 @@ pub struct PhysicsState{
 //random collection of contextual data that doesn't belong in PhysicsState
 pub struct PhysicsData{
 	//permanent map data
-	bvh:bvh::BvhNode<PhysicsModelId>,
+	bvh:bvh::BvhNode<ConvexMeshId>,
 	modes:gameplay_modes::Modes,
 	//transient map/environment data (open world may load/unload)
 	models:PhysicsModels,
@@ -939,33 +943,47 @@ impl PhysicsContext{
 		});
 	}
 
-	pub fn generate_models(&mut self,map:&map::Map){
+	pub fn generate_models(&mut self,map:map::Map){
 		let mut starts=Vec::new();
 		let mut spawns=Vec::new();
 		let mut attr_hash=HashMap::new();
-		for model in &map.models{
-			let mesh_id=self.models.meshes.len();
+		for (model_id,model) in map.models{
+			let mesh_id=self.data.models.meshes.len();
 			let mut make_mesh=false;
 			for model_instance in &model.instances{
 				if let Ok(physics_attributes)=PhysicsCollisionAttributes::try_from(&model_instance.attributes){
 					let attr_id=if let Some(&attr_id)=attr_hash.get(&physics_attributes){
 						attr_id
 					}else{
-						let attr_id=self.models.push_attr(physics_attributes.clone());
+						let attr_id=self.data.models.push_attr(physics_attributes.clone());
 						attr_hash.insert(physics_attributes,attr_id);
 						attr_id
 					};
 					let model_physics=PhysicsModel::new(mesh_id,attr_id,model_instance.transform);
 					make_mesh=true;
-					self.models.push_model(model_physics);
+					self.data.models.push_model(model_physics);
 				}
 			}
 			if make_mesh{
-				self.models.push_mesh(PhysicsMesh::from(model));
+				self.data.models.push_mesh(PhysicsMesh::from(model));
 			}
 		}
-		self.bvh=bvh::generate_bvh(self.models.aabb_list(),|i|PhysicsModelId::new(i as u32));
-		println!("Physics Objects: {}",self.models.models.len());
+		let convex_mesh_aabb_list=self.data.models.models.iter()
+		.enumerate().flat_map(|(model_id,model)|{
+			self.data.models.meshes[model.mesh_id.get() as usize].submesh_views()
+			.enumerate().map(|(submesh_id,view)|{
+				let mut aabb=aabb::Aabb::default();
+				for v in view.verts(){
+					aabb.grow(v)
+				}
+				(ConvexMeshId{
+					model_id:PhysicsModelId::new(model_id as u32),
+					submesh_id:PhysicsSubmeshId::new(submesh_id as u32),
+				},aabb)
+			})
+		}).collect();
+		self.data.bvh=bvh::generate_bvh_node(convex_mesh_aabb_list);
+		println!("Physics Objects: {}",self.data.models.models.len());
 	}
 
 	//tickless gaming
@@ -1020,17 +1038,17 @@ impl PhysicsContext{
 		//common body
 		let relative_body=VirtualBody::relative(&Body::default(),&state.body).body(state.time);
 		let hitbox_mesh=data.hitbox_mesh.transformed_mesh();
-		data.bvh.the_tester(&aabb,&mut |id|{
+		data.bvh.the_tester(&aabb,&mut |convex_mesh_id|{
 			//no checks are needed because of the time limits.
-			let model_mesh=data.models.mesh(id);
-			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&hitbox_mesh);
+			let model_mesh=data.models.mesh(convex_mesh_id);
+			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(model_mesh,hitbox_mesh);
 			collector.collect(minkowski.predict_collision_in(&relative_body,collector.time())
 				//temp (?) code to avoid collision loops
 				.map_or(None,|(face,time)|if time==state.time{None}else{Some((face,time))})
 				.map(|(face,time)|{
-				TimedInstruction{time,instruction:PhysicsInstruction::CollisionStart(match data.models.attr(id){
-					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>Collision::Contact(ContactCollision{model_id:id,face_id:face}),
-					PhysicsCollisionAttributes::Intersect{intersecting:_,general:_}=>Collision::Intersect(IntersectCollision{model_id:id}),
+				TimedInstruction{time,instruction:PhysicsInstruction::CollisionStart(match data.models.attr(convex_mesh_id.model_id){
+					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>Collision::Contact(ContactCollision{convex_mesh_id,face_id:face}),
+					PhysicsCollisionAttributes::Intersect{intersecting:_,general:_}=>Collision::Intersect(IntersectCollision{convex_mesh_id}),
 				})}
 			}));
 		});
@@ -1053,8 +1071,8 @@ fn jumped_velocity(models:&PhysicsModels,style:&StyleModifiers,hitbox_mesh:&Hitb
 }
 
 fn contact_normal(models:&PhysicsModels,hitbox_mesh:&HitboxMesh,contact:&ContactCollision)->Planar64Vec3{
-	let model_mesh=models.mesh(contact.model_id);
-	let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&model_mesh,&hitbox_mesh.transformed_mesh());
+	let model_mesh=models.mesh(contact.convex_mesh_id);
+	let minkowski=model_physics::MinkowskiMesh::minkowski_sum(model_mesh,hitbox_mesh.transformed_mesh());
 	minkowski.face_nd(contact.face_id).0
 }
 
@@ -1116,15 +1134,15 @@ fn teleport(body:&mut Body,touching:&mut TouchingState,models:&PhysicsModels,sty
 }
 fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModifiers,hitbox_mesh:&HitboxMesh,mode:&gameplay_modes::Mode,models:&PhysicsModels,stage_id:gameplay_modes::StageId)->Option<MoveState>{
 	let model=models.model(mode.get_spawn_model_id(stage_id)?.into());
-	let point=model.transform.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(style.hitbox.halfsize.y()+Planar64::ONE/16);
+	let point=model.transform.vertex.transform_point3(Planar64Vec3::Y)+Planar64Vec3::Y*(style.hitbox.halfsize.y()+Planar64::ONE/16);
 	Some(teleport(body,touching,models,style,hitbox_mesh,point))
 }
 
-fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&mut ModeState,models:&PhysicsModels,mode:&gameplay_modes::Mode,style:&StyleModifiers,hitbox_mesh:&HitboxMesh,touching:&mut TouchingState,body:&mut Body,model_id:PhysicsModelId)->Option<MoveState>{
+fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&mut ModeState,models:&PhysicsModels,mode:&gameplay_modes::Mode,style:&StyleModifiers,hitbox_mesh:&HitboxMesh,touching:&mut TouchingState,body:&mut Body,convex_mesh_id:ConvexMeshId)->Option<MoveState>{
 	//TODO: jump count and checkpoints are always reset on teleport.
 	//Map makers are expected to use tools to prevent
 	//multi-boosting on JumpLimit boosters such as spawning into a SetVelocity
-	if let Some(stage_element)=mode.get_element(model_id.into()){
+	if let Some(stage_element)=mode.get_element(convex_mesh_id.model_id.into()){
 		let stage=mode.get_stage(stage_element.stage_id)?;
 		if stage_element.force||game.stage_id<stage_element.stage_id{
 			//TODO: check if all checkpoints are complete up to destination stage id, otherwise set to checkpoint completion stage it
@@ -1151,23 +1169,23 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 			},
 		}
 		if let Some(next_checkpoint)=stage.ordered_checkpoints.get(&game.next_ordered_checkpoint_id){
-			if model_id==next_checkpoint{
+			if convex_mesh_id==next_checkpoint{
 				//if you hit the next number in a sequence of ordered checkpoints
 				//increment the current checkpoint id
 				game.next_ordered_checkpoint_id=gameplay_modes::CheckpointId::new(game.next_ordered_checkpoint_id.get()+1);
 			}
 		}
-		if stage.unordered_checkpoints.contains(model_id.into()){
+		if stage.unordered_checkpoints.contains(convex_mesh_id.model_id.into()){
 			//count model id in accumulated unordered checkpoints
-			game.unordered_checkpoints.insert(model_id.into());
+			game.unordered_checkpoints.insert(convex_mesh_id.model_id.into());
 		}
 	}
 	match wormhole{
 		&Some(gameplay_attributes::Wormhole{destination_model})=>{
-			let origin_model=models.model(model_id);
+			let origin_model=models.model(convex_mesh_id.model_id);
 			let destination_model=models.model(destination_model.into());
 			//ignore the transform for now
-			Some(teleport(body,touching,models,style,hitbox_mesh,body.position-origin_model.transform.translation+destination_model.transform.translation))
+			Some(teleport(body,touching,models,style,hitbox_mesh,body.position-origin_model.transform.vertex.translation+destination_model.transform.vertex.translation))
 		}
 		None=>None,
 	}
@@ -1192,8 +1210,8 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 		}
 		match ins.instruction{
 			PhysicsInstruction::CollisionStart(c)=>{
-				let model_id=c.model_id();
-				match (data.models.attr(model_id),&c){
+				let convex_mesh_id=c.convex_mesh_id();
+				match (data.models.attr(convex_mesh_id.model_id),&c){
 					(PhysicsCollisionAttributes::Contact{contacting,general},Collision::Contact(contact))=>{
 						let mut v=state.body.velocity;
 						let normal=contact_normal(&data.models,&data.hitbox_mesh,contact);
@@ -1232,7 +1250,7 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 						//check ground
 						state.touching.insert(c);
 						//I love making functions with 10 arguments to dodge the borrow checker
-						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode_state.mode_id).unwrap(),&state.style,&data.hitbox_mesh,&mut state.touching,&mut state.body,model_id);
+						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode_state.mode_id).unwrap(),&state.style,&data.hitbox_mesh,&mut state.touching,&mut state.body,convex_mesh_id);
 						//flatten v
 						state.touching.constrain_velocity(&data.models,&data.hitbox_mesh,&mut v);
 						match &general.booster{
@@ -1276,13 +1294,13 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 					(PhysicsCollisionAttributes::Intersect{intersecting: _,general},Collision::Intersect(intersect))=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
 						state.touching.insert(c);
-						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode_state.mode_id).unwrap(),&state.style,&data.hitbox_mesh,&mut state.touching,&mut state.body,model_id);
+						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode_state.mode_id).unwrap(),&state.style,&data.hitbox_mesh,&mut state.touching,&mut state.body,convex_mesh_id);
 					},
 					_=>panic!("invalid pair"),
 				}
 			},
 			PhysicsInstruction::CollisionEnd(c) => {
-				match data.models.attr(c.model_id()){
+				match data.models.attr(c.convex_mesh_id().model_id){
 					PhysicsCollisionAttributes::Contact{contacting:_,general:_}=>{
 						state.touching.remove(&c);//remove contact before calling contact_constrain_acceleration
 						//check ground
@@ -1365,7 +1383,7 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 						let spawn_point={
 							let mode=data.modes.get_mode(state.mode_state.mode_id).unwrap();
 							let stage=mode.get_stage(gameplay_modes::StageId::FIRST).unwrap();
-							data.models.model(stage.spawn().into()).transform.translation
+							data.models.model(stage.spawn().into()).transform.vertex.translation
 						};
 						set_position(&mut state.body,&mut state.touching,spawn_point);
 						set_velocity(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh,Planar64Vec3::ZERO);
@@ -1409,7 +1427,7 @@ fn test_collision_rotated(relative_body:Body,expected_collision_time:Option<Time
 	let h1=HitboxMesh::roblox();
 	let hitbox_mesh=h1.transformed_mesh();
 	let platform_mesh=h0.transformed_mesh();
-	let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
+	let minkowski=model_physics::MinkowskiMesh::minkowski_sum(platform_mesh,hitbox_mesh);
 	let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
 	assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
 }
