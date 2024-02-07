@@ -3,19 +3,9 @@ use strafesnet_common::model;
 use strafesnet_common::zeroes;
 use strafesnet_common::integer::{self,Planar64,Planar64Vec3};
 
-#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
-pub struct VertId(usize);
-#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
-pub struct EdgeId(usize);
 pub trait UndirectedEdge{
 	type DirectedEdge:Copy+DirectedEdge;
 	fn as_directed(&self,parity:bool)->Self::DirectedEdge;
-}
-impl UndirectedEdge for EdgeId{
-	type DirectedEdge=DirectedEdgeId;
-	fn as_directed(&self,parity:bool)->DirectedEdgeId{
-		DirectedEdgeId(self.0|((parity as usize)<<(usize::BITS-1)))
-	}
 }
 pub trait DirectedEdge{
 	type UndirectedEdge:Copy+UndirectedEdge;
@@ -26,20 +16,32 @@ pub trait DirectedEdge{
 		self.as_undirected().as_directed(!self.parity())
 	}
 }
+
+#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
+pub struct VertId(u32);
+#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
+pub struct EdgeId(u32);
 /// DirectedEdgeId refers to an EdgeId when undirected.
 #[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
-pub struct DirectedEdgeId(usize);
+pub struct DirectedEdgeId(u32);
+#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
+pub struct FaceId(u32);
+
+impl UndirectedEdge for EdgeId{
+	type DirectedEdge=DirectedEdgeId;
+	fn as_directed(&self,parity:bool)->DirectedEdgeId{
+		DirectedEdgeId(self.0|((parity as u32)<<(u32::BITS-1)))
+	}
+}
 impl DirectedEdge for DirectedEdgeId{
 	type UndirectedEdge=EdgeId;
 	fn as_undirected(&self)->EdgeId{
-		EdgeId(self.0&!(1<<(usize::BITS-1)))
+		EdgeId(self.0&!(1<<(u32::BITS-1)))
 	}
 	fn parity(&self)->bool{
-		self.0&(1<<(usize::BITS-1))!=0
+		self.0&(1<<(u32::BITS-1))!=0
 	}
 }
-#[derive(Debug,Clone,Copy,Hash,Eq,PartialEq)]
-pub struct FaceId(usize);
 
 //Vertex <-> Edge <-> Face -> Collide
 pub enum FEV<F,E:DirectedEdge,V>{
@@ -84,11 +86,13 @@ struct VertRefs{
 	edges:Vec<DirectedEdgeId>,
 }
 struct PhysicsMeshData{
+	//this contains all real and virtual faces used in both the complete mesh and convex submeshes
+	//faces are sorted such that all faces that belong to the complete mesh appear first, and then
+	//all remaining faces are virtual to operate internal logic of the face crawler
+	//and cannot be part of a physics collision
+	//virtual faces are only used in convex submeshes.
 	faces:Vec<Face>,
 	verts:Vec<Vert>,
-	face_topology:Vec<FaceRefs>,
-	edge_topology:Vec<EdgeRefs>,
-	vert_topology:Vec<VertRefs>,
 }
 struct PhysicsMeshTopology{
 	//mapping of local ids to PhysicsMeshData ids
@@ -100,24 +104,98 @@ struct PhysicsMeshTopology{
 	vert_topology:Vec<VertRefs>,
 }
 pub struct PhysicsMesh{
-	mesh:PhysicsMeshData,
-	convex_submeshes:Vec<PhysicsMeshTopology>,
+	mesh_data:PhysicsMeshData,
+	//index 0 is the complete mesh.
+	//index 1-2+ is convex submeshes.
+	//Most objects in roblox maps are already convex, so the list length is 1
+	//as soon as the mesh is divided into 2 submeshes, the list length jumps to 3.
+	//length 2 is unnecessary since the complete mesh would be a duplicate of the only submesh, but would still function properly
+	submeshes:Vec<PhysicsMeshTopology>,
 }
 impl PhysicsMesh{
 	pub fn unit_cube()->Self{
 		//go go gadget debug print mesh
-		let mesh=PhysicsMeshData { faces: vec![Face { normal: Planar64Vec3::raw(4294967296, 0, 0), dot: Planar64::raw(4294967296) }, Face { normal: Planar64Vec3::raw(0, 4294967296, 0), dot: Planar64::raw(4294967296) }, Face { normal: Planar64Vec3::raw(0, 0, 4294967296), dot: Planar64::raw(4294967296) }, Face { normal: Planar64Vec3::raw(-4294967296, 0, 0), dot: Planar64::raw(4294967296) }, Face { normal: Planar64Vec3::raw(0, -4294967296, 0), dot: Planar64::raw(4294967296) }, Face { normal: Planar64Vec3::raw(0, 0, -4294967296), dot: Planar64::raw(4294967296) }], verts: vec![Vert(Planar64Vec3::raw(4294967296, -4294967296, -4294967296)), Vert(Planar64Vec3::raw(4294967296, 4294967296, -4294967296)), Vert(Planar64Vec3::raw(4294967296, 4294967296, 4294967296)), Vert(Planar64Vec3::raw(4294967296, -4294967296, 4294967296)), Vert(Planar64Vec3::raw(-4294967296, 4294967296, -4294967296)), Vert(Planar64Vec3::raw(-4294967296, 4294967296, 4294967296)), Vert(Planar64Vec3::raw(-4294967296, -4294967296, 4294967296)), Vert(Planar64Vec3::raw(-4294967296, -4294967296, -4294967296))]};
-		let mesh_topology=PhysicsMeshTopology { face: vec![FaceRefs { edges: vec![DirectedEdgeId(9223372036854775808), DirectedEdgeId(9223372036854775809), DirectedEdgeId(9223372036854775810), DirectedEdgeId(3)] }, FaceRefs { edges: vec![DirectedEdgeId(9223372036854775812), DirectedEdgeId(9223372036854775813), DirectedEdgeId(6), DirectedEdgeId(1)] }, FaceRefs { edges: vec![DirectedEdgeId(7), DirectedEdgeId(2), DirectedEdgeId(9223372036854775814), DirectedEdgeId(9223372036854775816)] }, FaceRefs { edges: vec![DirectedEdgeId(8), DirectedEdgeId(5), DirectedEdgeId(9223372036854775817), DirectedEdgeId(10)] }, FaceRefs { edges: vec![DirectedEdgeId(9223372036854775815), DirectedEdgeId(9223372036854775818), DirectedEdgeId(11), DirectedEdgeId(9223372036854775811)] }, FaceRefs { edges: vec![DirectedEdgeId(4), DirectedEdgeId(0), DirectedEdgeId(9223372036854775819), DirectedEdgeId(9)] }], edge: vec![EdgeRefs { faces: [FaceId(0), FaceId(5)], verts: [VertId(0), VertId(1)] }, EdgeRefs { faces: [FaceId(0), FaceId(1)], verts: [VertId(1), VertId(2)] }, EdgeRefs { faces: [FaceId(0), FaceId(2)], verts: [VertId(2), VertId(3)] }, EdgeRefs { faces: [FaceId(4), FaceId(0)], verts: [VertId(0), VertId(3)] }, EdgeRefs { faces: [FaceId(1), FaceId(5)], verts: [VertId(1), VertId(4)] }, EdgeRefs { faces: [FaceId(1), FaceId(3)], verts: [VertId(4), VertId(5)] }, EdgeRefs { faces: [FaceId(2), FaceId(1)], verts: [VertId(2), VertId(5)] }, EdgeRefs { faces: [FaceId(4), FaceId(2)], verts: [VertId(3), VertId(6)] }, EdgeRefs { faces: [FaceId(2), FaceId(3)], verts: [VertId(5), VertId(6)] }, EdgeRefs { faces: [FaceId(3), FaceId(5)], verts: [VertId(4), VertId(7)] }, EdgeRefs { faces: [FaceId(4), FaceId(3)], verts: [VertId(6), VertId(7)] }, EdgeRefs { faces: [FaceId(5), FaceId(4)], verts: [VertId(0), VertId(7)] }], vert: vec![VertRefs { faces: vec![FaceId(0), FaceId(4), FaceId(5)], edges: vec![DirectedEdgeId(9223372036854775811), DirectedEdgeId(9223372036854775819), DirectedEdgeId(9223372036854775808)] }, VertRefs { faces: vec![FaceId(0), FaceId(5), FaceId(1)], edges: vec![DirectedEdgeId(9223372036854775812), DirectedEdgeId(0), DirectedEdgeId(9223372036854775809)] }, VertRefs { faces: vec![FaceId(0), FaceId(2), FaceId(1)], edges: vec![DirectedEdgeId(1), DirectedEdgeId(9223372036854775810), DirectedEdgeId(9223372036854775814)] }, VertRefs { faces: vec![FaceId(0), FaceId(2), FaceId(4)], edges: vec![DirectedEdgeId(2), DirectedEdgeId(3), DirectedEdgeId(9223372036854775815)] }, VertRefs { faces: vec![FaceId(3), FaceId(5), FaceId(1)], edges: vec![DirectedEdgeId(4), DirectedEdgeId(9223372036854775817), DirectedEdgeId(9223372036854775813)] }, VertRefs { faces: vec![FaceId(2), FaceId(3), FaceId(1)], edges: vec![DirectedEdgeId(5), DirectedEdgeId(6), DirectedEdgeId(9223372036854775816)] }, VertRefs { faces: vec![FaceId(2), FaceId(3), FaceId(4)], edges: vec![DirectedEdgeId(7), DirectedEdgeId(8), DirectedEdgeId(9223372036854775818)] }, VertRefs { faces: vec![FaceId(4), FaceId(3), FaceId(5)], edges: vec![DirectedEdgeId(10), DirectedEdgeId(11), DirectedEdgeId(9)] }] };
+		let mesh_data=PhysicsMeshData{
+			faces:vec![
+				Face{normal:Planar64Vec3::raw( 4294967296, 0, 0),dot:Planar64::raw(4294967296)},
+				Face{normal:Planar64Vec3::raw( 0, 4294967296, 0),dot:Planar64::raw(4294967296)},
+				Face{normal:Planar64Vec3::raw( 0, 0, 4294967296),dot:Planar64::raw(4294967296)},
+				Face{normal:Planar64Vec3::raw(-4294967296, 0, 0),dot:Planar64::raw(4294967296)},
+				Face{normal:Planar64Vec3::raw( 0,-4294967296, 0),dot:Planar64::raw(4294967296)},
+				Face{normal:Planar64Vec3::raw( 0, 0,-4294967296),dot:Planar64::raw(4294967296)}
+			],
+			verts:vec![
+				Vert(Planar64Vec3::raw( 4294967296,-4294967296,-4294967296)),
+				Vert(Planar64Vec3::raw( 4294967296, 4294967296,-4294967296)),
+				Vert(Planar64Vec3::raw( 4294967296, 4294967296, 4294967296)),
+				Vert(Planar64Vec3::raw( 4294967296,-4294967296, 4294967296)),
+				Vert(Planar64Vec3::raw(-4294967296, 4294967296,-4294967296)),
+				Vert(Planar64Vec3::raw(-4294967296, 4294967296, 4294967296)),
+				Vert(Planar64Vec3::raw(-4294967296,-4294967296, 4294967296)),
+				Vert(Planar64Vec3::raw(-4294967296,-4294967296,-4294967296))
+			]
+		};
+		let mesh_topology=PhysicsMeshTopology{
+			faces:(0..mesh_data.faces.len()).map(FaceId).collect(),
+			verts:(0..mesh_data.verts.len()).map(VertId).collect(),
+			face_topology:vec![
+				FaceRefs{edges:vec![DirectedEdgeId(9223372036854775808),DirectedEdgeId(9223372036854775809),DirectedEdgeId(9223372036854775810),DirectedEdgeId(3)]},
+				FaceRefs{edges:vec![DirectedEdgeId(9223372036854775812),DirectedEdgeId(9223372036854775813),DirectedEdgeId(6),DirectedEdgeId(1)]},
+				FaceRefs{edges:vec![DirectedEdgeId(7),DirectedEdgeId(2),DirectedEdgeId(9223372036854775814),DirectedEdgeId(9223372036854775816)]},
+				FaceRefs{edges:vec![DirectedEdgeId(8),DirectedEdgeId(5),DirectedEdgeId(9223372036854775817),DirectedEdgeId(10)]},
+				FaceRefs{edges:vec![DirectedEdgeId(9223372036854775815),DirectedEdgeId(9223372036854775818),DirectedEdgeId(11),DirectedEdgeId(9223372036854775811)]},
+				FaceRefs{edges:vec![DirectedEdgeId(4),DirectedEdgeId(0),DirectedEdgeId(9223372036854775819),DirectedEdgeId(9)]}
+			],
+			edge_topology:vec![
+				EdgeRefs{faces:[FaceId(0),FaceId(5)],verts:[VertId(0),VertId(1)]}, 
+				EdgeRefs{faces:[FaceId(0),FaceId(1)],verts:[VertId(1),VertId(2)]}, 
+				EdgeRefs{faces:[FaceId(0),FaceId(2)],verts:[VertId(2),VertId(3)]}, 
+				EdgeRefs{faces:[FaceId(4),FaceId(0)],verts:[VertId(0),VertId(3)]}, 
+				EdgeRefs{faces:[FaceId(1),FaceId(5)],verts:[VertId(1),VertId(4)]}, 
+				EdgeRefs{faces:[FaceId(1),FaceId(3)],verts:[VertId(4),VertId(5)]}, 
+				EdgeRefs{faces:[FaceId(2),FaceId(1)],verts:[VertId(2),VertId(5)]}, 
+				EdgeRefs{faces:[FaceId(4),FaceId(2)],verts:[VertId(3),VertId(6)]}, 
+				EdgeRefs{faces:[FaceId(2),FaceId(3)],verts:[VertId(5),VertId(6)]}, 
+				EdgeRefs{faces:[FaceId(3),FaceId(5)],verts:[VertId(4),VertId(7)]}, 
+				EdgeRefs{faces:[FaceId(4),FaceId(3)],verts:[VertId(6),VertId(7)]}, 
+				EdgeRefs{faces:[FaceId(5),FaceId(4)],verts:[VertId(0),VertId(7)]}
+			],
+			vert_topology:vec![
+				VertRefs{faces:vec![FaceId(0),FaceId(4),FaceId(5)],edges:vec![DirectedEdgeId(9223372036854775811),DirectedEdgeId(9223372036854775819),DirectedEdgeId(9223372036854775808)]},
+				VertRefs{faces:vec![FaceId(0),FaceId(5),FaceId(1)],edges:vec![DirectedEdgeId(9223372036854775812),DirectedEdgeId(0),DirectedEdgeId(9223372036854775809)]},
+				VertRefs{faces:vec![FaceId(0),FaceId(2),FaceId(1)],edges:vec![DirectedEdgeId(1),DirectedEdgeId(9223372036854775810),DirectedEdgeId(9223372036854775814)]},
+				VertRefs{faces:vec![FaceId(0),FaceId(2),FaceId(4)],edges:vec![DirectedEdgeId(2),DirectedEdgeId(3),DirectedEdgeId(9223372036854775815)]},
+				VertRefs{faces:vec![FaceId(3),FaceId(5),FaceId(1)],edges:vec![DirectedEdgeId(4),DirectedEdgeId(9223372036854775817),DirectedEdgeId(9223372036854775813)]},
+				VertRefs{faces:vec![FaceId(2),FaceId(3),FaceId(1)],edges:vec![DirectedEdgeId(5),DirectedEdgeId(6),DirectedEdgeId(9223372036854775816)]},
+				VertRefs{faces:vec![FaceId(2),FaceId(3),FaceId(4)],edges:vec![DirectedEdgeId(7),DirectedEdgeId(8),DirectedEdgeId(9223372036854775818)]},
+				VertRefs{faces:vec![FaceId(4),FaceId(3),FaceId(5)],edges:vec![DirectedEdgeId(10),DirectedEdgeId(11),DirectedEdgeId(9)]}
+			]
+		};
 		Self{
-			mesh,
-			convex_submeshes:vec![mesh_topology],
+			mesh_data,
+			submeshes:vec![mesh_topology],
 		}
 	}
 	pub fn unit_cylinder()->Self{
 		Self::unit_cube()
 	}
+	pub fn mesh_data(&self)->&PhysicsMeshData{
+		&self.mesh_data
+	}
+	pub fn complete_mesh(&self)->&PhysicsMeshTopology{
+		&self.submeshes[0]
+	}
+	pub fn convex_submeshes(&self)->&[PhysicsMeshTopology]{
+		if self.submeshes.len()==1{
+			//the complete mesh is already a convex mesh
+			&self.submeshes[0..0]
+		}else{
+			&self.submeshes[1..]
+		}
+	}
 }
 
+//mesh builder code
 #[derive(Default,Clone)]
 struct VertRefGuy{
 	edges:std::collections::HashSet<DirectedEdgeId>,
@@ -233,9 +311,9 @@ impl From<&model::IndexedModel> for PhysicsMesh{
 	}
 }
 
-impl PhysicsMesh{
+impl PhysicsMeshView<'_>{
 	pub fn verts<'a>(&'a self)->impl Iterator<Item=Planar64Vec3>+'a{
-		self.verts.iter().map(|Vert(pos)|*pos)
+		self.mesh_data.verts.iter().map(|Vert(pos)|*pos)
 	}
 }
 impl MeshQuery<FaceId,DirectedEdgeId,VertId> for PhysicsMesh{
@@ -263,21 +341,30 @@ impl MeshQuery<FaceId,DirectedEdgeId,VertId> for PhysicsMesh{
 	}
 }
 
-pub struct TransformedMesh<'a>{
-	mesh:&'a PhysicsMesh,
+struct PhysicsMeshView<'a>{
+	mesh_data:&'a PhysicsMeshData,
+	topology:&'a PhysicsMeshTopology,
+}
+struct PhysicsMeshTransform<'a>{
 	transform:&'a integer::Planar64Affine3,
 	normal_transform:&'a integer::Planar64Mat3,
 	transform_det:Planar64,
 }
+pub struct TransformedMesh<'a>{
+	mesh:PhysicsMeshView<'a>,
+	transform:PhysicsMeshTransform<'a>,
+}
 impl TransformedMesh<'_>{
 	pub fn new<'a>(
-		mesh:&'a PhysicsMesh,
+		mesh_data:&'a PhysicsMeshData,
+		topology:&'a PhysicsMeshTopology,
 		transform:&'a integer::Planar64Affine3,
 		normal_transform:&'a integer::Planar64Mat3,
 		transform_det:Planar64,
 		)->TransformedMesh<'a>{
 		TransformedMesh{
-			mesh,
+			mesh_data,
+			topology,
 			transform,
 			normal_transform,
 			transform_det,
@@ -384,8 +471,8 @@ pub enum MinkowskiFace{
 }
 
 pub struct MinkowskiMesh<'a>{
-	mesh0:&'a TransformedMesh<'a>,
-	mesh1:&'a TransformedMesh<'a>,
+	mesh0:TransformedMesh<'a>,
+	mesh1:TransformedMesh<'a>,
 }
 
 //infinity fev algorithm state transition
@@ -399,7 +486,7 @@ enum EV{
 }
 
 impl MinkowskiMesh<'_>{
-	pub fn minkowski_sum<'a>(mesh0:&'a TransformedMesh,mesh1:&'a TransformedMesh)->MinkowskiMesh<'a>{
+	pub fn minkowski_sum<'a>(mesh0:TransformedMesh<'a>,mesh1:TransformedMesh<'a>)->MinkowskiMesh<'a>{
 		MinkowskiMesh{
 			mesh0,
 			mesh1,
