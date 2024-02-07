@@ -173,38 +173,44 @@ impl<'a,Task:Send+'a> INWorker<'a,Task>{
 	}
 }
 
-#[test]//How to run this test with printing: cargo test --release -- --nocapture
-fn test_worker() {
-	// Create the worker thread
-	let test_body=crate::physics::Body::new(crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Time::ZERO);
-	let worker=QRWorker::new(crate::physics::Body::default(),
-		|_|crate::physics::Body::new(crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Planar64Vec3::ONE,crate::integer::Time::ZERO)
-	);
+#[cfg(test)]
+mod test{
+	use super::{thread,QRWorker};
+	use crate::physics;
+	use strafesnet_common::{integer,instruction};
+	#[test]//How to run this test with printing: cargo test --release -- --nocapture
+	fn test_worker() {
+		// Create the worker thread
+		let test_body=physics::Body::new(integer::Planar64Vec3::ONE,integer::Planar64Vec3::ONE,integer::Planar64Vec3::ONE,integer::Time::ZERO);
+		let worker=QRWorker::new(physics::Body::default(),
+			|_|physics::Body::new(integer::Planar64Vec3::ONE,integer::Planar64Vec3::ONE,integer::Planar64Vec3::ONE,integer::Time::ZERO)
+		);
 
-	// Send tasks to the worker
-	for _ in 0..5 {
-		let task = strafesnet_common::instruction::TimedInstruction{
-			time:strafesnet_common::integer::Time::ZERO,
-			instruction:crate::physics::PhysicsInstruction::StrafeTick,
+		// Send tasks to the worker
+		for _ in 0..5 {
+			let task = instruction::TimedInstruction{
+				time:integer::Time::ZERO,
+				instruction:physics::PhysicsInstruction::StrafeTick,
+			};
+			worker.send(task).unwrap();
+		}
+
+		// Optional: Signal the worker to stop (in a real-world scenario)
+		// sender.send("STOP".to_string()).unwrap();
+
+		// Sleep to allow the worker thread to finish processing
+		thread::sleep(std::time::Duration::from_millis(10));
+
+		// Send a new task
+		let task = instruction::TimedInstruction{
+			time:integer::Time::ZERO,
+			instruction:physics::PhysicsInstruction::StrafeTick,
 		};
 		worker.send(task).unwrap();
+
+		//assert_eq!(test_body,worker.grab_clone());
+
+		// wait long enough to see print from final task
+		thread::sleep(std::time::Duration::from_millis(10));
 	}
-
-	// Optional: Signal the worker to stop (in a real-world scenario)
-	// sender.send("STOP".to_string()).unwrap();
-
-	// Sleep to allow the worker thread to finish processing
-	thread::sleep(std::time::Duration::from_millis(10));
-
-	// Send a new task
-	let task = strafesnet_common::instruction::TimedInstruction{
-		time:strafesnet_common::integer::Time::ZERO,
-		instruction:crate::physics::PhysicsInstruction::StrafeTick,
-	};
-	worker.send(task).unwrap();
-
-	//assert_eq!(test_body,worker.grab_clone());
-
-	// wait long enough to see print from final task
-	thread::sleep(std::time::Duration::from_millis(10));
 }
