@@ -664,7 +664,7 @@ dependencies = [
 [[package]]
 name = "id"
 version = "0.1.0"
-source = "git+https://git.itzana.me/Quaternions/id?rev=faca9fb6a8eb0c7f0e2796fbfad9eac16875cbd6#faca9fb6a8eb0c7f0e2796fbfad9eac16875cbd6"
+source = "git+https://git.itzana.me/Quaternions/id?rev=1f710976cc786c8853dab73d6e1cee53158deeb0#1f710976cc786c8853dab73d6e1cee53158deeb0"
 dependencies = [
  "proc-macro2",
  "quote",
