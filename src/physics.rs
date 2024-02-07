@@ -217,7 +217,7 @@ impl PhysicsCamera {
 	const ANGLE_PITCH_LOWER_LIMIT:Angle32=-Angle32::FRAC_PI_2;
 	const ANGLE_PITCH_UPPER_LIMIT:Angle32=Angle32::FRAC_PI_2;
 	pub fn move_mouse(&mut self,mouse_pos:glam::IVec2){
-		let mut unclamped_mouse_pos=self.clamped_mouse_pos+mouse_pos-self.mouse.pos;
+		let mut unclamped_mouse_pos=mouse_pos-self.mouse.pos+self.clamped_mouse_pos;
 		unclamped_mouse_pos.y=unclamped_mouse_pos.y.clamp(
 			self.sensitivity.y.rhs_div_int(Self::ANGLE_PITCH_LOWER_LIMIT.get() as i64) as i32,
 			self.sensitivity.y.rhs_div_int(Self::ANGLE_PITCH_UPPER_LIMIT.get() as i64) as i32,
