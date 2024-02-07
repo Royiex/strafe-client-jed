@@ -517,7 +517,7 @@ impl PhysicsGroupId{
 }
 //unique physics meshes indexed by this
 struct ConvexMeshId{
-	mesh_id:PhysicsMeshId,// 1:1 with IndexedModelId
+	model_id:PhysicsModelId,// 1:1 with IndexedModelId
 	group_id:PhysicsGroupId,// group in model
 }
 #[derive(Debug,Clone,Copy,Eq,Hash,PartialEq)]
