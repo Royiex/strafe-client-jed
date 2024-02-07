@@ -943,11 +943,11 @@ impl PhysicsContext{
 		});
 	}
 
-	pub fn generate_models(&mut self,map:map::Map){
+	pub fn generate_models(&mut self,map:&map::Map){
 		let mut starts=Vec::new();
 		let mut spawns=Vec::new();
 		let mut attr_hash=HashMap::new();
-		for (model_id,model) in map.models{
+		for (&model_id,model) in &map.models{
 			let mesh_id=self.data.models.meshes.len();
 			let mut make_mesh=false;
 			for model_instance in &model.instances{

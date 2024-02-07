@@ -28,7 +28,7 @@ pub fn new<'a>(
 	crate::compat_worker::INWorker::new(move |ins:Instruction|{
 		match ins{
 			Instruction::GenerateModels(indexed_model_instances)=>{
-				graphics.generate_models(&device,&queue,indexed_model_instances);
+				graphics.generate_models(&device,&queue,&indexed_model_instances);
 			},
 			Instruction::ClearModels=>{
 				graphics.clear();
