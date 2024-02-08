@@ -1,5 +1,6 @@
 use std::borrow::{Borrow,Cow};
-use strafesnet_common::model;
+use std::collections::{HashSet,HashMap};
+use strafesnet_common::model::{self,PolygonIter};
 use strafesnet_common::zeroes;
 use strafesnet_common::integer::{self,Planar64,Planar64Vec3};
 
@@ -56,6 +57,7 @@ pub enum FEV<F,E:DirectedEdge,V>{
 }
 
 //use Unit32 #[repr(C)] for map files
+#[derive(Clone,Hash,Eq,PartialEq)]
 struct Face{
 	normal:Planar64Vec3,
 	dot:Planar64,
@@ -188,21 +190,28 @@ impl PhysicsMesh{
 	pub fn unit_cylinder()->Self{
 		Self::unit_cube()
 	}
-	pub fn mesh_data(&self)->&PhysicsMeshData{
+	#[inline]
+	pub const fn mesh_data(&self)->&PhysicsMeshData{
 		&self.data
 	}
-	pub fn complete_mesh(&self)->&PhysicsMeshTopology{
+	#[inline]
+	pub const fn complete_mesh(&self)->&PhysicsMeshTopology{
 		&self.submeshes[0]
 	}
-	pub fn submeshes(&self)->&[PhysicsMeshTopology]{
-		if self.submeshes.len()==1{
-			//the complete mesh is already a convex mesh
-			&self.submeshes[0..0]
-		}else{
-			&self.submeshes[1..]
+	#[inline]
+	pub const fn complete_mesh_view(&self)->PhysicsMeshView{
+		PhysicsMeshView{
+			data:&self.data,
+			topology:self.complete_mesh(),
 		}
 	}
-	pub fn submesh_view(&self,submesh_id:PhysicsSubmeshId)->PhysicsMeshView{
+	#[inline]
+	pub const fn submeshes(&self)->&[PhysicsMeshTopology]{
+		//the complete mesh is already a convex mesh when len()==1, len()==2 is invalid but will still work
+		&self.submeshes[self.submeshes.len().saturating_sub(1).min(1)..]
+	}
+	#[inline]
+	pub const fn submesh_view(&self,submesh_id:PhysicsSubmeshId)->PhysicsMeshView{
 		PhysicsMeshView{
 			data:&self.data,
 			topology:&self.submeshes()[submesh_id.get() as usize],
@@ -219,13 +228,13 @@ impl PhysicsMesh{
 //mesh builder code
 #[derive(Default,Clone)]
 struct VertRefGuy{
-	edges:std::collections::HashSet<SubmeshDirectedEdgeId>,
-	faces:std::collections::HashSet<SubmeshFaceId>,
+	edges:HashSet<SubmeshDirectedEdgeId>,
+	faces:HashSet<SubmeshFaceId>,
 }
 #[derive(Clone,Hash,Eq,PartialEq)]
 struct EdgeRefVerts([SubmeshVertId;2]);
 impl EdgeRefVerts{
-	fn new(v0:SubmeshVertId,v1:SubmeshVertId)->(Self,bool){
+	const fn new(v0:SubmeshVertId,v1:SubmeshVertId)->(Self,bool){
 		(if v0.0<v1.0{
 			Self([v0,v1])
 		}else{
@@ -235,10 +244,10 @@ impl EdgeRefVerts{
 }
 struct EdgeRefFaces([SubmeshFaceId;2]);
 impl EdgeRefFaces{
-	fn new()->Self{
+	const fn new()->Self{
 		Self([SubmeshFaceId(0);2])
 	}
-	fn push(&mut self,i:usize,face_id:SubmeshFaceId){
+	const fn push(&mut self,i:usize,face_id:SubmeshFaceId){
 		self.0[i]=face_id;
 	}
 }
@@ -246,88 +255,126 @@ struct FaceRefEdges(Vec<SubmeshDirectedEdgeId>);
 #[derive(Default)]
 struct EdgePool{
 	edge_guys:Vec<(EdgeRefVerts,EdgeRefFaces)>,
-	edge_id_from_guy:std::collections::HashMap<EdgeRefVerts,usize>,
+	edge_id_from_guy:HashMap<EdgeRefVerts,SubmeshEdgeId>,
 }
 impl EdgePool{
 	fn push(&mut self,edge_ref_verts:EdgeRefVerts)->(&mut EdgeRefFaces,SubmeshEdgeId){
 		let edge_id=if let Some(&edge_id)=self.edge_id_from_guy.get(&edge_ref_verts){
 			edge_id
 		}else{
-			let edge_id=self.edge_guys.len();
+			let edge_id=SubmeshEdgeId::new(self.edge_guys.len() as u32);
 			self.edge_guys.push((edge_ref_verts.clone(),EdgeRefFaces::new()));
 			self.edge_id_from_guy.insert(edge_ref_verts,edge_id);
 			edge_id
 		};
-		(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,SubmeshEdgeId::new(edge_id as u32))
+		(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id.get() as usize)}.1,edge_id)
 	}
 }
 impl From<&model::Mesh> for PhysicsMesh{
-	fn from(indexed_model:&model::Mesh)->Self{
-		assert!(indexed_model.unique_pos.len()!=0,"Mesh cannot have 0 vertices");
-		let verts=indexed_model.unique_pos.iter().map(|v|Vert(v.clone())).collect();
-		let mut vert_ref_guys=vec![VertRefGuy::default();indexed_model.unique_pos.len()];
-		let mut edge_pool=EdgePool::default();
-		let mut face_i=0;
+	fn from(mesh:&model::Mesh)->Self{
+		assert!(mesh.unique_pos.len()!=0,"Mesh cannot have 0 vertices");
+		let verts=mesh.unique_pos.into_iter().map(Vert).collect();
 		let mut faces=Vec::new();
-		let mut face_ref_guys=Vec::new();
-		for group in &indexed_model.polygon_groups{for poly_vertices in group.polys(){
-			let face_id=SubmeshFaceId::new(face_i);
-			//one face per poly
-			let mut normal=Planar64Vec3::ZERO;
-			let len=poly_vertices.len();
-			let face_edges=poly_vertices.iter().enumerate().map(|(i,&vert_id)|{
-				let vert0_id=indexed_model.unique_vertices[vert_id.get() as usize].pos.get() as usize;
-				let vert1_id=indexed_model.unique_vertices[poly_vertices[(i+1)%len].get() as usize].pos.get() as usize;
-				//https://www.khronos.org/opengl/wiki/Calculating_a_Surface_Normal (Newell's Method)
-				let v0=indexed_model.unique_pos[vert0_id];
-				let v1=indexed_model.unique_pos[vert1_id];
-				normal+=Planar64Vec3::new(
-					(v0.y()-v1.y())*(v0.z()+v1.z()),
-					(v0.z()-v1.z())*(v0.x()+v1.x()),
-					(v0.x()-v1.x())*(v0.y()+v1.y()),
-				);
-				//get/create edge and push face into it
-				let (edge_ref_verts,is_sorted)=EdgeRefVerts::new(SubmeshVertId::new(vert0_id as u32),SubmeshVertId::new(vert1_id as u32));
-				let (edge_ref_faces,edge_id)=edge_pool.push(edge_ref_verts);
-				//polygon vertices as assumed to be listed clockwise
-				//populate the edge face on the left or right depending on how the edge vertices got sorted
-				edge_ref_faces.push(!is_sorted as usize,face_id);
-				//index edges & face into vertices
-				{
-					let vert_ref_guy=unsafe{vert_ref_guys.get_unchecked_mut(vert0_id)};
-					vert_ref_guy.edges.insert(edge_id.as_directed(is_sorted));
-					vert_ref_guy.faces.insert(face_id);
-					unsafe{vert_ref_guys.get_unchecked_mut(vert1_id)}.edges.insert(edge_id.as_directed(!is_sorted));
+		let mut face_id_from_face=HashMap::new();
+		let submeshes=mesh.physics_groups.iter().enumerate().map(|(submesh_id,physics_group)|{
+			//construct submesh
+			let mut submesh_faces=Vec::new();//these contain a map from submeshId->meshId
+			let mut submesh_verts=Vec::new();
+			let mut submesh_vert_id_from_mesh_vert_id=HashMap::<MeshVertId,SubmeshVertId>::new();
+			//lazy closure
+			let get_submesh_vert_id=|vert_id:MeshVertId|{
+				if let Some(&submesh_vert_id)=submesh_vert_id_from_mesh_vert_id.get(&vert_id){
+					submesh_vert_id
+				}else{
+					let submesh_vert_id=SubmeshVertId::new(vert_id.get() as u32);
+					submesh_vert_id_from_mesh_vert_id.insert(vert_id,submesh_vert_id);
+					submesh_vert_id
 				}
-				//return directed_edge_id
-				edge_id.as_directed(is_sorted)
-			}).collect();
-			//choose precision loss randomly idk
-			normal=normal/len as i64;
-			let mut dot=Planar64::ZERO;
-			for &v in poly_vertices{
-				dot+=normal.dot(indexed_model.unique_pos[indexed_model.unique_vertices[v.get() as usize].pos.get() as usize]);
+			};
+			let mut edge_pool=EdgePool::default();
+			let mut vert_ref_guys=vec![VertRefGuy::default();mesh.unique_pos.len()];
+			let mut face_ref_guys=Vec::new();
+			let submesh_id=PhysicsSubmeshId::new(submesh_id as u32);
+			for polygon_group_id in &physics_group.groups{
+				let polygon_group=mesh.polygon_groups[polygon_group_id.get() as usize];
+				for poly_vertices in polygon_group.polys(){
+					let submesh_face_id=SubmeshFaceId::new(submesh_faces.len() as u32);
+					//one face per poly
+					let mut normal=Planar64Vec3::ZERO;
+					let len=poly_vertices.len();
+					let face_edges=poly_vertices.into_iter().enumerate().map(|(i,vert_id)|{
+						let vert0_id=MeshVertId::new(mesh.unique_vertices[vert_id.get() as usize].pos.get() as u32);
+						let vert1_id=MeshVertId::new(mesh.unique_vertices[poly_vertices[(i+1)%len].get() as usize].pos.get() as u32);
+						//index submesh verts
+						let submesh_vert0_id=get_submesh_vert_id(vert0_id);
+						let submesh_vert1_id=get_submesh_vert_id(vert1_id);
+						//https://www.khronos.org/opengl/wiki/Calculating_a_Surface_Normal (Newell's Method)
+						let v0=mesh.unique_pos[vert0_id.get() as usize];
+						let v1=mesh.unique_pos[vert1_id.get() as usize];
+						normal+=Planar64Vec3::new(
+							(v0.y()-v1.y())*(v0.z()+v1.z()),
+							(v0.z()-v1.z())*(v0.x()+v1.x()),
+							(v0.x()-v1.x())*(v0.y()+v1.y()),
+						);
+						//get/create edge and push face into it
+						let (edge_ref_verts,is_sorted)=EdgeRefVerts::new(submesh_vert0_id,submesh_vert1_id);
+						let (edge_ref_faces,edge_id)=edge_pool.push(edge_ref_verts);
+						//polygon vertices as assumed to be listed clockwise
+						//populate the edge face on the left or right depending on how the edge vertices got sorted
+						edge_ref_faces.push(!is_sorted as usize,submesh_face_id);
+						//index edges & face into vertices
+						{
+							let vert_ref_guy=unsafe{vert_ref_guys.get_unchecked_mut(submesh_vert0_id.get() as usize)};
+							vert_ref_guy.edges.insert(edge_id.as_directed(is_sorted));
+							vert_ref_guy.faces.insert(submesh_face_id);
+							unsafe{vert_ref_guys.get_unchecked_mut(submesh_vert1_id.get() as usize)}.edges.insert(edge_id.as_directed(!is_sorted));
+						}
+						//return directed_edge_id
+						edge_id.as_directed(is_sorted)
+					}).collect();
+					//choose precision loss randomly idk
+					normal=normal/len as i64;
+					let mut dot=Planar64::ZERO;
+					for &v in poly_vertices{
+						dot+=normal.dot(mesh.unique_pos[mesh.unique_vertices[v.get() as usize].pos.get() as usize]);
+					}
+					let face=Face{normal,dot:dot/len as i64};
+					let face_id=match face_id_from_face.get(&face){
+						Some(&face_id)=>face_id,
+						None=>{
+							let face_id=MeshFaceId::new(faces.len() as u32);
+							face_id_from_face.insert(face,face_id);
+							faces.push(face);
+							face_id
+						}
+					};
+					submesh_faces.push(face_id);
+					face_ref_guys.push(FaceRefEdges(face_edges));
+				}
 			}
-			faces.push(Face{normal,dot:dot/len as i64});
-			face_ref_guys.push(FaceRefEdges(face_edges));
-			face_i+=1;
-		}}
-		//conceivably faces, edges, and vertices exist now
+			PhysicsMeshTopology{
+				faces:submesh_faces,
+				verts:submesh_verts,
+				face_topology:face_ref_guys.into_iter().map(|face_ref_guy|{
+					FaceRefs{edges:face_ref_guy.0}
+				}).collect(),
+				edge_topology:edge_pool.edge_guys.into_iter().map(|(edge_ref_verts,edge_ref_faces)|
+					EdgeRefs{faces:edge_ref_faces.0,verts:edge_ref_verts.0}
+				).collect(),
+				vert_topology:vert_ref_guys.into_iter().map(|vert_ref_guy|
+					VertRefs{
+						edges:vert_ref_guy.edges.into_iter().collect(),
+						faces:vert_ref_guy.faces.into_iter().collect(),
+					}
+				).collect(),
+			}
+		}).collect();
 		Self{
-			faces,
-			verts,
-			face_topology:face_ref_guys.into_iter().map(|face_ref_guy|{
-				FaceRefs{edges:face_ref_guy.0}
-			}).collect(),
-			edge_topology:edge_pool.edge_guys.into_iter().map(|(edge_ref_verts,edge_ref_faces)|
-				EdgeRefs{faces:edge_ref_faces.0,verts:edge_ref_verts.0}
-			).collect(),
-			vert_topology:vert_ref_guys.into_iter().map(|vert_ref_guy|
-				VertRefs{
-					edges:vert_ref_guy.edges.into_iter().collect(),
-					faces:vert_ref_guy.faces.into_iter().collect(),
-				}
-			).collect(),
+			data:PhysicsMeshData{
+				faces,
+				verts,
+			},
+			submeshes,
 		}
 	}
 }
