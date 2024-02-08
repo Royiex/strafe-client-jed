@@ -1,6 +1,6 @@
 use std::borrow::{Borrow,Cow};
 use std::collections::{HashSet,HashMap};
-use strafesnet_common::model::{self,PolygonIter};
+use strafesnet_common::model::{self,MeshId,PolygonIter};
 use strafesnet_common::zeroes;
 use strafesnet_common::integer::{self,Planar64,Planar64Vec3};
 
@@ -110,8 +110,18 @@ struct PhysicsMeshTopology{
 	edge_topology:Vec<EdgeRefs>,
 	vert_topology:Vec<VertRefs>,
 }
-#[derive(id::Id)]
+#[derive(Hash,id::Id,Eq,PartialEq)]
 pub struct PhysicsMeshId(u32);
+impl Into<MeshId> for PhysicsMeshId{
+	fn into(self)->MeshId{
+		MeshId::new(self.0)
+	}
+}
+impl From<MeshId> for PhysicsMeshId{
+	fn from(value:MeshId)->Self{
+		Self::new(value.get())
+	}
+}
 #[derive(Debug,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
 pub struct PhysicsSubmeshId(u32);
 pub struct PhysicsMesh{
@@ -417,9 +427,9 @@ impl MeshQuery<SubmeshFaceId,SubmeshDirectedEdgeId,SubmeshVertId> for PhysicsMes
 }
 
 pub struct PhysicsMeshTransform{
-	vertex:integer::Planar64Affine3,
-	normal:integer::Planar64Mat3,
-	det:Planar64,
+	pub vertex:integer::Planar64Affine3,
+	pub normal:integer::Planar64Mat3,
+	pub det:Planar64,
 }
 impl PhysicsMeshTransform{
 	pub const fn new(transform:integer::Planar64Affine3)->Self{

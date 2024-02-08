@@ -6,7 +6,7 @@ use strafesnet_common::bvh;
 use strafesnet_common::map;
 use strafesnet_common::aabb;
 use strafesnet_common::gameplay_modes;
-use strafesnet_common::gameplay_attributes;
+use strafesnet_common::gameplay_attributes::{self,CollisionAttributesId};
 use strafesnet_common::model::ModelId;
 use strafesnet_common::gameplay_style::{self,StyleModifiers};
 use strafesnet_common::instruction::{self,InstructionEmitter,InstructionConsumer,TimedInstruction};
@@ -170,17 +170,17 @@ impl PhysicsModels{
 	//TODO: "statically" verify the maps don't refer to any nonexistant data, if they do delete the references.
 	//then I can make these getter functions unchecked.
 	fn mesh(&self,convex_mesh_id:ConvexMeshId)->TransformedMesh{
-		let model_idx=convex_mesh_id.model_id.get() as usize;
+		let model=self.models[&convex_mesh_id.model_id];
 		TransformedMesh::new(
-			self.meshes[model_idx].submesh_view(convex_mesh_id.submesh_id),
-			&self.models[model_idx].transform
+			self.meshes[&model.mesh_id].submesh_view(convex_mesh_id.submesh_id),
+			&model.transform
 		)
 	}
 	fn model(&self,model_id:PhysicsModelId)->&PhysicsModel{
-		&self.models[model_id.get() as usize]
+		&self.models[&model_id]
 	}
 	fn attr(&self,model_id:PhysicsModelId)->&PhysicsCollisionAttributes{
-		&self.attributes[self.models[model_id.get() as usize].attr_id.get() as usize]
+		&self.attributes[&self.models[&model_id].attr_id]
 	}
 	fn push_mesh(&mut self,mesh:PhysicsMesh){
 		self.meshes.push(mesh);
@@ -470,9 +470,18 @@ impl TryFrom<&gameplay_attributes::CollisionAttributes> for PhysicsCollisionAttr
 		}
 	}
 }
-#[derive(id::Id)]
+#[derive(Hash,id::Id,Eq,PartialEq)]
 struct PhysicsAttributesId(u32);
-
+impl Into<CollisionAttributesId> for PhysicsAttributesId{
+	fn into(self)->CollisionAttributesId{
+		CollisionAttributesId::new(self.0)
+	}
+}
+impl From<CollisionAttributesId> for PhysicsAttributesId{
+	fn from(value:CollisionAttributesId)->Self{
+		Self::new(value.get())
+	}
+}
 //unique physics meshes indexed by this
 #[derive(Debug,Clone,Copy,Eq,Hash,PartialEq)]
 struct ConvexMeshId{
