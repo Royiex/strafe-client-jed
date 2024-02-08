@@ -1,5 +1,5 @@
-use bytemuck::{Pod, Zeroable};
-use strafesnet_common::model::{IndexedVertex,PolygonGroup};
+use bytemuck::{Pod,Zeroable};
+use strafesnet_common::model::{IndexedVertex,PolygonGroup,RenderConfigId,TextureId};
 #[derive(Clone,Copy,Pod,Zeroable)]
 #[repr(C)]
 pub struct GraphicsVertex{
@@ -8,43 +8,32 @@ pub struct GraphicsVertex{
 	pub normal:[f32;3],
 	pub color:[f32;4],
 }
-pub struct IndexedGroupFixedTexture{
-	pub polys:Vec<PolygonGroup>,
-}
-pub struct IndexedGraphicsModelSingleTexture{
+#[derive(id::Id)]
+pub struct IndexedGraphicsMeshOwnedRenderConfigId(u32);
+pub struct IndexedGraphicsMeshOwnedRenderConfig{
 	pub unique_pos:Vec<[f32;3]>,
 	pub unique_tex:Vec<[f32;2]>,
 	pub unique_normal:Vec<[f32;3]>,
 	pub unique_color:Vec<[f32;4]>,
 	pub unique_vertices:Vec<IndexedVertex>,
-	pub texture:Option<u32>,//RenderPattern? material/texture/shader/flat color
-	pub groups:Vec<IndexedGroupFixedTexture>,
-	pub instances:Vec<GraphicsModelInstance>,
+	pub render_config:RenderConfigId,
+	pub polys:PolygonGroup,
+	pub instances:Vec<GraphicsModelOwned>,
 }
-pub enum Entities{
-	U32(Vec<Vec<u32>>),
-	U16(Vec<Vec<u16>>),
+pub enum Indices{
+	U32(Vec<u32>),
+	U16(Vec<u16>),
 }
-pub struct GraphicsModelSingleTexture{
-	pub instances:Vec<GraphicsModelInstance>,
+pub struct GraphicsMeshOwnedRenderConfig{
 	pub vertices:Vec<GraphicsVertex>,
-	pub entities:Entities,
-	pub texture:Option<u32>,
+	pub indices:Indices,
+	pub render_config:RenderConfigId,
+	pub instances:Vec<GraphicsModelOwned>,
 }
-#[derive(Clone,PartialEq)]
+#[derive(Clone,PartialEq,id::Id)]
 pub struct GraphicsModelColor4(glam::Vec4);
-impl GraphicsModelColor4{
-	pub const fn get(&self)->glam::Vec4{
-		self.0
-	}
-}
-impl From<glam::Vec4> for GraphicsModelColor4{
-	fn from(value:glam::Vec4)->Self{
-		Self(value)
-	}
-}
 impl std::hash::Hash for GraphicsModelColor4{
-	fn hash<H: std::hash::Hasher>(&self,state:&mut H) {
+	fn hash<H:std::hash::Hasher>(&self,state:&mut H) {
 		for &f in self.0.as_ref(){
 			bytemuck::cast::<f32,u32>(f).hash(state);
 		}
@@ -52,7 +41,7 @@ impl std::hash::Hash for GraphicsModelColor4{
 }
 impl Eq for GraphicsModelColor4{}
 #[derive(Clone)]
-pub struct GraphicsModelInstance{
+pub struct GraphicsModelOwned{
 	pub transform:glam::Mat4,
 	pub normal_transform:glam::Mat3,
 	pub color:GraphicsModelColor4,

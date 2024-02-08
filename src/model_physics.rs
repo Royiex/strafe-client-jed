@@ -261,8 +261,8 @@ impl EdgePool{
 		(&mut unsafe{self.edge_guys.get_unchecked_mut(edge_id)}.1,SubmeshEdgeId::new(edge_id as u32))
 	}
 }
-impl From<&model::IndexedModel> for PhysicsMesh{
-	fn from(indexed_model:&model::IndexedModel)->Self{
+impl From<&model::Mesh> for PhysicsMesh{
+	fn from(indexed_model:&model::Mesh)->Self{
 		assert!(indexed_model.unique_pos.len()!=0,"Mesh cannot have 0 vertices");
 		let verts=indexed_model.unique_pos.iter().map(|v|Vert(v.clone())).collect();
 		let mut vert_ref_guys=vec![VertRefGuy::default();indexed_model.unique_pos.len()];

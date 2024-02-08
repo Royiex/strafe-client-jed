@@ -18,7 +18,7 @@ pub enum Instruction{
 	Input(InputInstruction),
 	Render,
 	Resize(winit::dpi::PhysicalSize<u32>,crate::settings::UserSettings),
-	GenerateModels(strafesnet_common::map::Map),
+	GenerateModels(strafesnet_common::map::CompleteMap),
 	ClearModels,
 	//Graphics(crate::graphics_worker::Instruction),
 }
