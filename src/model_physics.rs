@@ -338,6 +338,7 @@ impl From<&model::Mesh> for PhysicsMesh{
 					for &v in poly_vertices{
 						dot+=normal.dot(mesh.unique_pos[mesh.unique_vertices[v.get() as usize].pos.get() as usize]);
 					}
+					//assume face hash is stable, and there are no flush faces...
 					let face=Face{normal,dot:dot/len as i64};
 					let face_id=match face_id_from_face.get(&face){
 						Some(&face_id)=>face_id,

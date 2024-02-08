@@ -250,6 +250,7 @@ impl GraphicsState{
 						});
 						texture_index
 					};
+					//this utm_id is going to take a lot of hashing to generate!
 					unique_texture_models[utm_id.get() as usize].instances.push(instance);
 				}
 			}
