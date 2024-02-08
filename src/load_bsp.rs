@@ -16,12 +16,6 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 		Ok(bsp)=>{
 			let mut spawn_point=integer::Planar64Vec3::ZERO;
 
-			let vertices: Vec<_> = bsp
-				.vertices
-				.iter()
-				.map(|vertex|<[f32;3]>::from(vertex.position))
-				.collect();
-
 			let mut name_from_texture_id=Vec::new();
 			let mut texture_id_from_name=std::collections::HashMap::new();
 
@@ -54,10 +48,11 @@ pub fn generate_indexed_models<R:std::io::Read+std::io::Seek>(input:&mut R)->Res
 					let normal=face.normal();
 					let normal_idx=spam_normal.len() as u32;
 					spam_normal.push(valve_transform(<[f32;3]>::from(normal)));
-					let mut vertices:Vec<u32>=face.vertex_indexes().map(|vertex_index|{
-						let pos=glam::Vec3A::from_array(vertices[vertex_index as usize]);
+					let mut vertices:Vec<u32>=face.vertex_positions().map(|vertex_pos|{
+						let vertex_xyz=<[f32;3]>::from(vertex_pos);
+						let pos=glam::Vec3A::from_array(vertex_xyz);
 						let pos_idx=spam_pos.len();
-						spam_pos.push(valve_transform(vertices[vertex_index as usize]));
+						spam_pos.push(valve_transform(vertex_xyz));
 
 						//calculate texture coordinates
 						let tex=(glam::vec2(pos.dot(texture_u),pos.dot(texture_v))+texture_offset)/texture_size;
