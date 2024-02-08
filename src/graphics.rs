@@ -221,7 +221,7 @@ impl GraphicsState{
 		for model in indexed_models.models.into_iter(){
 			//convert ModelInstance into GraphicsModelInstance
 			let instances:Vec<GraphicsModelInstance>=model.instances.into_iter().filter_map(|instance|{
-				if instance.color.w==0.0{
+				if instance.color.w==0.0&&!model.groups.iter().any(|g|g.texture.is_some()){
 					None
 				}else{
 					Some(GraphicsModelInstance{
