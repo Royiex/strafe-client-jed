@@ -935,40 +935,29 @@ impl PhysicsContext{
 	}
 
 	pub fn generate_models(&mut self,map:&map::CompleteMap){
-		let mut starts=Vec::new();
-		let mut spawns=Vec::new();
-		let mut attr_hash=HashMap::new();
-		for model in &map.models{
-			let mesh_id=self.data.models.meshes.len();
-			let mut make_mesh=false;
-			for model_instance in &model.instances{
-				if let Ok(physics_attributes)=PhysicsCollisionAttributes::try_from(&model_instance.attributes){
-					let attr_id=if let Some(&attr_id)=attr_hash.get(&physics_attributes){
-						attr_id
-					}else{
-						let attr_id=self.data.models.push_attr(physics_attributes.clone());
-						attr_hash.insert(physics_attributes,attr_id);
-						attr_id
-					};
-					let model_physics=PhysicsModel::new(mesh_id,attr_id,model_instance.transform);
-					make_mesh=true;
-					self.data.models.push_model(model_physics);
-				}
-			}
-			if make_mesh{
-				self.data.models.push_mesh(PhysicsMesh::from(model));
-			}
-		}
+		self.data.modes=map.modes.clone();
+		self.data.models.attributes=map.attributes
+		.iter().enumerate().filter_map(|(attr_id,m_attr)|
+			PhysicsCollisionAttributes::try_from(m_attr).ok().map(|p_attr|
+				(PhysicsAttributesId::new(attr_id as u32),p_attr)
+			)
+		).collect();
+		self.data.models.meshes=map.meshes.iter().enumerate().map(|(mesh_id,mesh)|
+			(PhysicsMeshId::new(mesh_id as u32),PhysicsMesh::from(mesh))
+		).collect();
+		self.data.models.models=map.models.iter().enumerate().map(|(model_id,model)|
+			(PhysicsModelId::new(model_id as u32),PhysicsModel::new(model.mesh.into(),model.attributes.into(),PhysicsMeshTransform::new(model.transform)))
+		).collect();
 		let convex_mesh_aabb_list=self.data.models.models.iter()
-		.enumerate().flat_map(|(model_id,model)|{
-			self.data.models.meshes[model.mesh_id.get() as usize].submesh_views()
+		.flat_map(|(&model_id,model)|{
+			self.data.models.meshes[&model.mesh_id].submesh_views()
 			.enumerate().map(|(submesh_id,view)|{
 				let mut aabb=aabb::Aabb::default();
 				for v in view.verts(){
 					aabb.grow(v)
 				}
 				(ConvexMeshId{
-					model_id:PhysicsModelId::new(model_id as u32),
+					model_id,
 					submesh_id:PhysicsSubmeshId::new(submesh_id as u32),
 				},aabb)
 			})
