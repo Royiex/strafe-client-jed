@@ -14,7 +14,6 @@ id = { git = "https://git.itzana.me/Quaternions/id", rev = "1f710976cc786c8853da
 parking_lot = "0.12.1"
 pollster = "0.3.0"
 strafesnet_common = { git = "https://git.itzana.me/StrafesNET/common", rev = "c915cdfc0ae1f2c934ebf06b826b05401faa3ad0" }
-strafesnet_snf = { git = "https://git.itzana.me/StrafesNET/snf", rev = "856386e9bf29c337cfaef8774c71a18a2ee06ce2" }
 strafesnet_rbx_loader = { git = "https://git.itzana.me/StrafesNET/rbx_loader", rev = "4be9e44627b3498236203cf2743c7ff49fc25873" }
 wgpu = "0.19.0"
 winit = "0.29.2"
