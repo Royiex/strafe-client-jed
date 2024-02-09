@@ -13,8 +13,8 @@ glam = "0.25.0"
 id = { git = "https://git.itzana.me/Quaternions/id", rev = "1f710976cc786c8853dab73d6e1cee53158deeb0" }
 parking_lot = "0.12.1"
 pollster = "0.3.0"
-strafesnet_common = { git = "https://git.itzana.me/StrafesNET/common", rev = "a1fa2c278174dabbb56db1d814340611dab67575" }
-strafesnet_snf = { git = "https://git.itzana.me/StrafesNET/snf", rev = "dea408daeef576cff8ffa61356c89a9d03d95f6b" }
+strafesnet_common = { git = "https://git.itzana.me/StrafesNET/common", rev = "c915cdfc0ae1f2c934ebf06b826b05401faa3ad0" }
+strafesnet_snf = { git = "https://git.itzana.me/StrafesNET/snf", rev = "856386e9bf29c337cfaef8774c71a18a2ee06ce2" }
 wgpu = "0.19.0"
 winit = "0.29.2"
 

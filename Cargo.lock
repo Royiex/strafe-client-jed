@@ -1304,7 +1304,7 @@ dependencies = [
 [[package]]
 name = "strafesnet_common"
 version = "0.1.0"
-source = "git+https://git.itzana.me/StrafesNET/common?rev=a1fa2c278174dabbb56db1d814340611dab67575#a1fa2c278174dabbb56db1d814340611dab67575"
+source = "git+https://git.itzana.me/StrafesNET/common?rev=c915cdfc0ae1f2c934ebf06b826b05401faa3ad0#c915cdfc0ae1f2c934ebf06b826b05401faa3ad0"
 dependencies = [
  "glam",
  "id",
@@ -1313,9 +1313,11 @@ dependencies = [
 [[package]]
 name = "strafesnet_snf"
 version = "0.1.0"
-source = "git+https://git.itzana.me/StrafesNET/snf?rev=dea408daeef576cff8ffa61356c89a9d03d95f6b#dea408daeef576cff8ffa61356c89a9d03d95f6b"
+source = "git+https://git.itzana.me/StrafesNET/snf?rev=856386e9bf29c337cfaef8774c71a18a2ee06ce2#856386e9bf29c337cfaef8774c71a18a2ee06ce2"
 dependencies = [
  "binrw",
+ "id",
+ "strafesnet_common",
 ]
 
 [[package]]
