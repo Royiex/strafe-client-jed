@@ -1041,7 +1041,7 @@ impl PhysicsContext{
 				},aabb)
 			})
 		}).collect();
-		self.data.bvh=bvh::generate_bvh_node(convex_mesh_aabb_list);
+		self.data.bvh=bvh::generate_bvh(convex_mesh_aabb_list);
 		println!("Physics Objects: {}",self.data.models.models.len());
 	}
 
