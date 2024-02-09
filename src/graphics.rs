@@ -204,9 +204,8 @@ impl GraphicsState{
 		//the models received here are supposed to be tightly packed,i.e. no code needs to check if two models are using the same groups.
 		let indexed_models_len=map.models.len();
 		//models split into graphics_group.RenderConfigId
-		let mut map_map:HashMap<model::MeshId,HashMap<RenderConfigId,IndexedGraphicsMeshOwnedRenderConfigId>>=HashMap::new();
-		let mut map_unique_textures=HashMap::new();
-		let mut unique_texture_models=Vec::with_capacity(indexed_models_len);
+		let mut owned_mesh_id_from_mesh_id_render_config_id:HashMap<model::MeshId,HashMap<RenderConfigId,IndexedGraphicsMeshOwnedRenderConfigId>>=HashMap::new();
+		let mut unique_render_config_models=Vec::with_capacity(indexed_models_len);
 		for model in &map.models{
 			//wow
 			let instance=GraphicsModelOwned{
@@ -214,44 +213,53 @@ impl GraphicsState{
 				normal_transform:Into::<glam::Mat3>::into(model.transform.matrix3).inverse().transpose(),
 				color:GraphicsModelColor4::new(model.color),
 			};
+			//get or create owned mesh map
+			let mut owned_mesh_map=if let Some(map)=owned_mesh_id_from_mesh_id_render_config_id.get_mut(&model.mesh){
+				map
+			}else{
+				let map=HashMap::new();
+				owned_mesh_id_from_mesh_id_render_config_id.insert(model.mesh,map);
+				owned_mesh_id_from_mesh_id_render_config_id.get_mut(&model.mesh).unwrap()
+			};
 			//convert Model into GraphicsModelOwned
-			//check each group, if it's using a new texture then make a new clone of the model
-			let id=unique_texture_models.len();
-			let mut unique_textures=Vec::new();
+			//check each group, if it's using a new render config then make a new clone of the model
 			if let Some(mesh)=map.meshes.get(model.mesh.get() as usize){
 				for graphics_group in mesh.graphics_groups.iter(){
 					let render_config=map.render_configs[graphics_group.render.get() as usize];
 					if model.color.w==0.0&&render_config.texture.is_none(){
 						continue;
 					}
-					//ignore zero copy optimization for now
-					let texture_index=if let Some(texture_index)=unique_textures.iter().position(|&texture|texture==render_config.texture){
-						texture_index
-					}else{
-						//create new texture_index
-						let texture_index=unique_textures.len();
-						unique_textures.push(render_config.texture);
-						unique_texture_models.push(IndexedGraphicsMeshOwnedRenderConfig{
-							unique_pos:mesh.unique_pos.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
-							unique_tex:mesh.unique_tex.iter().map(|v|*v.as_ref()).collect(),
-							unique_normal:mesh.unique_normal.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
-							unique_color:mesh.unique_color.iter().map(|v|*v.as_ref()).collect(),
-							unique_vertices:mesh.unique_vertices.clone(),
-							render_config:graphics_group.render,
-							polys:model::PolygonGroup::PolygonList(model::PolygonList::new(
-								graphics_group.groups.iter().flat_map(|polygon_group_id|{
-									mesh.polygon_groups[polygon_group_id.get() as usize].polys()
-								})
-								.map(|vertex_id_slice|
-									vertex_id_slice.iter().copied().collect()
-								).collect()
-							)),
-							instances:Vec::new(),
-						});
-						texture_index
-					};
+					//get or create owned mesh
+					let mut owned_mesh=unique_render_config_models.get_mut(
+						if let Some(&owned_mesh_id)=owned_mesh_map.get(&graphics_group.render){
+							owned_mesh_id
+						}else{
+							//create
+							let owned_mesh_id=IndexedGraphicsMeshOwnedRenderConfigId::new(unique_render_config_models.len() as u32);
+							owned_mesh_map.insert(graphics_group.render,owned_mesh_id);
+							//push
+							unique_render_config_models.push(IndexedGraphicsMeshOwnedRenderConfig{
+								unique_pos:mesh.unique_pos.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
+								unique_tex:mesh.unique_tex.iter().map(|v|*v.as_ref()).collect(),
+								unique_normal:mesh.unique_normal.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
+								unique_color:mesh.unique_color.iter().map(|v|*v.as_ref()).collect(),
+								unique_vertices:mesh.unique_vertices.clone(),
+								render_config:graphics_group.render,
+								polys:model::PolygonGroup::PolygonList(model::PolygonList::new(
+									graphics_group.groups.iter().flat_map(|polygon_group_id|{
+										mesh.polygon_groups[polygon_group_id.get() as usize].polys()
+									})
+									.map(|vertex_id_slice|
+										vertex_id_slice.iter().copied().collect()
+									).collect()
+								)),
+								instances:Vec::new(),
+							});
+							owned_mesh_id
+						}.get() as usize
+					).unwrap();
 					//this utm_id is going to take a lot of hashing to generate!
-					unique_texture_models[utm_id.get() as usize].instances.push(instance);
+					owned_mesh.instances.push(instance);
 				}
 			}
 		}
@@ -266,7 +274,7 @@ impl GraphicsState{
 		//for now:just deduplicate single models...
 		let mut deduplicated_models=Vec::with_capacity(indexed_models_len);//use indexed_models_len because the list will likely get smaller instead of bigger
 		let mut unique_texture_color=HashMap::new();//texture->color->vec![(model_id,instance_id)]
-		for (model_id,model) in unique_texture_models.iter().enumerate(){
+		for (model_id,model) in unique_render_config_models.iter().enumerate(){
 			//for now:filter out models with more than one instance
 			if 1<model.instances.len(){
 				continue;
@@ -319,7 +327,7 @@ impl GraphicsState{
 						//populate hashset to prevent these models from being copied
 						selected_model_instances.insert(model_id);
 						//there is only one instance per model
-						let model=&unique_texture_models[model_id];
+						let model=&unique_render_config_models[model_id];
 						let instance=&model.instances[instance_id];
 						//just hash word slices LOL
 						let map_pos_id:Vec<PositionId>=model.unique_pos.iter().map(|untransformed_pos|{
@@ -411,7 +419,7 @@ impl GraphicsState{
 			}
 		}
 		//fill untouched models
-		for (model_id,model) in unique_texture_models.into_iter().enumerate(){
+		for (model_id,model) in unique_render_config_models.into_iter().enumerate(){
 			if !selected_model_instances.contains(&model_id){
 				deduplicated_models.push(model);
 			}
