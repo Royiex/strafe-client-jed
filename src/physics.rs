@@ -550,15 +550,12 @@ pub struct PhysicsModel{
 }
 
 impl PhysicsModel{
-	pub const fn new(mesh_id:PhysicsMeshId,attr_id:PhysicsAttributesId,transform:PhysicsMeshTransform)->Self{
+	const fn new(mesh_id:PhysicsMeshId,attr_id:PhysicsAttributesId,transform:PhysicsMeshTransform)->Self{
 		Self{
 			mesh_id,
 			attr_id,
 			transform,
 		}
-	}
-	const fn transform(&self)->&PhysicsMeshTransform{
-		&self.transform
 	}
 }
 
@@ -577,13 +574,13 @@ enum Collision{
 	Intersect(IntersectCollision),
 }
 impl Collision{
-	fn convex_mesh_id(&self)->ConvexMeshId{
+	const fn convex_mesh_id(&self)->ConvexMeshId{
 		match self{
 			&Collision::Contact(ContactCollision{convex_mesh_id,face_id:_})
 			|&Collision::Intersect(IntersectCollision{convex_mesh_id})=>convex_mesh_id,
 		}
 	}
-	fn face_id(&self)->Option<model_physics::MinkowskiFace>{
+	const fn face_id(&self)->Option<model_physics::MinkowskiFace>{
 		match self{
 			&Collision::Contact(ContactCollision{convex_mesh_id:_,face_id})=>Some(face_id),
 			&Collision::Intersect(IntersectCollision{convex_mesh_id:_})=>None,
@@ -711,7 +708,7 @@ impl TouchingState{
 			//detect face slide off
 			let model_mesh=models.mesh(contact.convex_mesh_id);
 			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(model_mesh,hitbox_mesh.transformed_mesh());
-			collector.collect(minkowski.predict_collision_face_out(&relative_body,collector.time(),contact.face_id).map(|(face,time)|{
+			collector.collect(minkowski.predict_collision_face_out(&relative_body,collector.time(),contact.face_id).map(|(_face,time)|{
 				TimedInstruction{
 					time,
 					instruction:PhysicsInstruction::CollisionEnd(
@@ -724,7 +721,7 @@ impl TouchingState{
 			//detect model collision in reverse
 			let model_mesh=models.mesh(intersect.convex_mesh_id);
 			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(model_mesh,hitbox_mesh.transformed_mesh());
-			collector.collect(minkowski.predict_collision_out(&relative_body,collector.time()).map(|(face,time)|{
+			collector.collect(minkowski.predict_collision_out(&relative_body,collector.time()).map(|(_face,time)|{
 				TimedInstruction{
 					time,
 					instruction:PhysicsInstruction::CollisionEnd(
@@ -737,7 +734,7 @@ impl TouchingState{
 }
 
 impl Body{
-	pub fn new(position:Planar64Vec3,velocity:Planar64Vec3,acceleration:Planar64Vec3,time:Time)->Self{
+	pub const fn new(position:Planar64Vec3,velocity:Planar64Vec3,acceleration:Planar64Vec3,time:Time)->Self{
 		Self{
 			position,
 			velocity,
@@ -806,7 +803,7 @@ struct VirtualBody<'a>{
 	body1:&'a Body,
 }
 impl VirtualBody<'_>{
-	fn relative<'a>(body0:&'a Body,body1:&'a Body)->VirtualBody<'a>{
+	const fn relative<'a>(body0:&'a Body,body1:&'a Body)->VirtualBody<'a>{
 		//(p0,v0,a0,t0)
 		//(p1,v1,a1,t1)
 		VirtualBody{
