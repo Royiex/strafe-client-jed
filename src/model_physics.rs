@@ -110,7 +110,7 @@ pub struct PhysicsMeshTopology{
 	edge_topology:Vec<EdgeRefs>,
 	vert_topology:Vec<VertRefs>,
 }
-#[derive(Hash,id::Id,Eq,PartialEq)]
+#[derive(Clone,Copy,Hash,id::Id,Eq,PartialEq)]
 pub struct PhysicsMeshId(u32);
 impl Into<MeshId> for PhysicsMeshId{
 	fn into(self)->MeshId{
@@ -395,11 +395,6 @@ pub struct PhysicsMeshView<'a>{
 	data:&'a PhysicsMeshData,
 	topology:&'a PhysicsMeshTopology,
 }
-impl PhysicsMeshView<'_>{
-	pub fn verts<'a>(&'a self)->impl Iterator<Item=Planar64Vec3>+'a{
-		self.data.verts.iter().map(|&Vert(pos)|pos)
-	}
-}
 impl MeshQuery<SubmeshFaceId,SubmeshDirectedEdgeId,SubmeshVertId> for PhysicsMeshView<'_>{
 	fn face_nd(&self,face_id:SubmeshFaceId)->(Planar64Vec3,Planar64){
 		let face_idx=self.topology.faces[face_id.get() as usize].get() as usize;
@@ -455,6 +450,9 @@ impl TransformedMesh<'_>{
 			view,
 			transform,
 		}
+	}
+	pub fn verts<'a>(&'a self)->impl Iterator<Item=Planar64Vec3>+'a{
+		self.view.data.verts.iter().map(|&Vert(pos)|self.transform.vertex.transform_point3(pos))
 	}
 	fn farthest_vert(&self,dir:Planar64Vec3)->SubmeshVertId{
 		let mut best_dot=Planar64::MIN;

@@ -6,7 +6,7 @@ use strafesnet_common::map;
 use strafesnet_common::aabb;
 use strafesnet_common::gameplay_modes::{self,StageId};
 use strafesnet_common::gameplay_attributes::{self,CollisionAttributesId};
-use strafesnet_common::model::ModelId;
+use strafesnet_common::model::{MeshId,ModelId};
 use strafesnet_common::gameplay_style::{self,StyleModifiers};
 use strafesnet_common::instruction::{self,InstructionEmitter,InstructionConsumer,TimedInstruction};
 use strafesnet_common::integer::{self,Time,Planar64,Planar64Vec3,Planar64Mat3,Angle32,Ratio64Vec2};
@@ -324,13 +324,15 @@ impl HitboxMesh{
 	fn new(mesh:PhysicsMesh,transform:integer::Planar64Affine3)->Self{
 		//calculate extents
 		let mut aabb=aabb::Aabb::default();
-		for vert in mesh.complete_mesh_view().verts(){
-			aabb.grow(transform.transform_point3(vert));
+		let transform=PhysicsMeshTransform::new(transform);
+		let transformed_mesh=TransformedMesh::new(mesh.complete_mesh_view(),&transform);
+		for vert in transformed_mesh.verts(){
+			aabb.grow(vert);
 		}
 		Self{
 			halfsize:aabb.size()/2,
 			mesh,
-			transform:PhysicsMeshTransform::new(transform)
+			transform,
 		}
 	}
 	#[inline]
@@ -508,7 +510,7 @@ impl TryFrom<&gameplay_attributes::CollisionAttributes> for PhysicsCollisionAttr
 		}
 	}
 }
-#[derive(Hash,id::Id,Eq,PartialEq)]
+#[derive(Clone,Copy,Hash,id::Id,Eq,PartialEq)]
 struct PhysicsAttributesId(u32);
 impl Into<CollisionAttributesId> for PhysicsAttributesId{
 	fn into(self)->CollisionAttributesId{
@@ -988,25 +990,53 @@ impl PhysicsContext{
 
 	pub fn generate_models(&mut self,map:&map::CompleteMap){
 		self.data.modes=map.modes.clone();
-		self.data.models.attributes=map.attributes
-		.iter().enumerate().filter_map(|(attr_id,m_attr)|
-			PhysicsCollisionAttributes::try_from(m_attr).ok().map(|p_attr|
-				(PhysicsAttributesId::new(attr_id as u32),p_attr)
-			)
-		).collect();
-		self.data.models.meshes=map.meshes.iter().enumerate().map(|(mesh_id,mesh)|
-			(PhysicsMeshId::new(mesh_id as u32),PhysicsMesh::from(mesh))
-		).collect();
-		self.data.models.models=map.models.iter().enumerate().map(|(model_id,model)|
-			(PhysicsModelId::new(model_id as u32),PhysicsModel::new(model.mesh.into(),model.attributes.into(),PhysicsMeshTransform::new(model.transform)))
-		).collect();
+		//TODO redo this with models first and only add used atributes and meshes
+		let mut used_attributes=Vec::new();
+		let mut physics_attr_id_from_model_attr_id=HashMap::<CollisionAttributesId,PhysicsAttributesId>::new();
+		let mut used_meshes=Vec::new();
+		let mut physics_mesh_id_from_model_mesh_id=HashMap::<MeshId,PhysicsMeshId>::new();
+		self.data.models.models=map.models.iter().enumerate().filter_map(|(model_id,model)|{
+			let attr_id=if let Some(&attr_id)=physics_attr_id_from_model_attr_id.get(&model.attributes){
+				attr_id
+			}else{
+				//check if it's real
+				match map.attributes.get(model.attributes.get() as usize).and_then(|m_attr|{
+					PhysicsCollisionAttributes::try_from(m_attr).map_or(None,|p_attr|{
+						let attr_id=PhysicsAttributesId::new(used_attributes.len() as u32);
+						used_attributes.push(p_attr);
+						physics_attr_id_from_model_attr_id.insert(model.attributes,attr_id);
+						Some(attr_id)
+					})
+				}){
+					Some(attr_id)=>attr_id,
+					None=>return None,
+				}
+			};
+			let mesh_id=if let Some(&mesh_id)=physics_mesh_id_from_model_mesh_id.get(&model.mesh){
+				mesh_id
+			}else{
+				match map.meshes.get(model.mesh.get() as usize).and_then(|mesh|{
+					let mesh_id=PhysicsMeshId::new(used_meshes.len() as u32);
+					used_meshes.push(PhysicsMesh::from(mesh));
+					physics_mesh_id_from_model_mesh_id.insert(model.mesh,mesh_id);
+					Some(mesh_id)
+				}){
+					Some(mesh_id)=>mesh_id,
+					None=>return None,
+				}
+			};
+			Some((PhysicsModelId::new(model_id as u32),PhysicsModel::new(mesh_id,attr_id,PhysicsMeshTransform::new(model.transform))))
+		}).collect();
+		self.data.models.attributes=used_attributes.into_iter().enumerate().map(|(attr_id,attr)|(PhysicsAttributesId::new(attr_id as u32),attr)).collect();
+		self.data.models.meshes=used_meshes.into_iter().enumerate().map(|(mesh_id,mesh)|(PhysicsMeshId::new(mesh_id as u32),mesh)).collect();
 		let convex_mesh_aabb_list=self.data.models.models.iter()
 		.flat_map(|(&model_id,model)|{
 			self.data.models.meshes[&model.mesh_id].submesh_views()
 			.enumerate().map(move|(submesh_id,view)|{
 				let mut aabb=aabb::Aabb::default();
-				for v in view.verts(){
-					aabb.grow(v)
+				let transformed_mesh=TransformedMesh::new(view,&model.transform);
+				for v in transformed_mesh.verts(){
+					aabb.grow(v);
 				}
 				(ConvexMeshId{
 					model_id,
