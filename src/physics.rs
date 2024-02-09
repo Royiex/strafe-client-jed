@@ -521,12 +521,12 @@ impl From<CollisionAttributesId> for PhysicsAttributesId{
 	}
 }
 //unique physics meshes indexed by this
-#[derive(Debug,Clone,Copy,Eq,Hash,PartialEq)]
+#[derive(Debug,Default,Clone,Copy,Eq,Hash,PartialEq)]
 struct ConvexMeshId{
 	model_id:PhysicsModelId,
 	submesh_id:PhysicsSubmeshId,
 }
-#[derive(Debug,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
+#[derive(Debug,Default,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
 struct PhysicsModelId(u32);
 impl Into<ModelId> for PhysicsModelId{
 	fn into(self)->ModelId{
@@ -869,6 +869,16 @@ impl Default for PhysicsState{
 		}
 	}
 }
+impl Default for PhysicsData{
+	fn default()->Self{
+ 		Self{
+			bvh:bvh::BvhNode::default(),
+			models:Default::default(),
+			modes:Default::default(),
+			hitbox_mesh:StyleModifiers::default().calculate_mesh(),
+		}
+	}
+}
 
 impl PhysicsState {
 	pub fn clear(&mut self){
@@ -952,6 +962,7 @@ impl PhysicsState {
 		}
 	}
 }
+#[derive(Default)]
 pub struct PhysicsContext{
 	pub state:PhysicsState,//this captures the entire state of the physics.
 	data:PhysicsData,//data currently loaded into memory which is needded for physics to run, but is not part of the state.
@@ -1375,7 +1386,7 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,mode_s
 				}
 			},
 			PhysicsInstruction::Input(input_instruction) => {
-				let mut refresh_walk_target=true;
+				let mut b_refresh_walk_target=true;
 				match input_instruction{
 					PhysicsInputInstruction::SetNextMouse(m) => {
 						state.camera.move_mouse(state.next_mouse.pos);
@@ -1400,11 +1411,11 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,mode_s
 								(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&data.hitbox_mesh,&state.camera,state.controls,&state.next_mouse,state.time);
 							}
 						}
-						refresh_walk_target=false;
+						b_refresh_walk_target=false;
 					},
 					PhysicsInputInstruction::SetZoom(s) => {
 						state.set_control(StyleModifiers::CONTROL_ZOOM,s);
-						refresh_walk_target=false;
+						b_refresh_walk_target=false;
 					},
 					PhysicsInputInstruction::Reset => {
 						//it matters which of these runs first, but I have not thought it through yet as it doesn't matter yet
@@ -1418,11 +1429,11 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,mode_s
 						set_position(&mut state.body,&mut state.touching,spawn_point);
 						set_velocity(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh,Planar64Vec3::ZERO);
 						(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&data.hitbox_mesh,&state.camera,state.controls,&state.next_mouse,state.time);
-						refresh_walk_target=false;
+						b_refresh_walk_target=false;
 					},
-					PhysicsInputInstruction::Idle => {refresh_walk_target=false;},//literally idle!
+					PhysicsInputInstruction::Idle => {b_refresh_walk_target=false;},//literally idle!
 				}
-				if refresh_walk_target{
+				if b_refresh_walk_target{
 					let a=refresh_walk_target(state,data);
 					if set_acceleration_cull(&mut state.body,&mut state.touching,&data.models,&data.hitbox_mesh,a){
 						(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&data.hitbox_mesh,&state.camera,state.controls,&state.next_mouse,state.time);

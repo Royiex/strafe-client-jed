@@ -29,17 +29,17 @@ impl WindowContext<'_>{
 			winit::event::WindowEvent::DroppedFile(path)=>{
 				//blocking because it's simpler...
 				if let Ok(file)=std::fs::File::open(path){
-					match strafesnet_snf::read_snf(std::io::BufReader::new(file)){
-						Ok(strafesnet_snf::SNF::Map(streamable_map))=>{
-							if let Ok(indexed_model_instances)=streamable_map.load_all(){
-								self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::ClearModels}).unwrap();
-								self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::GenerateModels(indexed_model_instances)}).unwrap();
-							}
-						},
-						Ok(strafesnet_snf::SNF::Bot(streamable_map))=>println!("File type not yet supported"),
-						Ok(strafesnet_snf::SNF::Demo(streamable_map))=>println!("File type not yet supported"),
-						Err(e)=>println!("Error reading file: {e:?}"),
-					}
+					// match strafesnet_snf::read_snf(std::io::BufReader::new(file)){
+					// 	Ok(strafesnet_snf::SNF::Map(streamable_map))=>{
+					// 		if let Ok(indexed_model_instances)=streamable_map.load_all(){
+					// 			self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::ClearModels}).unwrap();
+					// 			self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::GenerateModels(indexed_model_instances)}).unwrap();
+					// 		}
+					// 	},
+					// 	Ok(strafesnet_snf::SNF::Bot(streamable_map))=>println!("File type not yet supported"),
+					// 	Ok(strafesnet_snf::SNF::Demo(streamable_map))=>println!("File type not yet supported"),
+					// 	Err(e)=>println!("Error reading file: {e:?}"),
+					// }
 				}else{
 					println!("Failed to open file {path:?}");
 				}
@@ -173,7 +173,7 @@ impl WindowContext<'_>{
 pub struct WindowContextSetup<'a>{
 	user_settings:crate::settings::UserSettings,
 	window:&'a winit::window::Window,
-	physics:crate::physics::PhysicsState,
+	physics:crate::physics::PhysicsContext,
 	graphics:crate::graphics::GraphicsState,
 }
 
@@ -181,8 +181,8 @@ impl<'a> WindowContextSetup<'a>{
 	pub fn new(context:&crate::setup::SetupContext,window:&'a winit::window::Window)->Self{
 		let user_settings=crate::settings::read_user_settings();
 
-		let mut physics=crate::physics::PhysicsState::default();
-		physics.load_user_settings(&user_settings);
+		let mut physics=crate::physics::PhysicsContext::default();
+		physics.state.load_user_settings(&user_settings);
 
 		let mut graphics=crate::graphics::GraphicsState::new(&context.device,&context.queue,&context.config);
 		graphics.load_user_settings(&user_settings);

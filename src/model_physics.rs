@@ -122,7 +122,7 @@ impl From<MeshId> for PhysicsMeshId{
 		Self::new(value.get())
 	}
 }
-#[derive(Debug,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
+#[derive(Debug,Default,Clone,Copy,Hash,id::Id,Eq,PartialEq)]
 pub struct PhysicsSubmeshId(u32);
 pub struct PhysicsMesh{
 	data:PhysicsMeshData,

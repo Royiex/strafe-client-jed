@@ -214,13 +214,13 @@ pub fn setup_and_start(title:String){
 
 	let window=crate::window::WindowContextSetup::new(&setup_context,&window);
 	//the thread that spawns the physics thread
-	let window_thread=window.into_worker(setup_context);
+	let mut window_thread=window.into_worker(setup_context);
 
 	let args:Vec<String>=std::env::args().collect();
 	let indexed_model_instances=if args.len()==2{
 		let path=std::path::PathBuf::from(&args[1]);
 		window_thread.send(TimedInstruction{
-			time:0,
+			time:integer::Time::ZERO,
 			instruction:WindowInstruction::WindowEvent(winit::event::WindowEvent::DroppedFile(path)),
 		});
 	};
