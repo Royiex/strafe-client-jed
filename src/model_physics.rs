@@ -201,10 +201,6 @@ impl PhysicsMesh{
 		Self::unit_cube()
 	}
 	#[inline]
-	pub const fn mesh_data(&self)->&PhysicsMeshData{
-		&self.data
-	}
-	#[inline]
 	pub const fn complete_mesh(&self)->&PhysicsMeshTopology{
 		&self.complete_mesh
 	}

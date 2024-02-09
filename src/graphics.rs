@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::{HashSet,HashMap};
 use strafesnet_common::map;
 use strafesnet_common::integer;
-use strafesnet_common::model::{self, ColorId, MapVertexId, NormalId, PolygonIter, PositionId, RenderConfigId, TextureCoordinateId, VertexId};
+use strafesnet_common::model::{self, ColorId, NormalId, PolygonIter, PositionId, RenderConfigId, TextureCoordinateId, VertexId};
 use wgpu::{util::DeviceExt,AstcBlock,AstcChannel};
 use crate::model_graphics::{self,IndexedGraphicsMeshOwnedRenderConfig,IndexedGraphicsMeshOwnedRenderConfigId,GraphicsMeshOwnedRenderConfig,GraphicsModelColor4,GraphicsModelOwned,GraphicsVertex};
 

@@ -1066,7 +1066,7 @@ impl PhysicsContext{
 		//check for collision starts
 		let mut aabb=aabb::Aabb::default();
 		state.body.grow_aabb(&mut aabb,state.time,collector.time());
-		aabb.inflate(state.style.hitbox.halfsize);
+		aabb.inflate(data.hitbox_mesh.halfsize);
 		//common body
 		let relative_body=VirtualBody::relative(&Body::default(),&state.body).body(state.time);
 		data.bvh.the_tester(&aabb,&mut |convex_mesh_id|{
@@ -1447,11 +1447,11 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,models
 mod test{
 	use super::*;
 	fn test_collision_axis_aligned(relative_body:Body,expected_collision_time:Option<Time>){
-		let h0=HitboxMesh::from_mesh_scale(PhysicsMesh::unit_cube(),Planar64Vec3::int(5,1,5)/2);
-		let h1=HitboxMesh::roblox();
+		let h0=HitboxMesh::new(PhysicsMesh::unit_cube(),integer::Planar64Affine3::new(Planar64Mat3::from_diagonal(Planar64Vec3::int(5,1,5)/2),Planar64Vec3::ZERO));
+		let h1=StyleModifiers::roblox_bhop().calculate_mesh();
 		let hitbox_mesh=h1.transformed_mesh();
 		let platform_mesh=h0.transformed_mesh();
-		let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
+		let minkowski=model_physics::MinkowskiMesh::minkowski_sum(platform_mesh,hitbox_mesh);
 		let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
 		assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
 	}
@@ -1466,7 +1466,7 @@ mod test{
 				Planar64Vec3::ZERO,
 			)
 		);
-		let h1=HitboxMesh::roblox();
+		let h1=StyleModifiers::roblox_bhop().calculate_mesh();
 		let hitbox_mesh=h1.transformed_mesh();
 		let platform_mesh=h0.transformed_mesh();
 		let minkowski=model_physics::MinkowskiMesh::minkowski_sum(platform_mesh,hitbox_mesh);
