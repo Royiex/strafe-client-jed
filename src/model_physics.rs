@@ -396,7 +396,7 @@ struct PhysicsMeshView<'a>{
 }
 impl PhysicsMeshView<'_>{
 	pub fn verts<'a>(&'a self)->impl Iterator<Item=Planar64Vec3>+'a{
-		self.data.verts.iter().map(|Vert(pos)|*pos)
+		self.data.verts.iter().map(|&Vert(pos)|pos)
 	}
 }
 impl MeshQuery<SubmeshFaceId,SubmeshDirectedEdgeId,SubmeshVertId> for PhysicsMeshView<'_>{
