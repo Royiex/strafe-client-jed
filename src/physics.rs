@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-
 use crate::model_physics::{self,PhysicsMesh,PhysicsMeshTransform,TransformedMesh,MeshQuery,PhysicsMeshId,PhysicsSubmeshId};
 use strafesnet_common::bvh;
 use strafesnet_common::map;
 use strafesnet_common::aabb;
-use strafesnet_common::gameplay_modes;
+use strafesnet_common::gameplay_modes::{self,StageId};
 use strafesnet_common::gameplay_attributes::{self,CollisionAttributesId};
 use strafesnet_common::model::ModelId;
 use strafesnet_common::gameplay_style::{self,StyleModifiers};
 use strafesnet_common::instruction::{self,InstructionEmitter,InstructionConsumer,TimedInstruction};
 use strafesnet_common::integer::{self,Time,Planar64,Planar64Vec3,Planar64Mat3,Angle32,Ratio64Vec2};
+use gameplay::ModeState;
 
 #[derive(Debug)]
 pub enum PhysicsInstruction {
@@ -182,19 +182,6 @@ impl PhysicsModels{
 	fn attr(&self,model_id:PhysicsModelId)->&PhysicsCollisionAttributes{
 		&self.attributes[&self.models[&model_id].attr_id]
 	}
-	fn push_mesh(&mut self,mesh:PhysicsMesh){
-		self.meshes.push(mesh);
-	}
-	fn push_model(&mut self,model:PhysicsModel)->PhysicsModelId{
-		let model_id=PhysicsModelId::new(self.models.len() as u32);
-		self.models.push(model);
-		model_id
-	}
-	fn push_attr(&mut self,attr:PhysicsCollisionAttributes)->PhysicsAttributesId{
-		let attr_id=PhysicsAttributesId::new(self.attributes.len() as u32);
-		self.attributes.push(attr);
-		attr_id
-	}
 }
 
 #[derive(Clone)]
@@ -213,7 +200,7 @@ pub struct PhysicsCamera{
 	//yaw_limit:AngleLimit,
 }
 
-impl PhysicsCamera {
+impl PhysicsCamera{
 	const ANGLE_PITCH_LOWER_LIMIT:Angle32=-Angle32::FRAC_PI_2;
 	const ANGLE_PITCH_UPPER_LIMIT:Angle32=Angle32::FRAC_PI_2;
 	pub fn move_mouse(&mut self,mouse_pos:glam::IVec2){
@@ -255,22 +242,73 @@ impl std::default::Default for PhysicsCamera{
 		}
 	}
 }
-
-pub struct ModeState{
-	mode_id:gameplay_modes::ModeId,
-	stage_id:gameplay_modes::StageId,
-	next_ordered_checkpoint_id:gameplay_modes::CheckpointId,//which OrderedCheckpoint model_id you must pass next (if 0 you haven't passed OrderedCheckpoint0)
-	unordered_checkpoints:HashSet<ModelId>,
-	jump_counts:HashMap<ModelId,u32>,//model_id -> jump count
-}
-impl std::default::Default for ModeState{
-	fn default()->Self{
-		Self{
-			mode_id:gameplay_modes::ModeId::new(0),
-			stage_id:gameplay_modes::StageId::new(0),
-			next_ordered_checkpoint_id:gameplay_modes::CheckpointId::new(0),
-			unordered_checkpoints:HashSet::new(),
-			jump_counts:HashMap::new(),
+mod gameplay{
+	use super::{gameplay_modes,HashSet,HashMap,ModelId};
+	pub struct ModeState{
+		mode_id:gameplay_modes::ModeId,
+		stage_id:gameplay_modes::StageId,
+		next_ordered_checkpoint_id:gameplay_modes::CheckpointId,//which OrderedCheckpoint model_id you must pass next (if 0 you haven't passed OrderedCheckpoint0)
+		unordered_checkpoints:HashSet<ModelId>,
+		jump_counts:HashMap<ModelId,u32>,//model_id -> jump count
+	}
+	impl ModeState{
+		pub const fn get_mode_id(&self)->gameplay_modes::ModeId{
+			self.mode_id
+		}
+		pub const fn get_stage_id(&self)->gameplay_modes::StageId{
+			self.stage_id
+		}
+		pub const fn get_next_ordered_checkpoint_id(&self)->gameplay_modes::CheckpointId{
+			self.next_ordered_checkpoint_id
+		}
+		pub const fn get_jump_count(&self,model_id:ModelId)->Option<u32>{
+			self.jump_counts.get(&model_id).copied()
+		}
+		pub const fn ordered_checkpoint_count(&self)->u32{
+			self.next_ordered_checkpoint_id.get()
+		}
+		pub const fn unordered_checkpoint_count(&self)->u32{
+			self.unordered_checkpoints.len() as u32
+		}
+		pub fn set_mode_id(&mut self,mode_id:gameplay_modes::ModeId){
+			self.clear();
+			self.mode_id=mode_id;
+		}
+		pub fn set_stage_id(&mut self,stage_id:gameplay_modes::StageId){
+			self.clear_checkpoints();
+			self.stage_id=stage_id;
+		}
+		pub const fn accumulate_ordered_checkpoint(&mut self,stage:&gameplay_modes::Stage,model_id:ModelId){
+			if stage.is_next_ordered_checkpoint(self.get_next_ordered_checkpoint_id(),model_id){
+				self.next_ordered_checkpoint_id=gameplay_modes::CheckpointId::new(self.next_ordered_checkpoint_id.get()+1);
+			}
+		}
+		pub fn accumulate_unordered_checkpoint(&mut self,stage:&gameplay_modes::Stage,model_id:ModelId){
+			if stage.is_unordered_checkpoint(model_id){
+				self.unordered_checkpoints.insert(model_id);
+			}
+		}
+		pub fn clear(&mut self){
+			self.clear_jump_counts();
+			self.clear_checkpoints();
+		}
+		pub fn clear_jump_counts(&mut self){
+			self.jump_counts.clear();
+		}
+		pub fn clear_checkpoints(&mut self){
+			self.next_ordered_checkpoint_id=gameplay_modes::CheckpointId::FIRST;
+			self.unordered_checkpoints.clear();
+		}
+	}
+	impl std::default::Default for ModeState{
+		fn default()->Self{
+			Self{
+				mode_id:gameplay_modes::ModeId::MAIN,
+				stage_id:gameplay_modes::StageId::FIRST,
+				next_ordered_checkpoint_id:gameplay_modes::CheckpointId::FIRST,
+				unordered_checkpoints:HashSet::new(),
+				jump_counts:HashMap::new(),
+			}
 		}
 	}
 }
@@ -297,7 +335,7 @@ impl HitboxMesh{
 	}
 	#[inline]
 	fn transformed_mesh(&self)->TransformedMesh{
-		TransformedMesh::new(&self.mesh.complete_mesh_view(),&self.transform)
+		TransformedMesh::new(self.mesh.complete_mesh_view(),&self.transform)
 	}
 }
 
@@ -792,22 +830,26 @@ pub struct PhysicsState{
 	time:Time,
 	body:Body,
 	world:WorldState,//currently there is only one state the world can be in
-	mode_state:ModeState,
-	style:StyleModifiers,//mode style with custom style updates applied
 	touching:TouchingState,
 	//camera must exist in state because wormholes modify the camera, also camera punch
 	camera:PhysicsCamera,
+	//input_state
 	pub next_mouse:MouseState,//Where is the mouse headed next
 	controls:u32,//TODO this should be a struct
+	//style
+	style:StyleModifiers,//mode style with custom style updates applied
+	//gameplay_state
+	mode_state:ModeState,
 	move_state:MoveState,
 }
 //random collection of contextual data that doesn't belong in PhysicsState
 pub struct PhysicsData{
 	//permanent map data
 	bvh:bvh::BvhNode<ConvexMeshId>,
-	modes:gameplay_modes::Modes,
-	//transient map/environment data (open world may load/unload)
+	//transient map/environment data (open world loads/unloads parts of this data)
 	models:PhysicsModels,
+	//semi-transient data
+	modes:gameplay_modes::Modes,
 	//cached calculations
 	hitbox_mesh:HitboxMesh,
 }
@@ -927,7 +969,6 @@ impl instruction::InstructionEmitter<PhysicsInstruction> for PhysicsContext{
 }
 impl PhysicsContext{
 	pub fn spawn(&mut self){
-		self.state.mode_state.stage_id=gameplay_modes::StageId::new(0);
 		self.process_instruction(instruction::TimedInstruction{
 			time:self.state.time,
 			instruction: PhysicsInstruction::Input(PhysicsInputInstruction::Reset),
@@ -975,33 +1016,33 @@ impl PhysicsContext{
 			//write hash lol
 		}
 	}
+}
 
 	//TODO get rid of this trash
-	fn refresh_walk_target(&mut self)->Planar64Vec3{
-		match &mut self.state.move_state{
-			MoveState::Air|MoveState::Water=>self.state.touching.base_acceleration(&self.data.models,&self.state.style,&self.state.camera,self.state.controls,&self.state.next_mouse,self.state.time),
+	fn refresh_walk_target(s:&mut PhysicsState,data:&PhysicsData)->Planar64Vec3{
+		match &mut s.move_state{
+			MoveState::Air|MoveState::Water=>s.touching.base_acceleration(&data.models,&s.style,&s.camera,s.controls,&s.next_mouse,s.time),
 			MoveState::Walk(WalkState{state,contact,jump_direction:_})=>{
-				let n=contact_normal(&self.data.models,&self.data.hitbox_mesh,contact);
-				let gravity=self.state.touching.base_acceleration(&self.data.models,&self.state.style,&self.state.camera,self.state.controls,&self.state.next_mouse,self.state.time);
+				let n=contact_normal(&data.models,&data.hitbox_mesh,contact);
+				let gravity=s.touching.base_acceleration(&data.models,&s.style,&s.camera,s.controls,&s.next_mouse,s.time);
 				let mut a;
-				let mut v=self.state.style.get_walk_target_velocity(&self.state.camera,self.state.controls,&self.state.next_mouse,self.state.time,&n);
-				self.state.touching.constrain_velocity(&self.data.models,&self.data.hitbox_mesh,&mut v);
+				let mut v=s.style.get_walk_target_velocity(&s.camera,s.controls,&s.next_mouse,s.time,&n);
+				s.touching.constrain_velocity(&data.models,&data.hitbox_mesh,&mut v);
 				let normal_accel=-n.dot(gravity)/n.length();
-				(*state,a)=WalkEnum::with_target_velocity(&self.state.body,&self.state.style,v,&n,self.state.style.walk_speed,normal_accel);
+				(*state,a)=WalkEnum::with_target_velocity(&s.body,&s.style,v,&n,s.style.walk_speed,normal_accel);
 				a
 			},
 			MoveState::Ladder(WalkState{state,contact,jump_direction:_})=>{
-				let n=contact_normal(&self.data.models,&self.data.hitbox_mesh,contact);
-				let gravity=self.state.touching.base_acceleration(&self.data.models,&self.state.style,&self.state.camera,self.state.controls,&self.state.next_mouse,self.state.time);
+				let n=contact_normal(&data.models,&data.hitbox_mesh,contact);
+				let gravity=s.touching.base_acceleration(&data.models,&s.style,&s.camera,s.controls,&s.next_mouse,s.time);
 				let mut a;
-				let mut v=self.state.style.get_ladder_target_velocity(&self.state.camera,self.state.controls,&self.state.next_mouse,self.state.time,&n);
-				self.state.touching.constrain_velocity(&self.data.models,&self.data.hitbox_mesh,&mut v);
-				(*state,a)=WalkEnum::with_target_velocity(&self.state.body,&self.state.style,v,&n,self.state.style.ladder_speed,self.state.style.ladder_accel);
+				let mut v=s.style.get_ladder_target_velocity(&s.camera,s.controls,&s.next_mouse,s.time,&n);
+				s.touching.constrain_velocity(&data.models,&data.hitbox_mesh,&mut v);
+				(*state,a)=WalkEnum::with_target_velocity(&s.body,&s.style,v,&n,s.style.ladder_speed,s.style.ladder_accel);
 				a
 			},
 		}
 	}
-}
 
 	fn literally_next_instruction_but_with_context(state:&PhysicsState,data:&PhysicsData,time_limit:Time)->Option<TimedInstruction<PhysicsInstruction>>{
 		//JUST POLLING!!! NO MUTATION
@@ -1118,46 +1159,53 @@ fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModi
 	Some(teleport(body,touching,models,style,hitbox_mesh,point))
 }
 
-fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&mut ModeState,models:&PhysicsModels,mode:&gameplay_modes::Mode,style:&StyleModifiers,hitbox_mesh:&HitboxMesh,touching:&mut TouchingState,body:&mut Body,convex_mesh_id:ConvexMeshId)->Option<MoveState>{
+fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,mode_state:&mut ModeState,models:&PhysicsModels,mode:&gameplay_modes::Mode,style:&StyleModifiers,hitbox_mesh:&HitboxMesh,touching:&mut TouchingState,body:&mut Body,convex_mesh_id:ConvexMeshId)->Option<MoveState>{
 	//TODO: jump count and checkpoints are always reset on teleport.
 	//Map makers are expected to use tools to prevent
 	//multi-boosting on JumpLimit boosters such as spawning into a SetVelocity
 	if let Some(stage_element)=mode.get_element(convex_mesh_id.model_id.into()){
-		let stage=mode.get_stage(stage_element.stage_id)?;
-		if stage_element.force||game.stage_id<stage_element.stage_id{
-			//TODO: check if all checkpoints are complete up to destination stage id, otherwise set to checkpoint completion stage it
-			game.stage_id=stage_element.stage_id;
-		}
-		match &stage_element.behaviour{
-			gameplay_modes::StageElementBehaviour::SpawnAt=>(),
-			gameplay_modes::StageElementBehaviour::Trigger
-			|gameplay_modes::StageElementBehaviour::Teleport=>{
-				//I guess this is correct behaviour when trying to teleport to a non-existent spawn but it's still weird
-				return teleport_to_spawn(body,touching,style,hitbox_mesh,mode,models,game.stage_id);
-			},
-			gameplay_modes::StageElementBehaviour::Platform=>(),
-			&gameplay_modes::StageElementBehaviour::Checkpoint=>{
+		if let Some(stage)=mode.get_stage(stage_element.stage_id()){
+			if mode_state.get_stage_id()<stage_element.stage_id(){
 				//checkpoint check
-				//TODO: need to check all stages
-				if stage.ordered_checkpoint_id.map_or(true,|id|id<game.next_ordered_checkpoint_id)
-					&&stage.unordered_checkpoint_count<=game.unordered_checkpoints.len() as u32{
-					//pass
-				}else{
-					//fail
-					return teleport_to_spawn(body,touching,style,hitbox_mesh,mode,models,game.stage_id);
+				//check if current stage is complete
+				if let Some(current_stage)=mode.get_stage(mode_state.get_stage_id()){
+					if !current_stage.is_complete(mode_state.ordered_checkpoint_count(),mode_state.unordered_checkpoint_count()){
+						//do the stage checkpoints have to be reset?
+						return teleport_to_spawn(body,touching,style,hitbox_mesh,mode,models,mode_state.get_stage_id());
+					}
 				}
-			},
-		}
-		if let Some(next_checkpoint)=stage.ordered_checkpoints.get(&game.next_ordered_checkpoint_id){
-			if convex_mesh_id==next_checkpoint{
-				//if you hit the next number in a sequence of ordered checkpoints
-				//increment the current checkpoint id
-				game.next_ordered_checkpoint_id=gameplay_modes::CheckpointId::new(game.next_ordered_checkpoint_id.get()+1);
+				//check if all between stages have no checkpoints required to pass them
+				for stage_id in mode_state.get_stage_id().get()+1..stage_element.stage_id().get(){
+					let stage_id=StageId::new(stage_id);
+					//check if none of the between stages has checkpoints, if they do teleport back to that stage
+					if !mode.get_stage(stage_id)?.is_empty(){
+						mode_state.set_stage_id(stage_id);
+						return teleport_to_spawn(body,touching,style,hitbox_mesh,mode,models,stage_id);
+					}
+				}
+				//notably you do not get teleported for touching ordered checkpoints in the wrong order within the same stage.
+				mode_state.set_stage_id(stage_element.stage_id());
+			}else if stage_element.force(){
+				//forced stage_element will set the stage_id even if the stage has already been passed
+				mode_state.set_stage_id(stage_element.stage_id());
 			}
-		}
-		if stage.unordered_checkpoints.contains(convex_mesh_id.model_id.into()){
-			//count model id in accumulated unordered checkpoints
-			game.unordered_checkpoints.insert(convex_mesh_id.model_id.into());
+			match stage_element.behaviour(){
+				gameplay_modes::StageElementBehaviour::SpawnAt=>(),
+				gameplay_modes::StageElementBehaviour::Trigger
+				|gameplay_modes::StageElementBehaviour::Teleport=>{
+					//I guess this is correct behaviour when trying to teleport to a non-existent spawn but it's still weird
+					return teleport_to_spawn(body,touching,style,hitbox_mesh,mode,models,mode_state.get_stage_id());
+				},
+				gameplay_modes::StageElementBehaviour::Platform=>(),
+				gameplay_modes::StageElementBehaviour::Check=>(),//this is to run the checkpoint check behaviour without any other side effects
+				gameplay_modes::StageElementBehaviour::Checkpoint=>{
+					//each of these checks if the model is actually a valid respective checkpoint object
+					//accumulate sequential ordered checkpoints
+					mode_state.accumulate_ordered_checkpoint(&stage,convex_mesh_id.model_id.into());
+					//insert model id in accumulated unordered checkpoints
+					mode_state.accumulate_unordered_checkpoint(&stage,convex_mesh_id.model_id.into());
+				},
+			}
 		}
 	}
 	match wormhole{
@@ -1230,7 +1278,7 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 						//check ground
 						state.touching.insert(c);
 						//I love making functions with 10 arguments to dodge the borrow checker
-						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode_state.mode_id).unwrap(),&state.style,&data.hitbox_mesh,&mut state.touching,&mut state.body,convex_mesh_id);
+						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode_state.get_mode_id()).unwrap(),&state.style,&data.hitbox_mesh,&mut state.touching,&mut state.body,convex_mesh_id);
 						//flatten v
 						state.touching.constrain_velocity(&data.models,&data.hitbox_mesh,&mut v);
 						match &general.booster{
@@ -1268,13 +1316,13 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 						if calc_move||Planar64::ZERO<normal.dot(v){
 							(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&data.hitbox_mesh,&state.camera,state.controls,&state.next_mouse,state.time);
 						}
-						let a=state.refresh_walk_target();
+						let a=refresh_walk_target(state,data);
 						set_acceleration(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh,a);
 					},
 					(PhysicsCollisionAttributes::Intersect{intersecting: _,general},Collision::Intersect(intersect))=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
 						state.touching.insert(c);
-						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode_state.mode_id).unwrap(),&state.style,&data.hitbox_mesh,&mut state.touching,&mut state.body,convex_mesh_id);
+						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode_state.get_mode_id()).unwrap(),&state.style,&data.hitbox_mesh,&mut state.touching,&mut state.body,convex_mesh_id);
 					},
 					_=>panic!("invalid pair"),
 				}
@@ -1360,8 +1408,10 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 					},
 					PhysicsInputInstruction::Reset => {
 						//it matters which of these runs first, but I have not thought it through yet as it doesn't matter yet
+						state.mode_state.clear();
+						state.mode_state.set_stage_id(gameplay_modes::StageId::FIRST);
 						let spawn_point={
-							let mode=data.modes.get_mode(state.mode_state.mode_id).unwrap();
+							let mode=data.modes.get_mode(state.mode_state.get_mode_id()).unwrap();
 							let stage=mode.get_stage(gameplay_modes::StageId::FIRST).unwrap();
 							data.models.model(stage.spawn().into()).transform.vertex.translation
 						};
@@ -1373,7 +1423,7 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 					PhysicsInputInstruction::Idle => {refresh_walk_target=false;},//literally idle!
 				}
 				if refresh_walk_target{
-					let a=state.refresh_walk_target();
+					let a=refresh_walk_target(state,data);
 					if set_acceleration_cull(&mut state.body,&mut state.touching,&data.models,&data.hitbox_mesh,a){
 						(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&data.hitbox_mesh,&state.camera,state.controls,&state.next_mouse,state.time);
 					}
@@ -1382,217 +1432,218 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,game:&
 		}
 	}
 
-#[allow(dead_code)]
-fn test_collision_axis_aligned(relative_body:Body,expected_collision_time:Option<Time>){
-	let h0=HitboxMesh::from_mesh_scale(PhysicsMesh::unit_cube(),Planar64Vec3::int(5,1,5)/2);
-	let h1=HitboxMesh::roblox();
-	let hitbox_mesh=h1.transformed_mesh();
-	let platform_mesh=h0.transformed_mesh();
-	let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
-	let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
-	assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
-}
-#[allow(dead_code)]
-fn test_collision_rotated(relative_body:Body,expected_collision_time:Option<Time>){
-	let h0=HitboxMesh::new(PhysicsMesh::unit_cube(),
-		integer::Planar64Affine3::new(
-			integer::Planar64Mat3::from_cols(
-				Planar64Vec3::int(5,0,1)/2,
-				Planar64Vec3::int(0,1,0)/2,
-				Planar64Vec3::int(-1,0,5)/2,
-			),
+#[cfg(test)]
+mod test{
+	use super::*;
+	fn test_collision_axis_aligned(relative_body:Body,expected_collision_time:Option<Time>){
+		let h0=HitboxMesh::from_mesh_scale(PhysicsMesh::unit_cube(),Planar64Vec3::int(5,1,5)/2);
+		let h1=HitboxMesh::roblox();
+		let hitbox_mesh=h1.transformed_mesh();
+		let platform_mesh=h0.transformed_mesh();
+		let minkowski=model_physics::MinkowskiMesh::minkowski_sum(&platform_mesh,&hitbox_mesh);
+		let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
+		assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
+	}
+	fn test_collision_rotated(relative_body:Body,expected_collision_time:Option<Time>){
+		let h0=HitboxMesh::new(PhysicsMesh::unit_cube(),
+			integer::Planar64Affine3::new(
+				integer::Planar64Mat3::from_cols(
+					Planar64Vec3::int(5,0,1)/2,
+					Planar64Vec3::int(0,1,0)/2,
+					Planar64Vec3::int(-1,0,5)/2,
+				),
+				Planar64Vec3::ZERO,
+			)
+		);
+		let h1=HitboxMesh::roblox();
+		let hitbox_mesh=h1.transformed_mesh();
+		let platform_mesh=h0.transformed_mesh();
+		let minkowski=model_physics::MinkowskiMesh::minkowski_sum(platform_mesh,hitbox_mesh);
+		let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
+		assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
+	}
+	fn test_collision(relative_body:Body,expected_collision_time:Option<Time>){
+		test_collision_axis_aligned(relative_body.clone(),expected_collision_time);
+		test_collision_rotated(relative_body,expected_collision_time);
+	}
+	#[test]
+	fn test_collision_degenerate(){
+		test_collision(Body::new(
+			Planar64Vec3::int(0,5,0),
+			Planar64Vec3::int(0,-1,0),
 			Planar64Vec3::ZERO,
-		)
-	);
-	let h1=HitboxMesh::roblox();
-	let hitbox_mesh=h1.transformed_mesh();
-	let platform_mesh=h0.transformed_mesh();
-	let minkowski=model_physics::MinkowskiMesh::minkowski_sum(platform_mesh,hitbox_mesh);
-	let collision=minkowski.predict_collision_in(&relative_body,Time::MAX);
-	assert_eq!(collision.map(|tup|tup.1),expected_collision_time,"Incorrect time of collision");
-}
-#[allow(dead_code)]
-fn test_collision(relative_body:Body,expected_collision_time:Option<Time>){
-	test_collision_axis_aligned(relative_body.clone(),expected_collision_time);
-	test_collision_rotated(relative_body,expected_collision_time);
-}
-#[test]
-fn test_collision_degenerate(){
-	test_collision(Body::new(
-		Planar64Vec3::int(0,5,0),
-		Planar64Vec3::int(0,-1,0),
-		Planar64Vec3::ZERO,
-		Time::ZERO
-	),Some(Time::from_secs(2)));
-}
-#[test]
-fn test_collision_degenerate_east(){
-	test_collision(Body::new(
-		Planar64Vec3::int(3,5,0),
-		Planar64Vec3::int(0,-1,0),
-		Planar64Vec3::ZERO,
-		Time::ZERO
-	),Some(Time::from_secs(2)));
-}
-#[test]
-fn test_collision_degenerate_south(){
-	test_collision(Body::new(
-		Planar64Vec3::int(0,5,3),
-		Planar64Vec3::int(0,-1,0),
-		Planar64Vec3::ZERO,
-		Time::ZERO
-	),Some(Time::from_secs(2)));
-}
-#[test]
-fn test_collision_degenerate_west(){
-	test_collision(Body::new(
-		Planar64Vec3::int(-3,5,0),
-		Planar64Vec3::int(0,-1,0),
-		Planar64Vec3::ZERO,
-		Time::ZERO
-	),Some(Time::from_secs(2)));
-}
-#[test]
-fn test_collision_degenerate_north(){
-	test_collision(Body::new(
-		Planar64Vec3::int(0,5,-3),
-		Planar64Vec3::int(0,-1,0),
-		Planar64Vec3::ZERO,
-		Time::ZERO
-	),Some(Time::from_secs(2)));
-}
-#[test]
-fn test_collision_parabola_edge_east_from_west(){
-	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
-		Planar64Vec3::int(3,3,0),
-		Planar64Vec3::int(100,-1,0),
-		Planar64Vec3::int(0,-1,0),
-		Time::ZERO
-	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
-}
-#[test]
-fn test_collision_parabola_edge_south_from_north(){
-	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
-		Planar64Vec3::int(0,3,3),
-		Planar64Vec3::int(0,-1,100),
-		Planar64Vec3::int(0,-1,0),
-		Time::ZERO
-	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
-}
-#[test]
-fn test_collision_parabola_edge_west_from_east(){
-	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
-		Planar64Vec3::int(-3,3,0),
-		Planar64Vec3::int(-100,-1,0),
-		Planar64Vec3::int(0,-1,0),
-		Time::ZERO
-	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
-}
-#[test]
-fn test_collision_parabola_edge_north_from_south(){
-	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
-		Planar64Vec3::int(0,3,-3),
-		Planar64Vec3::int(0,-1,-100),
-		Planar64Vec3::int(0,-1,0),
-		Time::ZERO
-	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
-}
-#[test]
-fn test_collision_parabola_edge_north_from_ne(){
-	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
-		Planar64Vec3::int(0,6,-7)/2,
-		Planar64Vec3::int(-10,-1,1),
-		Planar64Vec3::int(0,-1,0),
-		Time::ZERO
-	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
-}
-#[test]
-fn test_collision_parabola_edge_north_from_nw(){
-	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
-		Planar64Vec3::int(0,6,-7)/2,
-		Planar64Vec3::int(10,-1,1),
-		Planar64Vec3::int(0,-1,0),
-		Time::ZERO
-	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
-}
-#[test]
-fn test_collision_parabola_edge_east_from_se(){
-	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
-		Planar64Vec3::int(7,6,0)/2,
-		Planar64Vec3::int(-1,-1,-10),
-		Planar64Vec3::int(0,-1,0),
-		Time::ZERO
-	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
-}
-#[test]
-fn test_collision_parabola_edge_east_from_ne(){
-	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
-		Planar64Vec3::int(7,6,0)/2,
-		Planar64Vec3::int(-1,-1,10),
-		Planar64Vec3::int(0,-1,0),
-		Time::ZERO
-	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
-}
-#[test]
-fn test_collision_parabola_edge_south_from_se(){
-	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
-		Planar64Vec3::int(0,6,7)/2,
-		Planar64Vec3::int(-10,-1,-1),
-		Planar64Vec3::int(0,-1,0),
-		Time::ZERO
-	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
-}
-#[test]
-fn test_collision_parabola_edge_south_from_sw(){
-	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
-		Planar64Vec3::int(0,6,7)/2,
-		Planar64Vec3::int(10,-1,-1),
-		Planar64Vec3::int(0,-1,0),
-		Time::ZERO
-	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
-}
-#[test]
-fn test_collision_parabola_edge_west_from_se(){
-	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
-		Planar64Vec3::int(-7,6,0)/2,
-		Planar64Vec3::int(1,-1,-10),
-		Planar64Vec3::int(0,-1,0),
-		Time::ZERO
-	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
-}
-#[test]
-fn test_collision_parabola_edge_west_from_ne(){
-	test_collision(VirtualBody::relative(&Body::default(),&Body::new(
-		Planar64Vec3::int(-7,6,0)/2,
-		Planar64Vec3::int(1,-1,10),
-		Planar64Vec3::int(0,-1,0),
-		Time::ZERO
-	)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
-}
-#[test]
-fn test_collision_oblique(){
-	test_collision(Body::new(
-		Planar64Vec3::int(0,5,0),
-		Planar64Vec3::int(1,-64,2)/64,
-		Planar64Vec3::ZERO,
-		Time::ZERO
-	),Some(Time::from_secs(2)));
-}
-#[test]
-fn zoom_hit_nothing(){
-	test_collision(Body::new(
-		Planar64Vec3::int(0,10,0),
-		Planar64Vec3::int(1,0,0),
-		Planar64Vec3::int(0,1,0),
-		Time::ZERO
-	),None);
-}
-#[test]
-fn already_inside_hit_nothing(){
-	test_collision(Body::new(
-		Planar64Vec3::ZERO,
-		Planar64Vec3::int(1,0,0),
-		Planar64Vec3::int(0,1,0),
-		Time::ZERO
-	),None);
+			Time::ZERO
+		),Some(Time::from_secs(2)));
+	}
+	#[test]
+	fn test_collision_degenerate_east(){
+		test_collision(Body::new(
+			Planar64Vec3::int(3,5,0),
+			Planar64Vec3::int(0,-1,0),
+			Planar64Vec3::ZERO,
+			Time::ZERO
+		),Some(Time::from_secs(2)));
+	}
+	#[test]
+	fn test_collision_degenerate_south(){
+		test_collision(Body::new(
+			Planar64Vec3::int(0,5,3),
+			Planar64Vec3::int(0,-1,0),
+			Planar64Vec3::ZERO,
+			Time::ZERO
+		),Some(Time::from_secs(2)));
+	}
+	#[test]
+	fn test_collision_degenerate_west(){
+		test_collision(Body::new(
+			Planar64Vec3::int(-3,5,0),
+			Planar64Vec3::int(0,-1,0),
+			Planar64Vec3::ZERO,
+			Time::ZERO
+		),Some(Time::from_secs(2)));
+	}
+	#[test]
+	fn test_collision_degenerate_north(){
+		test_collision(Body::new(
+			Planar64Vec3::int(0,5,-3),
+			Planar64Vec3::int(0,-1,0),
+			Planar64Vec3::ZERO,
+			Time::ZERO
+		),Some(Time::from_secs(2)));
+	}
+	#[test]
+	fn test_collision_parabola_edge_east_from_west(){
+		test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+			Planar64Vec3::int(3,3,0),
+			Planar64Vec3::int(100,-1,0),
+			Planar64Vec3::int(0,-1,0),
+			Time::ZERO
+		)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+	}
+	#[test]
+	fn test_collision_parabola_edge_south_from_north(){
+		test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+			Planar64Vec3::int(0,3,3),
+			Planar64Vec3::int(0,-1,100),
+			Planar64Vec3::int(0,-1,0),
+			Time::ZERO
+		)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+	}
+	#[test]
+	fn test_collision_parabola_edge_west_from_east(){
+		test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+			Planar64Vec3::int(-3,3,0),
+			Planar64Vec3::int(-100,-1,0),
+			Planar64Vec3::int(0,-1,0),
+			Time::ZERO
+		)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+	}
+	#[test]
+	fn test_collision_parabola_edge_north_from_south(){
+		test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+			Planar64Vec3::int(0,3,-3),
+			Planar64Vec3::int(0,-1,-100),
+			Planar64Vec3::int(0,-1,0),
+			Time::ZERO
+		)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+	}
+	#[test]
+	fn test_collision_parabola_edge_north_from_ne(){
+		test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+			Planar64Vec3::int(0,6,-7)/2,
+			Planar64Vec3::int(-10,-1,1),
+			Planar64Vec3::int(0,-1,0),
+			Time::ZERO
+		)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+	}
+	#[test]
+	fn test_collision_parabola_edge_north_from_nw(){
+		test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+			Planar64Vec3::int(0,6,-7)/2,
+			Planar64Vec3::int(10,-1,1),
+			Planar64Vec3::int(0,-1,0),
+			Time::ZERO
+		)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+	}
+	#[test]
+	fn test_collision_parabola_edge_east_from_se(){
+		test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+			Planar64Vec3::int(7,6,0)/2,
+			Planar64Vec3::int(-1,-1,-10),
+			Planar64Vec3::int(0,-1,0),
+			Time::ZERO
+		)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+	}
+	#[test]
+	fn test_collision_parabola_edge_east_from_ne(){
+		test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+			Planar64Vec3::int(7,6,0)/2,
+			Planar64Vec3::int(-1,-1,10),
+			Planar64Vec3::int(0,-1,0),
+			Time::ZERO
+		)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+	}
+	#[test]
+	fn test_collision_parabola_edge_south_from_se(){
+		test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+			Planar64Vec3::int(0,6,7)/2,
+			Planar64Vec3::int(-10,-1,-1),
+			Planar64Vec3::int(0,-1,0),
+			Time::ZERO
+		)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+	}
+	#[test]
+	fn test_collision_parabola_edge_south_from_sw(){
+		test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+			Planar64Vec3::int(0,6,7)/2,
+			Planar64Vec3::int(10,-1,-1),
+			Planar64Vec3::int(0,-1,0),
+			Time::ZERO
+		)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+	}
+	#[test]
+	fn test_collision_parabola_edge_west_from_se(){
+		test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+			Planar64Vec3::int(-7,6,0)/2,
+			Planar64Vec3::int(1,-1,-10),
+			Planar64Vec3::int(0,-1,0),
+			Time::ZERO
+		)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+	}
+	#[test]
+	fn test_collision_parabola_edge_west_from_ne(){
+		test_collision(VirtualBody::relative(&Body::default(),&Body::new(
+			Planar64Vec3::int(-7,6,0)/2,
+			Planar64Vec3::int(1,-1,10),
+			Planar64Vec3::int(0,-1,0),
+			Time::ZERO
+		)).body(Time::from_secs(-1)),Some(Time::from_secs(0)));
+	}
+	#[test]
+	fn test_collision_oblique(){
+		test_collision(Body::new(
+			Planar64Vec3::int(0,5,0),
+			Planar64Vec3::int(1,-64,2)/64,
+			Planar64Vec3::ZERO,
+			Time::ZERO
+		),Some(Time::from_secs(2)));
+	}
+	#[test]
+	fn zoom_hit_nothing(){
+		test_collision(Body::new(
+			Planar64Vec3::int(0,10,0),
+			Planar64Vec3::int(1,0,0),
+			Planar64Vec3::int(0,1,0),
+			Time::ZERO
+		),None);
+	}
+	#[test]
+	fn already_inside_hit_nothing(){
+		test_collision(Body::new(
+			Planar64Vec3::ZERO,
+			Planar64Vec3::int(1,0,0),
+			Planar64Vec3::int(0,1,0),
+			Time::ZERO
+		),None);
+	}
 }
