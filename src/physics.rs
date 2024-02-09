@@ -170,7 +170,7 @@ impl PhysicsModels{
 	//TODO: "statically" verify the maps don't refer to any nonexistant data, if they do delete the references.
 	//then I can make these getter functions unchecked.
 	fn mesh(&self,convex_mesh_id:ConvexMeshId)->TransformedMesh{
-		let model=self.models[&convex_mesh_id.model_id];
+		let model=&self.models[&convex_mesh_id.model_id];
 		TransformedMesh::new(
 			self.meshes[&model.mesh_id].submesh_view(convex_mesh_id.submesh_id),
 			&model.transform
@@ -201,7 +201,7 @@ pub struct PhysicsCamera{
 }
 
 impl PhysicsCamera{
-	const ANGLE_PITCH_LOWER_LIMIT:Angle32=-Angle32::FRAC_PI_2;
+	const ANGLE_PITCH_LOWER_LIMIT:Angle32=Angle32::NEG_FRAC_PI_2;
 	const ANGLE_PITCH_UPPER_LIMIT:Angle32=Angle32::FRAC_PI_2;
 	pub fn move_mouse(&mut self,mouse_pos:glam::IVec2){
 		let mut unclamped_mouse_pos=mouse_pos-self.mouse.pos+self.clamped_mouse_pos;
@@ -261,13 +261,13 @@ mod gameplay{
 		pub const fn get_next_ordered_checkpoint_id(&self)->gameplay_modes::CheckpointId{
 			self.next_ordered_checkpoint_id
 		}
-		pub const fn get_jump_count(&self,model_id:ModelId)->Option<u32>{
+		pub fn get_jump_count(&self,model_id:ModelId)->Option<u32>{
 			self.jump_counts.get(&model_id).copied()
 		}
 		pub const fn ordered_checkpoint_count(&self)->u32{
 			self.next_ordered_checkpoint_id.get()
 		}
-		pub const fn unordered_checkpoint_count(&self)->u32{
+		pub fn unordered_checkpoint_count(&self)->u32{
 			self.unordered_checkpoints.len() as u32
 		}
 		pub fn set_mode_id(&mut self,mode_id:gameplay_modes::ModeId){
@@ -278,7 +278,7 @@ mod gameplay{
 			self.clear_checkpoints();
 			self.stage_id=stage_id;
 		}
-		pub const fn accumulate_ordered_checkpoint(&mut self,stage:&gameplay_modes::Stage,model_id:ModelId){
+		pub fn accumulate_ordered_checkpoint(&mut self,stage:&gameplay_modes::Stage,model_id:ModelId){
 			if stage.is_next_ordered_checkpoint(self.get_next_ordered_checkpoint_id(),model_id){
 				self.next_ordered_checkpoint_id=gameplay_modes::CheckpointId::new(self.next_ordered_checkpoint_id.get()+1);
 			}
@@ -359,7 +359,7 @@ impl StyleHelper for StyleModifiers{
 
 	fn allow_strafe(&self,controls:u32)->bool{
 		//disable strafing according to strafe settings
-		self.strafe.is_some_and(|s|s.mask(controls))
+		self.strafe.as_ref().is_some_and(|s|s.mask(controls))
 	}
 
 	fn get_control_dir(&self,controls:u32)->Planar64Vec3{
@@ -1003,7 +1003,7 @@ impl PhysicsContext{
 		let convex_mesh_aabb_list=self.data.models.models.iter()
 		.flat_map(|(&model_id,model)|{
 			self.data.models.meshes[&model.mesh_id].submesh_views()
-			.enumerate().map(|(submesh_id,view)|{
+			.enumerate().map(move|(submesh_id,view)|{
 				let mut aabb=aabb::Aabb::default();
 				for v in view.verts(){
 					aabb.grow(v)
@@ -1036,7 +1036,7 @@ impl PhysicsContext{
 			MoveState::Walk(WalkState{state,contact,jump_direction:_})=>{
 				let n=contact_normal(&data.models,&data.hitbox_mesh,contact);
 				let gravity=s.touching.base_acceleration(&data.models,&s.style,&s.camera,s.controls,&s.next_mouse,s.time);
-				let mut a;
+				let a;
 				let mut v=s.style.get_walk_target_velocity(&s.camera,s.controls,&s.next_mouse,s.time,&n);
 				s.touching.constrain_velocity(&data.models,&data.hitbox_mesh,&mut v);
 				let normal_accel=-n.dot(gravity)/n.length();
@@ -1045,8 +1045,8 @@ impl PhysicsContext{
 			},
 			MoveState::Ladder(WalkState{state,contact,jump_direction:_})=>{
 				let n=contact_normal(&data.models,&data.hitbox_mesh,contact);
-				let gravity=s.touching.base_acceleration(&data.models,&s.style,&s.camera,s.controls,&s.next_mouse,s.time);
-				let mut a;
+				//let gravity=s.touching.base_acceleration(&data.models,&s.style,&s.camera,s.controls,&s.next_mouse,s.time);
+				let a;
 				let mut v=s.style.get_ladder_target_velocity(&s.camera,s.controls,&s.next_mouse,s.time,&n);
 				s.touching.constrain_velocity(&data.models,&data.hitbox_mesh,&mut v);
 				(*state,a)=WalkEnum::with_target_velocity(&s.body,&s.style,v,&n,s.style.ladder_speed,s.style.ladder_accel);
@@ -1069,11 +1069,10 @@ impl PhysicsContext{
 		aabb.inflate(state.style.hitbox.halfsize);
 		//common body
 		let relative_body=VirtualBody::relative(&Body::default(),&state.body).body(state.time);
-		let hitbox_mesh=data.hitbox_mesh.transformed_mesh();
 		data.bvh.the_tester(&aabb,&mut |convex_mesh_id|{
 			//no checks are needed because of the time limits.
 			let model_mesh=data.models.mesh(convex_mesh_id);
-			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(model_mesh,hitbox_mesh);
+			let minkowski=model_physics::MinkowskiMesh::minkowski_sum(model_mesh,data.hitbox_mesh.transformed_mesh());
 			collector.collect(minkowski.predict_collision_in(&relative_body,collector.time())
 				//temp (?) code to avoid collision loops
 				.map_or(None,|(face,time)|if time==state.time{None}else{Some((face,time))})
@@ -1170,7 +1169,7 @@ fn teleport_to_spawn(body:&mut Body,touching:&mut TouchingState,style:&StyleModi
 	Some(teleport(body,touching,models,style,hitbox_mesh,point))
 }
 
-fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,mode_state:&mut ModeState,models:&PhysicsModels,mode:&gameplay_modes::Mode,style:&StyleModifiers,hitbox_mesh:&HitboxMesh,touching:&mut TouchingState,body:&mut Body,convex_mesh_id:ConvexMeshId)->Option<MoveState>{
+fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,models:&PhysicsModels,mode:&gameplay_modes::Mode,style:&StyleModifiers,hitbox_mesh:&HitboxMesh,mode_state:&mut ModeState,touching:&mut TouchingState,body:&mut Body,convex_mesh_id:ConvexMeshId)->Option<MoveState>{
 	//TODO: jump count and checkpoints are always reset on teleport.
 	//Map makers are expected to use tools to prevent
 	//multi-boosting on JumpLimit boosters such as spawning into a SetVelocity
@@ -1275,7 +1274,8 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,mode_s
 								let (walk_state,a)=WalkState::ladder(&state.body,&state.style,gravity,target_velocity,contact.clone(),&normal);
 								state.move_state=MoveState::Ladder(walk_state);
 								set_acceleration(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh,a);
-							}
+							},
+							Some(gameplay_attributes::ContactingBehaviour::NoJump)=>todo!("nyi"),
 							None=>if state.style.surf_slope.map_or(true,|s|contact_normal(&data.models,&data.hitbox_mesh,contact).walkable(s,Planar64Vec3::Y)){
 								//ground
 								let gravity=state.touching.base_acceleration(&data.models,&state.style,&state.camera,state.controls,&state.next_mouse,state.time);
@@ -1289,7 +1289,7 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,mode_s
 						//check ground
 						state.touching.insert(c);
 						//I love making functions with 10 arguments to dodge the borrow checker
-						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode_state.get_mode_id()).unwrap(),&state.style,&data.hitbox_mesh,&mut state.touching,&mut state.body,convex_mesh_id);
+						run_teleport_behaviour(&general.wormhole,&data.models,&data.modes.get_mode(state.mode_state.get_mode_id()).unwrap(),&state.style,&data.hitbox_mesh,&mut state.mode_state,&mut state.touching,&mut state.body,convex_mesh_id);
 						//flatten v
 						state.touching.constrain_velocity(&data.models,&data.hitbox_mesh,&mut v);
 						match &general.booster{
@@ -1333,7 +1333,7 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,mode_s
 					(PhysicsCollisionAttributes::Intersect{intersecting: _,general},Collision::Intersect(intersect))=>{
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
 						state.touching.insert(c);
-						run_teleport_behaviour(&general.wormhole,&mut state.mode_state,&data.models,&data.modes.get_mode(state.mode_state.get_mode_id()).unwrap(),&state.style,&data.hitbox_mesh,&mut state.touching,&mut state.body,convex_mesh_id);
+						run_teleport_behaviour(&general.wormhole,&data.models,&data.modes.get_mode(state.mode_state.get_mode_id()).unwrap(),&state.style,&data.hitbox_mesh,&mut state.mode_state,&mut state.touching,&mut state.body,convex_mesh_id);
 					},
 					_=>panic!("invalid pair"),
 				}

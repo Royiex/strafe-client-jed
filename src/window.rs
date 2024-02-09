@@ -27,6 +27,7 @@ impl WindowContext<'_>{
 	fn window_event(&mut self,time:integer::Time,event: winit::event::WindowEvent) {
 		match event {
 			winit::event::WindowEvent::DroppedFile(path)=>{
+				let path=path.as_path();
 				//blocking because it's simpler...
 				if let Ok(file)=std::fs::File::open(path){
 					// match strafesnet_snf::read_snf(std::io::BufReader::new(file)){

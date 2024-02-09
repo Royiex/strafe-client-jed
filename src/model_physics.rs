@@ -92,7 +92,7 @@ struct VertRefs{
 	faces:Vec<SubmeshFaceId>,
 	edges:Vec<SubmeshDirectedEdgeId>,
 }
-struct PhysicsMeshData{
+pub struct PhysicsMeshData{
 	//this contains all real and virtual faces used in both the complete mesh and convex submeshes
 	//faces are sorted such that all faces that belong to the complete mesh appear first, and then
 	//all remaining faces are virtual to operate internal logic of the face crawler
@@ -101,7 +101,7 @@ struct PhysicsMeshData{
 	faces:Vec<Face>,//MeshFaceId indexes this list
 	verts:Vec<Vert>,//MeshVertId indexes this list
 }
-struct PhysicsMeshTopology{
+pub struct PhysicsMeshTopology{
 	//mapping of local ids to PhysicsMeshData ids
 	faces:Vec<MeshFaceId>,//SubmeshFaceId indexes this list
 	verts:Vec<MeshVertId>,//SubmeshVertId indexes this list
@@ -126,11 +126,10 @@ impl From<MeshId> for PhysicsMeshId{
 pub struct PhysicsSubmeshId(u32);
 pub struct PhysicsMesh{
 	data:PhysicsMeshData,
-	//index 0 is the complete mesh.
-	//index 1-2+ is convex submeshes.
-	//Most objects in roblox maps are already convex, so the list length is 1
-	//as soon as the mesh is divided into 2 submeshes, the list length jumps to 3.
-	//length 2 is unnecessary since the complete mesh would be a duplicate of the only submesh, but would still function properly
+	complete_mesh:PhysicsMeshTopology,
+	//Most objects in roblox maps are already convex, so the list length is 0
+	//as soon as the mesh is divided into 2 submeshes, the list length jumps to 2.
+	//length 1 is unnecessary since the complete mesh would be a duplicate of the only submesh, but would still function properly
 	submeshes:Vec<PhysicsMeshTopology>,
 }
 impl PhysicsMesh{
@@ -160,12 +159,12 @@ impl PhysicsMesh{
 			faces:(0..data.faces.len() as u32).map(MeshFaceId::new).collect(),
 			verts:(0..data.verts.len() as u32).map(MeshVertId::new).collect(),
 			face_topology:vec![
-				FaceRefs{edges:vec![SubmeshDirectedEdgeId(9223372036854775808),SubmeshDirectedEdgeId(9223372036854775809),SubmeshDirectedEdgeId(9223372036854775810),SubmeshDirectedEdgeId(3)]},
-				FaceRefs{edges:vec![SubmeshDirectedEdgeId(9223372036854775812),SubmeshDirectedEdgeId(9223372036854775813),SubmeshDirectedEdgeId(6),SubmeshDirectedEdgeId(1)]},
-				FaceRefs{edges:vec![SubmeshDirectedEdgeId(7),SubmeshDirectedEdgeId(2),SubmeshDirectedEdgeId(9223372036854775814),SubmeshDirectedEdgeId(9223372036854775816)]},
-				FaceRefs{edges:vec![SubmeshDirectedEdgeId(8),SubmeshDirectedEdgeId(5),SubmeshDirectedEdgeId(9223372036854775817),SubmeshDirectedEdgeId(10)]},
-				FaceRefs{edges:vec![SubmeshDirectedEdgeId(9223372036854775815),SubmeshDirectedEdgeId(9223372036854775818),SubmeshDirectedEdgeId(11),SubmeshDirectedEdgeId(9223372036854775811)]},
-				FaceRefs{edges:vec![SubmeshDirectedEdgeId(4),SubmeshDirectedEdgeId(0),SubmeshDirectedEdgeId(9223372036854775819),SubmeshDirectedEdgeId(9)]}
+				FaceRefs{edges:vec![SubmeshDirectedEdgeId((9223372036854775808u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId((9223372036854775809u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId((9223372036854775810u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId(3)]},
+				FaceRefs{edges:vec![SubmeshDirectedEdgeId((9223372036854775812u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId((9223372036854775813u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId(6),SubmeshDirectedEdgeId(1)]},
+				FaceRefs{edges:vec![SubmeshDirectedEdgeId(7),SubmeshDirectedEdgeId(2),SubmeshDirectedEdgeId((9223372036854775814u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId((9223372036854775816u64-(1<<63)+(1<<31)) as u32)]},
+				FaceRefs{edges:vec![SubmeshDirectedEdgeId(8),SubmeshDirectedEdgeId(5),SubmeshDirectedEdgeId((9223372036854775817u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId(10)]},
+				FaceRefs{edges:vec![SubmeshDirectedEdgeId((9223372036854775815u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId((9223372036854775818u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId(11),SubmeshDirectedEdgeId((9223372036854775811u64-(1<<63)+(1<<31)) as u32)]},
+				FaceRefs{edges:vec![SubmeshDirectedEdgeId(4),SubmeshDirectedEdgeId(0),SubmeshDirectedEdgeId((9223372036854775819u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId(9)]}
 			],
 			edge_topology:vec![
 				EdgeRefs{faces:[SubmeshFaceId(0),SubmeshFaceId(5)],verts:[SubmeshVertId(0),SubmeshVertId(1)]}, 
@@ -182,19 +181,20 @@ impl PhysicsMesh{
 				EdgeRefs{faces:[SubmeshFaceId(5),SubmeshFaceId(4)],verts:[SubmeshVertId(0),SubmeshVertId(7)]}
 			],
 			vert_topology:vec![
-				VertRefs{faces:vec![SubmeshFaceId(0),SubmeshFaceId(4),SubmeshFaceId(5)],edges:vec![SubmeshDirectedEdgeId(9223372036854775811),SubmeshDirectedEdgeId(9223372036854775819),SubmeshDirectedEdgeId(9223372036854775808)]},
-				VertRefs{faces:vec![SubmeshFaceId(0),SubmeshFaceId(5),SubmeshFaceId(1)],edges:vec![SubmeshDirectedEdgeId(9223372036854775812),SubmeshDirectedEdgeId(0),SubmeshDirectedEdgeId(9223372036854775809)]},
-				VertRefs{faces:vec![SubmeshFaceId(0),SubmeshFaceId(2),SubmeshFaceId(1)],edges:vec![SubmeshDirectedEdgeId(1),SubmeshDirectedEdgeId(9223372036854775810),SubmeshDirectedEdgeId(9223372036854775814)]},
-				VertRefs{faces:vec![SubmeshFaceId(0),SubmeshFaceId(2),SubmeshFaceId(4)],edges:vec![SubmeshDirectedEdgeId(2),SubmeshDirectedEdgeId(3),SubmeshDirectedEdgeId(9223372036854775815)]},
-				VertRefs{faces:vec![SubmeshFaceId(3),SubmeshFaceId(5),SubmeshFaceId(1)],edges:vec![SubmeshDirectedEdgeId(4),SubmeshDirectedEdgeId(9223372036854775817),SubmeshDirectedEdgeId(9223372036854775813)]},
-				VertRefs{faces:vec![SubmeshFaceId(2),SubmeshFaceId(3),SubmeshFaceId(1)],edges:vec![SubmeshDirectedEdgeId(5),SubmeshDirectedEdgeId(6),SubmeshDirectedEdgeId(9223372036854775816)]},
-				VertRefs{faces:vec![SubmeshFaceId(2),SubmeshFaceId(3),SubmeshFaceId(4)],edges:vec![SubmeshDirectedEdgeId(7),SubmeshDirectedEdgeId(8),SubmeshDirectedEdgeId(9223372036854775818)]},
+				VertRefs{faces:vec![SubmeshFaceId(0),SubmeshFaceId(4),SubmeshFaceId(5)],edges:vec![SubmeshDirectedEdgeId((9223372036854775811u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId((9223372036854775819u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId((9223372036854775808u64-(1<<63)+(1<<31)) as u32)]},
+				VertRefs{faces:vec![SubmeshFaceId(0),SubmeshFaceId(5),SubmeshFaceId(1)],edges:vec![SubmeshDirectedEdgeId((9223372036854775812u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId(0),SubmeshDirectedEdgeId((9223372036854775809u64-(1<<63)+(1<<31)) as u32)]},
+				VertRefs{faces:vec![SubmeshFaceId(0),SubmeshFaceId(2),SubmeshFaceId(1)],edges:vec![SubmeshDirectedEdgeId(1),SubmeshDirectedEdgeId((9223372036854775810u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId((9223372036854775814u64-(1<<63)+(1<<31)) as u32)]},
+				VertRefs{faces:vec![SubmeshFaceId(0),SubmeshFaceId(2),SubmeshFaceId(4)],edges:vec![SubmeshDirectedEdgeId(2),SubmeshDirectedEdgeId(3),SubmeshDirectedEdgeId((9223372036854775815u64-(1<<63)+(1<<31)) as u32)]},
+				VertRefs{faces:vec![SubmeshFaceId(3),SubmeshFaceId(5),SubmeshFaceId(1)],edges:vec![SubmeshDirectedEdgeId(4),SubmeshDirectedEdgeId((9223372036854775817u64-(1<<63)+(1<<31)) as u32),SubmeshDirectedEdgeId((9223372036854775813u64-(1<<63)+(1<<31)) as u32)]},
+				VertRefs{faces:vec![SubmeshFaceId(2),SubmeshFaceId(3),SubmeshFaceId(1)],edges:vec![SubmeshDirectedEdgeId(5),SubmeshDirectedEdgeId(6),SubmeshDirectedEdgeId((9223372036854775816u64-(1<<63)+(1<<31)) as u32)]},
+				VertRefs{faces:vec![SubmeshFaceId(2),SubmeshFaceId(3),SubmeshFaceId(4)],edges:vec![SubmeshDirectedEdgeId(7),SubmeshDirectedEdgeId(8),SubmeshDirectedEdgeId((9223372036854775818u64-(1<<63)+(1<<31)) as u32)]},
 				VertRefs{faces:vec![SubmeshFaceId(4),SubmeshFaceId(3),SubmeshFaceId(5)],edges:vec![SubmeshDirectedEdgeId(10),SubmeshDirectedEdgeId(11),SubmeshDirectedEdgeId(9)]}
 			]
 		};
 		Self{
 			data,
-			submeshes:vec![mesh_topology],
+			complete_mesh:mesh_topology,
+			submeshes:Vec::new(),
 		}
 	}
 	pub fn unit_cylinder()->Self{
@@ -206,7 +206,7 @@ impl PhysicsMesh{
 	}
 	#[inline]
 	pub const fn complete_mesh(&self)->&PhysicsMeshTopology{
-		&self.submeshes[0]
+		&self.complete_mesh
 	}
 	#[inline]
 	pub const fn complete_mesh_view(&self)->PhysicsMeshView{
@@ -216,12 +216,16 @@ impl PhysicsMesh{
 		}
 	}
 	#[inline]
-	pub const fn submeshes(&self)->&[PhysicsMeshTopology]{
-		//the complete mesh is already a convex mesh when len()==1, len()==2 is invalid but will still work
-		&self.submeshes[self.submeshes.len().saturating_sub(1).min(1)..]
+	pub fn submeshes(&self)->&[PhysicsMeshTopology]{
+		//the complete mesh is already a convex mesh when len()==0, len()==1 is invalid but will still work
+		if self.submeshes.len()==0{
+			std::slice::from_ref(&self.complete_mesh)
+		}else{
+			&self.submeshes.as_slice()
+		}
 	}
 	#[inline]
-	pub const fn submesh_view(&self,submesh_id:PhysicsSubmeshId)->PhysicsMeshView{
+	pub fn submesh_view(&self,submesh_id:PhysicsSubmeshId)->PhysicsMeshView{
 		PhysicsMeshView{
 			data:&self.data,
 			topology:&self.submeshes()[submesh_id.get() as usize],
@@ -257,7 +261,7 @@ impl EdgeRefFaces{
 	const fn new()->Self{
 		Self([SubmeshFaceId(0);2])
 	}
-	const fn push(&mut self,i:usize,face_id:SubmeshFaceId){
+	fn push(&mut self,i:usize,face_id:SubmeshFaceId){
 		self.0[i]=face_id;
 	}
 }
@@ -283,20 +287,21 @@ impl EdgePool{
 impl From<&model::Mesh> for PhysicsMesh{
 	fn from(mesh:&model::Mesh)->Self{
 		assert!(mesh.unique_pos.len()!=0,"Mesh cannot have 0 vertices");
-		let verts=mesh.unique_pos.into_iter().map(Vert).collect();
+		let verts=mesh.unique_pos.iter().copied().map(Vert).collect();
 		let mut faces=Vec::new();
 		let mut face_id_from_face=HashMap::new();
-		let submeshes=mesh.physics_groups.iter().enumerate().map(|(submesh_id,physics_group)|{
+		let mut mesh_topologies:Vec<PhysicsMeshTopology>=mesh.physics_groups.iter().map(|physics_group|{
 			//construct submesh
 			let mut submesh_faces=Vec::new();//these contain a map from submeshId->meshId
 			let mut submesh_verts=Vec::new();
 			let mut submesh_vert_id_from_mesh_vert_id=HashMap::<MeshVertId,SubmeshVertId>::new();
 			//lazy closure
-			let get_submesh_vert_id=|vert_id:MeshVertId|{
+			let mut get_submesh_vert_id=|vert_id:MeshVertId|{
 				if let Some(&submesh_vert_id)=submesh_vert_id_from_mesh_vert_id.get(&vert_id){
 					submesh_vert_id
 				}else{
-					let submesh_vert_id=SubmeshVertId::new(vert_id.get() as u32);
+					let submesh_vert_id=SubmeshVertId::new(submesh_verts.len() as u32);
+					submesh_verts.push(vert_id);
 					submesh_vert_id_from_mesh_vert_id.insert(vert_id,submesh_vert_id);
 					submesh_vert_id
 				}
@@ -304,9 +309,8 @@ impl From<&model::Mesh> for PhysicsMesh{
 			let mut edge_pool=EdgePool::default();
 			let mut vert_ref_guys=vec![VertRefGuy::default();mesh.unique_pos.len()];
 			let mut face_ref_guys=Vec::new();
-			let submesh_id=PhysicsSubmeshId::new(submesh_id as u32);
 			for polygon_group_id in &physics_group.groups{
-				let polygon_group=mesh.polygon_groups[polygon_group_id.get() as usize];
+				let polygon_group=&mesh.polygon_groups[polygon_group_id.get() as usize];
 				for poly_vertices in polygon_group.polys(){
 					let submesh_face_id=SubmeshFaceId::new(submesh_faces.len() as u32);
 					//one face per poly
@@ -354,7 +358,7 @@ impl From<&model::Mesh> for PhysicsMesh{
 						Some(&face_id)=>face_id,
 						None=>{
 							let face_id=MeshFaceId::new(faces.len() as u32);
-							face_id_from_face.insert(face,face_id);
+							face_id_from_face.insert(face.clone(),face_id);
 							faces.push(face);
 							face_id
 						}
@@ -385,12 +389,13 @@ impl From<&model::Mesh> for PhysicsMesh{
 				faces,
 				verts,
 			},
-			submeshes,
+			complete_mesh:mesh_topologies.pop().unwrap(),
+			submeshes:mesh_topologies,
 		}
 	}
 }
 
-struct PhysicsMeshView<'a>{
+pub struct PhysicsMeshView<'a>{
 	data:&'a PhysicsMeshData,
 	topology:&'a PhysicsMeshTopology,
 }
@@ -460,8 +465,7 @@ impl TransformedMesh<'_>{
 		let mut best_vert=SubmeshVertId(0);
 		//this happens to be well-defined.  there are no virtual virtices
 		for (i,vert_id) in self.view.topology.verts.iter().enumerate(){
-			let vert=self.view.data.verts[vert_id.get() as usize];
-			let p=self.transform.vertex.transform_point3(vert.0);
+			let p=self.transform.vertex.transform_point3(self.view.data.verts[vert_id.get() as usize].0);
 			let d=dir.dot(p);
 			if best_dot<d{
 				best_dot=d;

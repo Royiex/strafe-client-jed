@@ -150,7 +150,7 @@ impl GraphicsState{
 	pub fn generate_models(&mut self,device:&wgpu::Device,queue:&wgpu::Queue,map:&map::CompleteMap){
 		//generate texture view per texture
 		let num_textures=map.textures.len();
-		let texture_views:Vec<wgpu::TextureView>=map.textures.into_iter().enumerate().map(|(texture_id,texture_data)|{
+		let texture_views:Vec<wgpu::TextureView>=map.textures.iter().enumerate().map(|(texture_id,texture_data)|{
 			let image=ddsfile::Dds::read(std::io::Cursor::new(texture_data)).unwrap();
 
 			let (mut width,mut height)=(image.get_width(),image.get_height());
@@ -214,7 +214,7 @@ impl GraphicsState{
 				color:GraphicsModelColor4::new(model.color),
 			};
 			//get or create owned mesh map
-			let mut owned_mesh_map=if let Some(map)=owned_mesh_id_from_mesh_id_render_config_id.get_mut(&model.mesh){
+			let owned_mesh_map=if let Some(map)=owned_mesh_id_from_mesh_id_render_config_id.get_mut(&model.mesh){
 				map
 			}else{
 				let map=HashMap::new();
@@ -225,41 +225,38 @@ impl GraphicsState{
 			//check each group, if it's using a new render config then make a new clone of the model
 			if let Some(mesh)=map.meshes.get(model.mesh.get() as usize){
 				for graphics_group in mesh.graphics_groups.iter(){
-					let render_config=map.render_configs[graphics_group.render.get() as usize];
+					let render_config=&map.render_configs[graphics_group.render.get() as usize];
 					if model.color.w==0.0&&render_config.texture.is_none(){
 						continue;
 					}
 					//get or create owned mesh
-					let mut owned_mesh=unique_render_config_models.get_mut(
-						if let Some(&owned_mesh_id)=owned_mesh_map.get(&graphics_group.render){
-							owned_mesh_id
-						}else{
-							//create
-							let owned_mesh_id=IndexedGraphicsMeshOwnedRenderConfigId::new(unique_render_config_models.len() as u32);
-							owned_mesh_map.insert(graphics_group.render,owned_mesh_id);
-							//push
-							unique_render_config_models.push(IndexedGraphicsMeshOwnedRenderConfig{
-								unique_pos:mesh.unique_pos.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
-								unique_tex:mesh.unique_tex.iter().map(|v|*v.as_ref()).collect(),
-								unique_normal:mesh.unique_normal.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
-								unique_color:mesh.unique_color.iter().map(|v|*v.as_ref()).collect(),
-								unique_vertices:mesh.unique_vertices.clone(),
-								render_config:graphics_group.render,
-								polys:model::PolygonGroup::PolygonList(model::PolygonList::new(
-									graphics_group.groups.iter().flat_map(|polygon_group_id|{
-										mesh.polygon_groups[polygon_group_id.get() as usize].polys()
-									})
-									.map(|vertex_id_slice|
-										vertex_id_slice.iter().copied().collect()
-									).collect()
-								)),
-								instances:Vec::new(),
-							});
-							owned_mesh_id
-						}.get() as usize
-					).unwrap();
-					//this utm_id is going to take a lot of hashing to generate!
-					owned_mesh.instances.push(instance);
+					let owned_mesh_id=if let Some(&owned_mesh_id)=owned_mesh_map.get(&graphics_group.render){
+						owned_mesh_id
+					}else{
+						//create
+						let owned_mesh_id=IndexedGraphicsMeshOwnedRenderConfigId::new(unique_render_config_models.len() as u32);
+						owned_mesh_map.insert(graphics_group.render,owned_mesh_id);
+						unique_render_config_models.push(IndexedGraphicsMeshOwnedRenderConfig{
+							unique_pos:mesh.unique_pos.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
+							unique_tex:mesh.unique_tex.iter().map(|v|*v.as_ref()).collect(),
+							unique_normal:mesh.unique_normal.iter().map(|&v|*Into::<glam::Vec3>::into(v).as_ref()).collect(),
+							unique_color:mesh.unique_color.iter().map(|v|*v.as_ref()).collect(),
+							unique_vertices:mesh.unique_vertices.clone(),
+							render_config:graphics_group.render,
+							polys:model::PolygonGroup::PolygonList(model::PolygonList::new(
+								graphics_group.groups.iter().flat_map(|polygon_group_id|{
+									mesh.polygon_groups[polygon_group_id.get() as usize].polys()
+								})
+								.map(|vertex_id_slice|
+									vertex_id_slice.iter().copied().collect()
+								).collect()
+							)),
+							instances:Vec::new(),
+						});
+						owned_mesh_id
+					};
+					let owned_mesh=unique_render_config_models.get_mut(owned_mesh_id.get() as usize).unwrap();
+					owned_mesh.instances.push(instance.clone());
 				}
 			}
 		}
@@ -440,7 +437,7 @@ impl GraphicsState{
 							indices.push(i);
 						}else{
 							let i=vertices.len();
-							let vertex=model.unique_vertices[vertex_index.get() as usize];
+							let vertex=&model.unique_vertices[vertex_index.get() as usize];
 							vertices.push(GraphicsVertex{
 								pos:model.unique_pos[vertex.pos.get() as usize],
 								tex:model.unique_tex[vertex.tex.get() as usize],
@@ -482,7 +479,7 @@ impl GraphicsState{
 					contents:bytemuck::cast_slice(&model_uniforms),
 					usage:wgpu::BufferUsages::UNIFORM|wgpu::BufferUsages::COPY_DST,
 				});
-				let render_config=map.render_configs[model.render_config.get() as usize];
+				let render_config=&map.render_configs[model.render_config.get() as usize];
 				let texture_view=match render_config.texture{
 					Some(texture_id)=>&texture_views[texture_id.get() as usize],
 					None=>&self.temp_squid_texture_view,
@@ -979,7 +976,7 @@ const MODEL_BUFFER_SIZE:usize=4*4 + 12 + 4;//let size=std::mem::size_of::<ModelI
 const MODEL_BUFFER_SIZE_BYTES:usize=MODEL_BUFFER_SIZE*4;
 fn get_instances_buffer_data(instances:&[GraphicsModelOwned])->Vec<f32>{
 	let mut raw=Vec::with_capacity(MODEL_BUFFER_SIZE*instances.len());
-	for (i,mi) in instances.iter().enumerate(){
+	for mi in instances{
 		//model transform
 		raw.extend_from_slice(&AsRef::<[f32; 4*4]>::as_ref(&mi.transform)[..]);
 		//normal transform

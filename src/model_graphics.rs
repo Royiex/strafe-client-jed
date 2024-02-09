@@ -1,5 +1,5 @@
 use bytemuck::{Pod,Zeroable};
-use strafesnet_common::model::{IndexedVertex,PolygonGroup,RenderConfigId,TextureId};
+use strafesnet_common::model::{IndexedVertex,PolygonGroup,RenderConfigId};
 #[derive(Clone,Copy,Pod,Zeroable)]
 #[repr(C)]
 pub struct GraphicsVertex{
@@ -8,7 +8,7 @@ pub struct GraphicsVertex{
 	pub normal:[f32;3],
 	pub color:[f32;4],
 }
-#[derive(id::Id)]
+#[derive(Clone,Copy,id::Id)]
 pub struct IndexedGraphicsMeshOwnedRenderConfigId(u32);
 pub struct IndexedGraphicsMeshOwnedRenderConfig{
 	pub unique_pos:Vec<[f32;3]>,
@@ -30,7 +30,7 @@ pub struct GraphicsMeshOwnedRenderConfig{
 	pub render_config:RenderConfigId,
 	pub instances:Vec<GraphicsModelOwned>,
 }
-#[derive(Clone,PartialEq,id::Id)]
+#[derive(Clone,Copy,PartialEq,id::Id)]
 pub struct GraphicsModelColor4(glam::Vec4);
 impl std::hash::Hash for GraphicsModelColor4{
 	fn hash<H:std::hash::Hasher>(&self,state:&mut H) {
