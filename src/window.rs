@@ -41,6 +41,13 @@ impl WindowContext<'_>{
 					// 	Ok(strafesnet_snf::SNF::Demo(streamable_map))=>println!("File type not yet supported"),
 					// 	Err(e)=>println!("Error reading file: {e:?}"),
 					// }
+					match strafesnet_rbx_loader::read(file){
+						Ok(map)=>{
+							self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::ClearModels}).unwrap();
+							self.physics_thread.send(TimedInstruction{time,instruction:crate::physics_worker::Instruction::GenerateModels(map)}).unwrap();
+						},
+						Err(e)=>println!("Error reading file: {e:?}"),
+					}
 				}else{
 					println!("Failed to open file {path:?}");
 				}
