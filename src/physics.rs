@@ -1448,11 +1448,11 @@ fn run_teleport_behaviour(wormhole:&Option<gameplay_attributes::Wormhole>,models
 						//it matters which of these runs first, but I have not thought it through yet as it doesn't matter yet
 						state.mode_state.clear();
 						state.mode_state.set_stage_id(gameplay_modes::StageId::FIRST);
-						let spawn_point={
-							let mode=data.modes.get_mode(state.mode_state.get_mode_id()).unwrap();
-							let stage=mode.get_stage(gameplay_modes::StageId::FIRST).unwrap();
-							data.models.model(stage.spawn().into()).transform.vertex.translation
-						};
+						let spawn_point=data.modes.get_mode(state.mode_state.get_mode_id()).and_then(|mode|
+							mode.get_stage(gameplay_modes::StageId::FIRST).and_then(|stage|
+								Some(data.models.model(stage.spawn().into()).transform.vertex.translation)
+							)
+						).unwrap_or(Planar64Vec3::ZERO);
 						set_position(&mut state.body,&mut state.touching,spawn_point);
 						set_velocity(&mut state.body,&state.touching,&data.models,&data.hitbox_mesh,Planar64Vec3::ZERO);
 						(state.move_state,state.body.acceleration)=state.touching.get_move_state(&state.body,&data.models,&state.style,&data.hitbox_mesh,&state.camera,state.controls,&state.next_mouse,state.time);
