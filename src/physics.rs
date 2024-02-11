@@ -744,6 +744,8 @@ pub struct PhysicsState{
 	//the spawn point is where you spawn when you load into the map.
 	//This is not the same as Reset which teleports you to Spawn0
 	spawn_point:Planar64Vec3,
+	//lmao lets go
+	start_time:Option<Time>,
 }
 #[derive(Clone,Default)]
 pub struct PhysicsOutputState{
@@ -1086,6 +1088,7 @@ impl Default for PhysicsState{
 			world:WorldState{},
 			game:GameMechanicsState::default(),
 			modes:Modes::default(),
+			start_time:None,
 		}
 	}
 }
@@ -1569,6 +1572,21 @@ impl instruction::InstructionConsumer<PhysicsInstruction> for PhysicsState {
 						set_acceleration(&mut self.body,&self.touching,&self.models,&self.style.mesh(),a);
 					},
 					(PhysicsCollisionAttributes::Intersect{intersecting: _,general},Collision::Intersect(intersect))=>{
+						//check for mapstart and set start time
+						let model_id=c.model_id();
+						let start_model_id=self.modes.get_mode(0).unwrap().start;
+						if model_id==start_model_id{
+							//object touched is a mapstart
+							println!("Start!");
+							self.start_time=Some(self.time);
+						}
+
+						//check for map finish and print end time
+						if general.zone.as_ref().is_some_and(|zone|zone.behaviour==crate::model::ZoneBehaviour::Finish){
+							if let Some(start_time)=self.start_time.take(){
+								println!("Finish! Time={}",self.time-start_time);
+							}
+						}
 						//I think that setting the velocity to 0 was preventing surface contacts from entering an infinite loop
 						self.touching.insert(c);
 						run_teleport_behaviour(&general.teleport_behaviour,&mut self.game,&self.models,&self.modes,&self.style,&mut self.touching,&mut self.body,model_id);
