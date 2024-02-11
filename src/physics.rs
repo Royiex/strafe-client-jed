@@ -727,7 +727,7 @@ enum MoveState{
 
 pub struct PhysicsState{
 	time:Time,
-	body:Body,
+	pub body:Body,
 	world:WorldState,//currently there is only one state the world can be in
 	game:GameMechanicsState,
 	style:StyleModifiers,

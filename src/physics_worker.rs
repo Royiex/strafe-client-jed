@@ -27,6 +27,7 @@ pub enum Instruction{
 		let mut mouse_blocking=true;
 		let mut last_mouse_time=physics.next_mouse.time;
 		let mut timeline=std::collections::VecDeque::new();
+		let mut next_velocity_print=std::time::Instant::now();
 		crate::compat_worker::QNWorker::new(move |ins:TimedInstruction<Instruction>|{
 			if if let Some(phys_input)=match &ins.instruction{
 				Instruction::Input(input_instruction)=>match input_instruction{
@@ -109,6 +110,12 @@ pub enum Instruction{
 						time:instruction.time,
 						instruction:crate::physics::PhysicsInstruction::Input(instruction.instruction),
 					});
+				}
+
+				//some random print stuff
+				if 3.0/5.0<next_velocity_print.elapsed().as_secs_f64(){
+					next_velocity_print=next_velocity_print+std::time::Duration::from_secs_f64(3.0/5.0);
+					println!("speed={}",physics.body.velocity.length());
 				}
 			}
 			match ins.instruction{
